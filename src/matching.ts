@@ -9,6 +9,7 @@ import type {
   ItemHashes,
   MatchedBy,
   MatchResult,
+  MatchStrategy,
   MatchStrategyContext,
   MatchStrategyResult,
   UpdateFilter,
@@ -267,9 +268,29 @@ export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult
   return { outcome: 'pass' }
 }
 
-// Priority-based match selection with per-channel link gating.
-// High uniqueness: guid > link > enclosure > title
-// Low uniqueness:  guid > enclosure > link (if link-only) > title
+// High-uniqueness channel: guid > link > enclosure > title.
+export const highUniquenessStrategies: Array<MatchStrategy> = [
+  { execute: matchByGuid },
+  { execute: matchByLink },
+  { execute: matchByEnclosure },
+  { execute: matchByTitle, gate: ({ incoming }) => !hasStrongHash(incoming) },
+]
+
+// Low-uniqueness channel: guid > enclosure > link (if link-only) > title.
+export const lowUniquenessStrategies: Array<MatchStrategy> = [
+  { execute: matchByGuid },
+  { execute: matchByEnclosure },
+  { execute: matchByLink, gate: ({ incoming }) => isLinkOnly(incoming) },
+  { execute: matchByTitle, gate: ({ incoming }) => !hasStrongHash(incoming) },
+]
+
+export const resolveStrategies = (feedProfile: FeedProfile): Array<MatchStrategy> => {
+  return feedProfile.link.effective.uniquenessRate >= 0.95
+    ? highUniquenessStrategies
+    : lowUniquenessStrategies
+}
+
+// Priority-based match selection with configurable strategy ordering.
 // Summary/content excluded: too volatile for cross-scan matching.
 // Returns undefined for ambiguous matches (>1) — prefer insert over wrong merge.
 export const selectMatchingItem = ({
@@ -277,11 +298,13 @@ export const selectMatchingItem = ({
   candidates,
   feedProfile,
   candidateFilters,
+  strategies = resolveStrategies(feedProfile),
 }: {
   incoming: IncomingItem
   candidates: Array<ExistingItem>
   feedProfile: FeedProfile
   candidateFilters: Array<CandidateFilter>
+  strategies?: Array<MatchStrategy>
 }): MatchResult | undefined => {
   const linkUniquenessRate = feedProfile.link.effective.uniquenessRate
   const channel = { linkUniquenessRate }
@@ -302,66 +325,19 @@ export const selectMatchingItem = ({
 
   const context: MatchStrategyContext = { incoming, candidates, filtered }
 
-  const tryStrategy = (
-    strategy: (context: MatchStrategyContext) => MatchStrategyResult,
-  ): MatchResult | undefined | 'pass' => {
-    const strategyResult = strategy(context)
-
-    if (strategyResult.outcome === 'matched') {
-      return strategyResult.result
+  for (const strategy of strategies) {
+    if (strategy.gate && !strategy.gate({ incoming })) {
+      continue
     }
 
-    if (strategyResult.outcome === 'ambiguous') {
+    const result = strategy.execute(context)
+
+    if (result.outcome === 'matched') {
+      return result.result
+    }
+
+    if (result.outcome === 'ambiguous') {
       return undefined
-    }
-
-    return 'pass'
-  }
-
-  // Priority 1: GUID match (always strongest).
-  const guidResult = tryStrategy(matchByGuid)
-
-  if (guidResult !== 'pass') {
-    return guidResult
-  }
-
-  // Channel-dependent strategy ordering.
-  if (linkUniquenessRate >= 0.95) {
-    // High-uniqueness channel: link is reliable.
-    const linkResult = tryStrategy(matchByLink)
-
-    if (linkResult !== 'pass') {
-      return linkResult
-    }
-
-    const enclosureResult = tryStrategy(matchByEnclosure)
-
-    if (enclosureResult !== 'pass') {
-      return enclosureResult
-    }
-  } else {
-    // Low-uniqueness channel: enclosure first, link only if link-only item.
-    const enclosureResult = tryStrategy(matchByEnclosure)
-
-    if (enclosureResult !== 'pass') {
-      return enclosureResult
-    }
-
-    if (isLinkOnly(incoming)) {
-      const linkResult = tryStrategy(matchByLink)
-
-      if (linkResult !== 'pass') {
-        return linkResult
-      }
-    }
-  }
-
-  // Weak fallback: title only when no strong hashes.
-  if (!hasStrongHash(incoming)) {
-    const titleResult = tryStrategy(matchByTitle)
-
-    if (titleResult !== 'pass') {
-      return titleResult
     }
   }
 

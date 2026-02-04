@@ -5,11 +5,14 @@ import {
   contentChangeFilter,
   enclosureConflictFilter,
   findMatchCandidates,
+  highUniquenessStrategies,
   isLinkOnly,
+  lowUniquenessStrategies,
   matchByEnclosure,
   matchByGuid,
   matchByLink,
   matchByTitle,
+  resolveStrategies,
   selectMatchingItem,
 } from './matching.js'
 import type { FeedProfile, SignalStats } from './profile.js'
@@ -829,6 +832,32 @@ describe('selectMatchingItem', () => {
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
+  })
+})
+
+describe('resolveStrategies', () => {
+  it('should return high uniqueness strategies when rate is 1.0', () => {
+    const value = makeFeedProfile(1.0)
+
+    expect(resolveStrategies(value)).toBe(highUniquenessStrategies)
+  })
+
+  it('should return high uniqueness strategies when rate is exactly 0.95', () => {
+    const value = makeFeedProfile(0.95)
+
+    expect(resolveStrategies(value)).toBe(highUniquenessStrategies)
+  })
+
+  it('should return low uniqueness strategies when rate is below 0.95', () => {
+    const value = makeFeedProfile(0.94)
+
+    expect(resolveStrategies(value)).toBe(lowUniquenessStrategies)
+  })
+
+  it('should return low uniqueness strategies when rate is 0', () => {
+    const value = makeFeedProfile(0)
+
+    expect(resolveStrategies(value)).toBe(lowUniquenessStrategies)
   })
 })
 

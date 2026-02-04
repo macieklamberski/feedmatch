@@ -69,6 +69,15 @@ export type MatchStrategyContext = {
   filtered: (matchedBy: MatchedBy, candidates: Array<ExistingItem>) => Array<ExistingItem>
 }
 
+export type MatchStrategyGateContext = {
+  incoming: IncomingItem
+}
+
+export type MatchStrategy = {
+  execute: (context: MatchStrategyContext) => MatchStrategyResult
+  gate?: (context: MatchStrategyGateContext) => boolean
+}
+
 export type InsertAction = {
   item: IncomingItem
   fingerprintHash: string
