@@ -15,32 +15,46 @@ import type {
   ItemHashes,
 } from './types.js'
 
+const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
+  return {
+    guidHash: null,
+    guidFragmentHash: null,
+    linkHash: null,
+    linkFragmentHash: null,
+    enclosureHash: null,
+    titleHash: null,
+    summaryHash: null,
+    contentHash: null,
+    ...overrides,
+  }
+}
+
 describe('scoreItem', () => {
   it('should sum weights for multiple hashes', () => {
-    const value: ItemHashes = { guidHash: 'g1', linkHash: 'l1', titleHash: 't1' }
+    const value = makeHashes({ guidHash: 'g1', linkHash: 'l1', titleHash: 't1' })
 
     expect(scoreItem(value)).toBe(32 + 8 + 4)
   })
 
   it('should return max score when all hashes present', () => {
-    const value: ItemHashes = {
+    const value = makeHashes({
       guidHash: 'g1',
       enclosureHash: 'e1',
       linkHash: 'l1',
       titleHash: 't1',
       contentHash: 'c1',
       summaryHash: 's1',
-    }
+    })
 
     expect(scoreItem(value)).toBe(32 + 16 + 8 + 4 + 2 + 1)
   })
 
   it('should weight guid highest', () => {
-    expect(scoreItem({ guidHash: 'g1' })).toBe(32)
+    expect(scoreItem(makeHashes({ guidHash: 'g1' }))).toBe(32)
   })
 
   it('should return 0 for empty hashes', () => {
-    expect(scoreItem({})).toBe(0)
+    expect(scoreItem(makeHashes())).toBe(0)
   })
 })
 
@@ -74,14 +88,14 @@ describe('filterItemsWithIdentifier', () => {
     const value: Array<ComposedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'g:gh1',
       },
     ]
     const expected: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'g:gh1',
       },
     ]
@@ -93,29 +107,29 @@ describe('filterItemsWithIdentifier', () => {
     const value: Array<ComposedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'g:gh1',
       },
       {
         item: {},
-        hashes: {},
+        hashes: makeHashes(),
         identifier: undefined,
       },
       {
         item: { title: 'Title' },
-        hashes: { titleHash: 'th1' },
+        hashes: makeHashes({ titleHash: 'th1' }),
         identifier: 'g:|gf:|l:|lf:|e:|t:th1',
       },
     ]
     const expected: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'g:gh1',
       },
       {
         item: { title: 'Title' },
-        hashes: { titleHash: 'th1' },
+        hashes: makeHashes({ titleHash: 'th1' }),
         identifier: 'g:|gf:|l:|lf:|e:|t:th1',
       },
     ]
@@ -127,7 +141,7 @@ describe('filterItemsWithIdentifier', () => {
     const value: Array<ComposedFeedItem<HashableItem>> = [
       {
         item: {},
-        hashes: {},
+        hashes: makeHashes(),
         identifier: undefined,
       },
     ]
@@ -141,19 +155,19 @@ describe('deduplicateItemsByIdentifier', () => {
     const value: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1', content: 'first' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'key1',
       },
       {
         item: { guid: 'g1', content: 'second' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'key1',
       },
     ]
     const expected: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1', content: 'first' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'key1',
       },
     ]
@@ -165,19 +179,19 @@ describe('deduplicateItemsByIdentifier', () => {
     const value: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'key1',
       },
       {
         item: { guid: 'g1', link: 'https://example.com' },
-        hashes: { guidHash: 'gh1', linkHash: 'lh1' },
+        hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
         identifier: 'key1',
       },
     ]
     const expected: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1', link: 'https://example.com' },
-        hashes: { guidHash: 'gh1', linkHash: 'lh1' },
+        hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
         identifier: 'key1',
       },
     ]
@@ -189,24 +203,24 @@ describe('deduplicateItemsByIdentifier', () => {
     const value: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'key1',
       },
       {
         item: { guid: 'g2' },
-        hashes: { guidHash: 'gh2' },
+        hashes: makeHashes({ guidHash: 'gh2' }),
         identifier: 'key2',
       },
     ]
     const expected: Array<IdentifiedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
-        hashes: { guidHash: 'gh1' },
+        hashes: makeHashes({ guidHash: 'gh1' }),
         identifier: 'key1',
       },
       {
         item: { guid: 'g2' },
-        hashes: { guidHash: 'gh2' },
+        hashes: makeHashes({ guidHash: 'gh2' }),
         identifier: 'key2',
       },
     ]
@@ -222,21 +236,25 @@ describe('deduplicateItemsByIdentifier', () => {
 describe('composeItemIdentifiers', () => {
   it('should compose identifiers for all items at given depth', () => {
     const value: Array<HashedFeedItem<HashableItem>> = [
-      { item: { guid: 'g1' }, hashes: { guidHash: 'gh1', linkHash: 'lh1' } },
-      { item: { guid: 'g2' }, hashes: { guidHash: 'gh2' } },
+      { item: { guid: 'g1' }, hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }) },
+      { item: { guid: 'g2' }, hashes: makeHashes({ guidHash: 'gh2' }) },
     ]
     const expected: Array<ComposedFeedItem<HashableItem>> = [
-      { item: { guid: 'g1' }, hashes: { guidHash: 'gh1', linkHash: 'lh1' }, identifier: 'g:gh1' },
-      { item: { guid: 'g2' }, hashes: { guidHash: 'gh2' }, identifier: 'g:gh2' },
+      {
+        item: { guid: 'g1' },
+        hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
+        identifier: 'g:gh1',
+      },
+      { item: { guid: 'g2' }, hashes: makeHashes({ guidHash: 'gh2' }), identifier: 'g:gh2' },
     ]
 
     expect(composeItemIdentifiers(value, 'guid')).toEqual(expected)
   })
 
   it('should return undefined identifier when no hashes in prefix', () => {
-    const value: Array<HashedFeedItem<HashableItem>> = [{ item: {}, hashes: {} }]
+    const value: Array<HashedFeedItem<HashableItem>> = [{ item: {}, hashes: makeHashes() }]
     const expected: Array<ComposedFeedItem<HashableItem>> = [
-      { item: {}, hashes: {}, identifier: undefined },
+      { item: {}, hashes: makeHashes(), identifier: undefined },
     ]
 
     expect(composeItemIdentifiers(value, 'guid')).toEqual(expected)

@@ -23,11 +23,25 @@ const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
   }
 }
 
+const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
+  return {
+    guidHash: null,
+    guidFragmentHash: null,
+    linkHash: null,
+    linkFragmentHash: null,
+    enclosureHash: null,
+    titleHash: null,
+    summaryHash: null,
+    contentHash: null,
+    ...overrides,
+  }
+}
+
 describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on guid source', () => {
     const value: CandidateFilterContext = {
       identifierSource: 'guid',
-      incoming: { hashes: { enclosureHash: 'enc-new' } },
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -41,7 +55,7 @@ describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on link source', () => {
     const value: CandidateFilterContext = {
       identifierSource: 'link',
-      incoming: { hashes: { enclosureHash: 'enc-new' } },
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -55,7 +69,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when enclosures match', () => {
     const value: CandidateFilterContext = {
       identifierSource: 'guid',
-      incoming: { hashes: { enclosureHash: 'enc-same' } },
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-same' }) },
       candidate: makeItem({ enclosureHash: 'enc-same' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -66,7 +80,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when candidate has no enclosure', () => {
     const value: CandidateFilterContext = {
       identifierSource: 'guid',
-      incoming: { hashes: { enclosureHash: 'enc-new' } },
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -77,7 +91,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when incoming has no enclosure', () => {
     const value: CandidateFilterContext = {
       identifierSource: 'guid',
-      incoming: { hashes: {} },
+      incoming: { hashes: makeHashes() },
       candidate: makeItem({ enclosureHash: 'enc-existing' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -88,7 +102,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when neither side has enclosure', () => {
     const value: CandidateFilterContext = {
       identifierSource: 'guid',
-      incoming: { hashes: {} },
+      incoming: { hashes: makeHashes() },
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -105,7 +119,7 @@ describe('contentChangeFilter', () => {
   it('should update when title changes', () => {
     const value = {
       existing: makeItem({ titleHash: 'title-1' }),
-      incomingHashes: { titleHash: 'title-2' } as ItemHashes,
+      incomingHashes: makeHashes({ titleHash: 'title-2' }),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -115,7 +129,7 @@ describe('contentChangeFilter', () => {
   it('should update when summary changes', () => {
     const value = {
       existing: makeItem({ summaryHash: 'sum-1' }),
-      incomingHashes: { summaryHash: 'sum-2' } as ItemHashes,
+      incomingHashes: makeHashes({ summaryHash: 'sum-2' }),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -125,7 +139,7 @@ describe('contentChangeFilter', () => {
   it('should update when content changes', () => {
     const value = {
       existing: makeItem({ contentHash: 'cnt-1' }),
-      incomingHashes: { contentHash: 'cnt-2' } as ItemHashes,
+      incomingHashes: makeHashes({ contentHash: 'cnt-2' }),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -135,7 +149,7 @@ describe('contentChangeFilter', () => {
   it('should update when enclosure changes', () => {
     const value = {
       existing: makeItem({ enclosureHash: 'enc-1' }),
-      incomingHashes: { enclosureHash: 'enc-2' } as ItemHashes,
+      incomingHashes: makeHashes({ enclosureHash: 'enc-2' }),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -150,12 +164,12 @@ describe('contentChangeFilter', () => {
         contentHash: 'cnt-1',
         enclosureHash: 'enc-1',
       }),
-      incomingHashes: {
+      incomingHashes: makeHashes({
         titleHash: 'title-1',
         summaryHash: 'sum-1',
         contentHash: 'cnt-1',
         enclosureHash: 'enc-1',
-      } as ItemHashes,
+      }),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -165,7 +179,7 @@ describe('contentChangeFilter', () => {
   it('should not update when null and undefined are compared', () => {
     const value = {
       existing: makeItem({ titleHash: null, contentHash: null }),
-      incomingHashes: {} as ItemHashes,
+      incomingHashes: makeHashes(),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -175,7 +189,7 @@ describe('contentChangeFilter', () => {
   it('should ignore non-content hashes', () => {
     const value = {
       existing: makeItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
-      incomingHashes: { guidHash: 'guid-2', linkHash: 'link-2' } as ItemHashes,
+      incomingHashes: makeHashes({ guidHash: 'guid-2', linkHash: 'link-2' }),
       identifierSource: 'guid' as MatchSource,
     }
 
@@ -197,7 +211,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       identifierSource: 'guid',
       filters: [filter],
-      incoming: { hashes: {} },
+      incoming: { hashes: makeHashes() },
       channel: { linkUniquenessRate: 1.0 },
     })
 
@@ -213,7 +227,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       identifierSource: 'guid',
       filters: [enclosureConflictFilter],
-      incoming: { hashes: { enclosureHash: 'enc-1' } },
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-1' }) },
       channel: { linkUniquenessRate: 1.0 },
     })
     const expected = [candidates[0]]
@@ -234,7 +248,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       identifierSource: 'title',
       filters: [filter],
-      incoming: { hashes: {} },
+      incoming: { hashes: makeHashes() },
       channel: { linkUniquenessRate: 1.0 },
     })
 
@@ -265,7 +279,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       identifierSource: 'guid',
       filters: [filterA, filterB],
-      incoming: { hashes: {} },
+      incoming: { hashes: makeHashes() },
       channel: { linkUniquenessRate: 1.0 },
     })
     const expected = [candidates[0]]
@@ -286,7 +300,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       identifierSource: 'guid',
       filters: [filter],
-      incoming: { hashes: {} },
+      incoming: { hashes: makeHashes() },
       channel: { linkUniquenessRate: 1.0 },
     })
 
@@ -304,7 +318,7 @@ describe('applyCandidateFilters', () => {
       },
     }
     const candidate = makeItem({ id: 'a' })
-    const hashes: ItemHashes = { guidHash: 'guid-1' }
+    const hashes = makeHashes({ guidHash: 'guid-1' })
     applyCandidateFilters({
       candidates: [candidate],
       identifierSource: 'link',

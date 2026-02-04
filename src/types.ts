@@ -20,14 +20,14 @@ export type HashableItem = {
 }
 
 export type ItemHashes = {
-  guidHash?: string
-  guidFragmentHash?: string
-  linkHash?: string
-  linkFragmentHash?: string
-  enclosureHash?: string
-  titleHash?: string
-  summaryHash?: string
-  contentHash?: string
+  guidHash: string | null
+  guidFragmentHash: string | null
+  linkHash: string | null
+  linkFragmentHash: string | null
+  enclosureHash: string | null
+  titleHash: string | null
+  summaryHash: string | null
+  contentHash: string | null
 }
 
 // Minimal shape for existing items — what matching + change detection need.

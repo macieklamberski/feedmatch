@@ -2,7 +2,6 @@ import { updateFilters } from './filters.js'
 import { composeItemIdentifier, resolveIdentityDepth } from './hashes.js'
 import { generateHash, isDefined } from './helpers.js'
 import { computeFeedProfile, findMatchCandidates, selectMatchingItem } from './matching.js'
-import { hashKeys } from './meta.js'
 import {
   composeItemIdentifiers,
   computeAllHashes,
@@ -14,25 +13,9 @@ import type {
   ClassifyItemsResult,
   HashableItem,
   InsertAction,
-  ItemHashes,
   MatchableItem,
   UpdateAction,
 } from './types.js'
-
-// Convert MatchableItem (string | null) to ItemHashes (string | undefined).
-const toItemHashes = (item: MatchableItem): ItemHashes => {
-  const hashes: ItemHashes = {}
-
-  for (const key of hashKeys) {
-    const value = item[key]
-
-    if (value) {
-      hashes[key] = value
-    }
-  }
-
-  return hashes
-}
 
 // Classify new items against existing items into inserts/updates.
 // Uses level-based identity with auto-computed depth when not provided.
@@ -77,22 +60,22 @@ export const classifyItems = <TItem extends HashableItem>(
 
     // Link match: only exclude when max-depth identifiers agree (true duplicate).
     const incomingMaxKey = composeItemIdentifier(newItemHashes, 'title')
-    const existingMaxKey = composeItemIdentifier(toItemHashes(result.match), 'title')
+    const existingMaxKey = composeItemIdentifier(result.match, 'title')
 
     if (incomingMaxKey === existingMaxKey) {
       matchedExistingIds.add(result.match.id)
     }
   }
 
-  const unmatchedExistingItemsHashes = existingItems
-    .filter((item) => !matchedExistingIds.has(item.id))
-    .map(toItemHashes)
+  const unmatchedExistingItems = existingItems.filter((item) => {
+    return !matchedExistingIds.has(item.id)
+  })
 
   // Dedup by max-depth identifier so identity-equivalent items (literal
   // duplicates, or same item with slightly different hash coverage) don't
   // cause false downgrades. Items with no level identity are skipped.
   const seenKeys = new Set<string>()
-  const depthHashes = [...newItemsHashes, ...unmatchedExistingItemsHashes].filter((hashes) => {
+  const depthHashes = [...newItemsHashes, ...unmatchedExistingItems].filter((hashes) => {
     const maxKey = composeItemIdentifier(hashes, 'title')
 
     if (!maxKey) {
@@ -127,7 +110,7 @@ export const classifyItems = <TItem extends HashableItem>(
     // Reject candidates whose identifier differs from the incoming item.
     // This prevents matching (and merging) items that the levels consider distinct.
     const depthFilteredCandidates = candidates.filter((candidate) => {
-      return composeItemIdentifier(toItemHashes(candidate), resolvedDepth) === item.identifier
+      return composeItemIdentifier(candidate, resolvedDepth) === item.identifier
     })
 
     const result = selectMatchingItem({

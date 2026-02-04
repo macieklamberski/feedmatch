@@ -31,12 +31,9 @@ export const enclosureConflictFilter: CandidateFilter = {
 export const contentChangeFilter: UpdateFilter = {
   name: 'contentChange',
   shouldUpdate: (context) => {
-    return (
-      hashMeta
-        .filter((meta) => meta.isContent)
-        /* biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined. */
-        .some((meta) => context.existing[meta.key] != context.incomingHashes[meta.key])
-    )
+    return hashMeta
+      .filter((meta) => meta.isContent)
+      .some((meta) => context.existing[meta.key] !== context.incomingHashes[meta.key])
   },
 }
 

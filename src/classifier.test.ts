@@ -9,24 +9,12 @@ import type {
   MatchableItem,
 } from './types.js'
 
+const makeMatchable = (input: HashableItem & { id?: string } = {}): MatchableItem => {
+  const { id = 'item-1', ...hashableFields } = input
+  return { id, ...computeItemHashes(hashableFields) }
+}
+
 describe('classifyItems', () => {
-  const makeMatchable = (input: HashableItem & { id?: string } = {}): MatchableItem => {
-    const { id = 'item-1', ...hashableFields } = input
-    const hashes = computeItemHashes(hashableFields)
-
-    return {
-      id,
-      guidHash: hashes.guidHash ?? null,
-      guidFragmentHash: hashes.guidFragmentHash ?? null,
-      linkHash: hashes.linkHash ?? null,
-      linkFragmentHash: hashes.linkFragmentHash ?? null,
-      enclosureHash: hashes.enclosureHash ?? null,
-      titleHash: hashes.titleHash ?? null,
-      summaryHash: hashes.summaryHash ?? null,
-      contentHash: hashes.contentHash ?? null,
-    }
-  }
-
   describe('basic classification', () => {
     it('should insert all items when no existing items', () => {
       const value: ClassifyItemsInput = {

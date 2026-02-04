@@ -86,10 +86,19 @@ export const resolveIdentityDepth = (
   return 'title'
 }
 
-// Compute all available hashes for a feed item. Returns only the hashes
-// that can be computed (undefined fields omitted).
+// Compute all available hashes for a feed item. Returns null for fields
+// that cannot be computed (absent or empty source data).
 export const computeItemHashes = <TItem extends HashableItem>(item: TItem): ItemHashes => {
-  const hashes: ItemHashes = {}
+  const hashes: ItemHashes = {
+    guidHash: null,
+    guidFragmentHash: null,
+    linkHash: null,
+    linkFragmentHash: null,
+    enclosureHash: null,
+    titleHash: null,
+    summaryHash: null,
+    contentHash: null,
+  }
 
   for (const meta of hashMeta) {
     const normalized = meta.normalizeFn(item)
