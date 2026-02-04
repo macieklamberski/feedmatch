@@ -40,9 +40,13 @@ export const contentChangeGate: UpdateGate = {
   },
 }
 
+// TODO: Consider splitting into prematch/classify gate arrays if a future
+// gate needs to apply only during classification (not pre-match).
+export const candidateGates: Array<CandidateGate> = [enclosureConflictGate]
+export const updateGates: Array<UpdateGate> = [contentChangeGate]
+
 // Apply all applicable candidate gates to a candidate list for a given source.
 // Gates are applied sequentially — each gate filters the output of the previous.
-// Emits candidates.gated trace events when gates remove candidates.
 export const applyCandidateGates = ({
   candidates,
   source,

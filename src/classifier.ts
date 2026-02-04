@@ -1,4 +1,4 @@
-import { contentChangeGate, enclosureConflictGate } from './gates.js'
+import { updateGates } from './gates.js'
 import { composeIdentifier, resolveIdentityDepth } from './hashes.js'
 import { generateHash, isDefined } from './helpers.js'
 import { computeChannelProfile, findCandidatesForItem, selectMatch } from './matching.js'
@@ -34,10 +34,7 @@ const toItemHashes = (item: MatchableItem): ItemHashes => {
 export const classifyItems = <TItem extends HashableItem>(
   input: ClassifyItemsInput<TItem>,
 ): ClassifyItemsResult<TItem> => {
-  const { newItems, existingItems, identityDepth: inputDepth, policy } = input
-
-  const candidateGates = [enclosureConflictGate, ...(policy?.candidateGates ?? [])]
-  const updateGates = [contentChangeGate, ...(policy?.updateGates ?? [])]
+  const { newItems, existingItems, identityDepth: inputDepth } = input
 
   const hashedItems = computeAllHashes(newItems)
   const incomingHashes = hashedItems.map((item) => item.hashes)
@@ -62,7 +59,6 @@ export const classifyItems = <TItem extends HashableItem>(
       hashes,
       candidates,
       linkUniquenessRate: profile.linkUniquenessRate,
-      candidateGates,
     })
 
     if (!result) {
@@ -135,7 +131,6 @@ export const classifyItems = <TItem extends HashableItem>(
       hashes: item.hashes,
       candidates: depthFilteredCandidates,
       linkUniquenessRate: profile.linkUniquenessRate,
-      candidateGates,
     })
 
     if (!result) {

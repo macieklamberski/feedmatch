@@ -1,8 +1,7 @@
-import { applyCandidateGates } from './gates.js'
+import { applyCandidateGates, candidateGates } from './gates.js'
 import { isDefined } from './helpers.js'
 import { hashMeta, hasStrongHash } from './meta.js'
 import type {
-  CandidateGate,
   ChannelProfile,
   ItemHashes,
   MatchableItem,
@@ -207,12 +206,10 @@ export const selectMatch = ({
   hashes,
   candidates,
   linkUniquenessRate,
-  candidateGates,
 }: {
   hashes: ItemHashes
   candidates: Array<MatchableItem>
   linkUniquenessRate: number
-  candidateGates: Array<CandidateGate>
 }): MatchResult | undefined => {
   const incoming = { hashes }
   const channel = { linkUniquenessRate }

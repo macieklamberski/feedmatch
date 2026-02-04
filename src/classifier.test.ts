@@ -2,13 +2,11 @@ import { describe, expect, it } from 'bun:test'
 import { classifyItems } from './classifier.js'
 import { computeItemHashes } from './hashes.js'
 import type {
-  CandidateGate,
   ClassifyItemsInput,
   ClassifyItemsResult,
   HashableItem,
   IdentityDepth,
   MatchableItem,
-  UpdateGate,
 } from './types.js'
 
 describe('classifyItems', () => {
@@ -3695,66 +3693,6 @@ describe('classifyItems', () => {
 
         expect(outputIndex).toBeGreaterThanOrEqual(inputIndex)
       }
-    })
-  })
-
-  describe('policy', () => {
-    it('should apply custom candidate gate to reject matches', () => {
-      const rejectAllGate: CandidateGate = {
-        name: 'rejectAll',
-        appliesTo: 'all',
-        decide: () => {
-          return { allow: false, reason: 'custom rejection' }
-        },
-      }
-      const value: ClassifyItemsInput = {
-        newItems: [{ guid: 'guid-1', title: 'Updated Title' }],
-        existingItems: [makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'Old Title' })],
-        policy: { candidateGates: [rejectAllGate] },
-      }
-      const result = classifyItems(value)
-
-      expect(result.inserts).toHaveLength(1)
-      expect(result.updates).toHaveLength(0)
-    })
-
-    it('should apply custom update gate to suppress updates', () => {
-      const suppressAllGate: UpdateGate = {
-        name: 'suppressAll',
-        shouldEmit: () => {
-          return false
-        },
-      }
-      const value: ClassifyItemsInput = {
-        newItems: [{ guid: 'guid-1', title: 'Updated Title' }],
-        existingItems: [makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'Old Title' })],
-        policy: { updateGates: [suppressAllGate] },
-      }
-      const result = classifyItems(value)
-
-      expect(result.inserts).toHaveLength(0)
-      expect(result.updates).toHaveLength(0)
-    })
-
-    it('should compose custom gates with built-in gates', () => {
-      const customGate: CandidateGate = {
-        name: 'customGate',
-        appliesTo: ['guid'],
-        decide: () => {
-          return { allow: true }
-        },
-      }
-      const value: ClassifyItemsInput = {
-        newItems: [{ guid: 'guid-1', title: 'Updated Title' }],
-        existingItems: [makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'Old Title' })],
-        policy: {
-          candidateGates: [customGate],
-        },
-      }
-      const result = classifyItems(value)
-
-      expect(result.updates).toHaveLength(1)
-      expect(result.updates[0].existingItemId).toBe('existing-1')
     })
   })
 })

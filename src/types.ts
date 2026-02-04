@@ -119,16 +119,10 @@ export type UpdateGate = {
   shouldEmit: (context: UpdateGateContext) => boolean
 }
 
-export type ClassifyPolicy = {
-  candidateGates?: Array<CandidateGate>
-  updateGates?: Array<UpdateGate>
-}
-
 export type ClassifyItemsInput<TItem extends HashableItem = HashableItem> = {
   newItems: Array<TItem>
   existingItems: Array<MatchableItem>
   identityDepth?: IdentityDepth
-  policy?: ClassifyPolicy
 }
 
 export type ClassifyItemsResult<TItem> = {
