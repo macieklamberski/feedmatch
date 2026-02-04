@@ -82,7 +82,6 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   // classification. Uses raw (not deduped) incoming hashes; duplicates
   // lower uniqueness slightly, which is conservative (fewer link matches).
   const feedProfile = computeFeedProfile(existingItems, incomingItems)
-  const linkUniquenessRate = feedProfile.link.uniquenessRate
 
   // Pre-match: find existing items that are true updates and exclude them
   // from the level collision set. A match is "strong enough" when it's by
@@ -97,7 +96,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
     const result = selectMatchingItem({
       incoming: incomingItem,
       candidates,
-      linkUniquenessRate,
+      feedProfile,
     })
 
     if (!result) {
@@ -167,7 +166,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
     const result = selectMatchingItem({
       incoming: item,
       candidates: levelFilteredCandidates,
-      linkUniquenessRate,
+      feedProfile,
     })
 
     if (!result) {

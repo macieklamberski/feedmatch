@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { computeFeedProfile, computeSignalStats } from './profile.js'
-import type { ExistingItem, ItemHashes } from './types.js'
+import type { ExistingItem, IncomingItem } from './types.js'
 
 const makeItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
   return {
@@ -17,7 +17,7 @@ const makeItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
   }
 }
 
-const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
+const makeIncomingItem = (overrides: Partial<IncomingItem> = {}): IncomingItem => {
   return {
     guidHash: null,
     guidFragmentHash: null,
@@ -105,100 +105,115 @@ describe('computeSignalStats', () => {
 })
 
 describe('computeFeedProfile', () => {
-  it('should return 1.0 uniqueness when all link hashes are unique', () => {
+  it('should return 1.0 effective uniqueness when all link hashes are unique', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: 'l-1' }),
       makeItem({ id: 'b', linkHash: 'l-2' }),
     ]
-    const incomingHashes = [makeHashes({ linkHash: 'l-3' }), makeHashes({ linkHash: 'l-4' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = { present: 4, total: 4, presenceRate: 1.0, distinct: 4, uniquenessRate: 1.0 }
+    const incomingItems = [
+      makeIncomingItem({ linkHash: 'l-3' }),
+      makeIncomingItem({ linkHash: 'l-4' }),
+    ]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      incoming: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+    })
   })
 
-  it('should return min of historical and batch uniqueness rates', () => {
+  it('should return min of existing and incoming uniqueness rates', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: 'l-1' }),
       makeItem({ id: 'b', linkHash: 'l-1' }),
     ]
-    const incomingHashes = [makeHashes({ linkHash: 'l-3' }), makeHashes({ linkHash: 'l-4' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = { present: 4, total: 4, presenceRate: 1.0, distinct: 3, uniquenessRate: 0.5 }
+    const incomingItems = [
+      makeIncomingItem({ linkHash: 'l-3' }),
+      makeIncomingItem({ linkHash: 'l-4' }),
+    ]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
+      incoming: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
+    })
   })
 
-  it('should use batch stats when no existing items', () => {
+  it('should use incoming stats when no existing items', () => {
     const existingItems: Array<ExistingItem> = []
-    const incomingHashes = [makeHashes({ linkHash: 'l-1' }), makeHashes({ linkHash: 'l-2' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = {
-      present: 2,
-      total: 2,
-      presenceRate: 1.0,
-      distinct: 2,
-      uniquenessRate: 1.0,
-    }
+    const incomingItems = [
+      makeIncomingItem({ linkHash: 'l-1' }),
+      makeIncomingItem({ linkHash: 'l-2' }),
+    ]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 0, total: 0, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      incoming: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+    })
   })
 
-  it('should use batch stats when existing items have only null link hashes', () => {
+  it('should use incoming stats when existing items have only null link hashes', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: null }),
       makeItem({ id: 'b', linkHash: null }),
     ]
-    const incomingHashes = [makeHashes({ linkHash: 'l-1' }), makeHashes({ linkHash: 'l-2' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 }
+    const incomingItems = [
+      makeIncomingItem({ linkHash: 'l-1' }),
+      makeIncomingItem({ linkHash: 'l-2' }),
+    ]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 0, total: 2, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      incoming: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+    })
   })
 
-  it('should use historical stats when no incoming items', () => {
+  it('should use existing stats when no incoming items', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: 'l-1' }),
       makeItem({ id: 'b', linkHash: 'l-1' }),
     ]
-    const incomingHashes: Array<ItemHashes> = []
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = {
-      present: 2,
-      total: 2,
-      presenceRate: 1.0,
-      distinct: 1,
-      uniquenessRate: 0.5,
-    }
+    const incomingItems: Array<IncomingItem> = []
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
+      incoming: { present: 0, total: 0, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
+    })
   })
 
-  it('should return zero stats when neither side has link data', () => {
+  it('should fall back to incoming when neither side has present link values', () => {
     const existingItems = [makeItem({ id: 'a' })]
-    const incomingHashes: Array<ItemHashes> = []
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = {
-      present: 0,
-      total: 0,
-      presenceRate: 0,
-      distinct: 0,
-      uniquenessRate: 0,
-    }
+    const incomingItems: Array<IncomingItem> = []
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 0, total: 1, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      incoming: { present: 0, total: 0, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      effective: { presenceRate: 0, uniquenessRate: 0 },
+    })
   })
 
-  it('should ignore null link hashes in existing items', () => {
+  it('should compute min effective rate when existing has mixed null values', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: null }),
       makeItem({ id: 'b', linkHash: 'l-1' }),
     ]
-    const incomingHashes = [makeHashes({ linkHash: 'l-2' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = { present: 2, total: 3, presenceRate: 0.5, distinct: 2, uniquenessRate: 1.0 }
+    const incomingItems = [makeIncomingItem({ linkHash: 'l-2' })]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.link).toEqual(expected)
+    expect(profile.link).toEqual({
+      existing: { present: 1, total: 2, presenceRate: 0.5, distinct: 1, uniquenessRate: 1.0 },
+      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+      effective: { presenceRate: 0.5, uniquenessRate: 1.0 },
+    })
   })
 
   it('should compute independent stats per signal', () => {
@@ -218,68 +233,62 @@ describe('computeFeedProfile', () => {
         titleHash: 't-shared',
       }),
     ]
-    const incomingHashes = [
-      makeHashes({
+    const incomingItems = [
+      makeIncomingItem({
         guidHash: 'g-3',
         linkHash: 'l-3',
         enclosureHash: 'e-3',
         titleHash: 't-3',
       }),
     ]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expectedGuid = {
-      present: 3,
-      total: 3,
-      presenceRate: 1.0,
-      distinct: 3,
-      uniquenessRate: 1.0,
-    }
-    const expectedLink = {
-      present: 3,
-      total: 3,
-      presenceRate: 1.0,
-      distinct: 2,
-      uniquenessRate: 0.5,
-    }
-    const expectedEnclosure = {
-      present: 3,
-      total: 3,
-      presenceRate: 1.0,
-      distinct: 3,
-      uniquenessRate: 1.0,
-    }
-    const expectedTitle = {
-      present: 3,
-      total: 3,
-      presenceRate: 1.0,
-      distinct: 2,
-      uniquenessRate: 0.5,
-    }
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.guid).toEqual(expectedGuid)
-    expect(profile.link).toEqual(expectedLink)
-    expect(profile.enclosure).toEqual(expectedEnclosure)
-    expect(profile.title).toEqual(expectedTitle)
+    expect(profile.guid).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+    })
+    expect(profile.link).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
+      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
+    })
+    expect(profile.enclosure).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+    })
+    expect(profile.title).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
+      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
+    })
   })
 
   it('should return zero stats for absent signals across both sides', () => {
     const existingItems = [makeItem({ id: 'a', guidHash: 'g-1' })]
-    const incomingHashes = [makeHashes({ guidHash: 'g-2' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = { present: 0, total: 1, presenceRate: 0, distinct: 0, uniquenessRate: 0 }
+    const incomingItems = [makeIncomingItem({ guidHash: 'g-2' })]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.enclosure).toEqual(expected)
+    expect(profile.enclosure).toEqual({
+      existing: { present: 0, total: 1, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      incoming: { present: 0, total: 1, presenceRate: 0, distinct: 0, uniquenessRate: 0 },
+      effective: { presenceRate: 0, uniquenessRate: 0 },
+    })
   })
 
-  it('should combine counts from both sides', () => {
+  it('should return 1.0 effective rates when all items on both sides are unique', () => {
     const existingItems = [
       makeItem({ id: 'a', guidHash: 'g-1' }),
       makeItem({ id: 'b', guidHash: 'g-2' }),
     ]
-    const incomingHashes = [makeHashes({ guidHash: 'g-3' })]
-    const profile = computeFeedProfile(existingItems, incomingHashes)
-    const expected = { present: 3, total: 3, presenceRate: 1.0, distinct: 3, uniquenessRate: 1.0 }
+    const incomingItems = [makeIncomingItem({ guidHash: 'g-3' })]
+    const profile = computeFeedProfile(existingItems, incomingItems)
 
-    expect(profile.guid).toEqual(expected)
+    expect(profile.guid).toEqual({
+      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+    })
   })
 })

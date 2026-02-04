@@ -1,6 +1,6 @@
 import { signalHashKeys } from './constants.js'
 import { isDefined } from './hashes.js'
-import type { ExistingItem, ItemHashes } from './types.js'
+import type { ExistingItem, IncomingItem } from './types.js'
 
 export type SignalStats = {
   present: number
@@ -10,11 +10,20 @@ export type SignalStats = {
   uniquenessRate: number
 }
 
+export type SignalProfile = {
+  existing: SignalStats
+  incoming: SignalStats
+  effective: {
+    presenceRate: number
+    uniquenessRate: number
+  }
+}
+
 export type FeedProfile = {
-  guid: SignalStats
-  link: SignalStats
-  enclosure: SignalStats
-  title: SignalStats
+  guid: SignalProfile
+  link: SignalProfile
+  enclosure: SignalProfile
+  title: SignalProfile
 }
 
 // Compute stats for a single signal from a set of hash values.
@@ -31,43 +40,32 @@ export const computeSignalStats = (values: Array<string | null>): SignalStats =>
   }
 }
 
-// Combine two SignalStats conservatively. When one side has no present values,
-// fall back to the other side. Otherwise take the minimum of both rates.
-const combineSignalStats = (historical: SignalStats, batch: SignalStats): SignalStats => {
-  if (historical.present === 0) {
-    return batch
-  }
-
-  if (batch.present === 0) {
-    return historical
-  }
-
-  const present = historical.present + batch.present
-  const total = historical.total + batch.total
-  const distinct = historical.distinct + batch.distinct
-
-  return {
-    present,
-    total,
-    presenceRate: Math.min(historical.presenceRate, batch.presenceRate),
-    distinct,
-    uniquenessRate: Math.min(historical.uniquenessRate, batch.uniquenessRate),
-  }
-}
-
-// Compute feed profile from existing + incoming hashes. Per-signal stats
-// use conservative combining: when one side has no present values, fall
-// back to the other side; otherwise take the minimum of both rates.
+// Compute feed profile from existing + incoming items. Per-signal stats
+// are kept separate; effective rates use conservative combining: when one
+// side has no present values, fall back to the other; otherwise min.
 export const computeFeedProfile = (
   existingItems: Array<ExistingItem>,
-  incomingHashes: Array<ItemHashes>,
+  incomingItems: Array<IncomingItem>,
 ): FeedProfile => {
   const profile = {} as FeedProfile
 
   for (const [signal, hashKey] of signalHashKeys) {
-    const historical = computeSignalStats(existingItems.map((item) => item[hashKey]))
-    const batch = computeSignalStats(incomingHashes.map((hashes) => hashes[hashKey]))
-    profile[signal] = combineSignalStats(historical, batch)
+    const existing = computeSignalStats(existingItems.map((item) => item[hashKey]))
+    const incoming = computeSignalStats(incomingItems.map((item) => item[hashKey]))
+
+    // When one side has no present values, use the other side's rates.
+    // Otherwise take the minimum (conservative).
+    const effective =
+      existing.present === 0
+        ? { presenceRate: incoming.presenceRate, uniquenessRate: incoming.uniquenessRate }
+        : incoming.present === 0
+          ? { presenceRate: existing.presenceRate, uniquenessRate: existing.uniquenessRate }
+          : {
+              presenceRate: Math.min(existing.presenceRate, incoming.presenceRate),
+              uniquenessRate: Math.min(existing.uniquenessRate, incoming.uniquenessRate),
+            }
+
+    profile[signal] = { existing, incoming, effective }
   }
 
   return profile

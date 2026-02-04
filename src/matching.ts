@@ -1,5 +1,6 @@
 import { hashMeta } from './constants.js'
 import { hasStrongHash } from './hashes.js'
+import type { FeedProfile } from './profile.js'
 import type {
   CandidateFilter,
   CandidateFilterContext,
@@ -275,12 +276,13 @@ export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult
 export const selectMatchingItem = ({
   incoming,
   candidates,
-  linkUniquenessRate,
+  feedProfile,
 }: {
   incoming: IncomingItem
   candidates: Array<ExistingItem>
-  linkUniquenessRate: number
+  feedProfile: FeedProfile
 }): MatchResult | undefined => {
+  const linkUniquenessRate = feedProfile.link.effective.uniquenessRate
   const channel = { linkUniquenessRate }
 
   const filtered = (matchedBy: MatchedBy, candidates: Array<ExistingItem>): Array<ExistingItem> => {
