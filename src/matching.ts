@@ -1,4 +1,4 @@
-import { applyCandidateGates, candidateGates } from './gates.js'
+import { applyCandidateFilters, candidateFilters } from './filters.js'
 import { isDefined } from './helpers.js'
 import { hashMeta, hasStrongHash } from './meta.js'
 import type {
@@ -46,13 +46,13 @@ export const findMatchCandidates = (
 
 // Tier matcher: GUID with enclosure/guidFragment/link disambiguation.
 const matchByGuid = (context: TierContext): TierResult => {
-  const { hashes, candidates, gated } = context
+  const { hashes, candidates, filtered } = context
 
   if (!hashes.guidHash) {
     return { outcome: 'pass' }
   }
 
-  const byGuid = gated(
+  const byGuid = filtered(
     'guid',
     candidates.filter((candidate) => {
       return candidate.guidHash === hashes.guidHash
@@ -108,13 +108,13 @@ const matchByGuid = (context: TierContext): TierResult => {
 
 // Tier matcher: link with linkFragment disambiguation.
 const matchByLink = (context: TierContext): TierResult => {
-  const { hashes, candidates, gated } = context
+  const { hashes, candidates, filtered } = context
 
   if (!hashes.linkHash) {
     return { outcome: 'pass' }
   }
 
-  const byLink = gated(
+  const byLink = filtered(
     'link',
     candidates.filter((candidate) => {
       return candidate.linkHash === hashes.linkHash
@@ -144,13 +144,13 @@ const matchByLink = (context: TierContext): TierResult => {
 
 // Tier matcher: enclosure (no disambiguation).
 const matchByEnclosure = (context: TierContext): TierResult => {
-  const { hashes, candidates, gated } = context
+  const { hashes, candidates, filtered } = context
 
   if (!hashes.enclosureHash) {
     return { outcome: 'pass' }
   }
 
-  const byEnclosure = gated(
+  const byEnclosure = filtered(
     'enclosure',
     candidates.filter((candidate) => {
       return candidate.enclosureHash === hashes.enclosureHash
@@ -173,13 +173,13 @@ const matchByEnclosure = (context: TierContext): TierResult => {
 
 // Tier matcher: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
 const matchByTitle = (context: TierContext): TierResult => {
-  const { hashes, candidates, gated } = context
+  const { hashes, candidates, filtered } = context
 
   if (!hashes.titleHash) {
     return { outcome: 'pass' }
   }
 
-  const byTitle = gated(
+  const byTitle = filtered(
     'title',
     candidates.filter((candidate) => {
       return candidate.titleHash === hashes.titleHash
@@ -214,14 +214,14 @@ export const selectMatchingItem = ({
   const incoming = { hashes }
   const channel = { linkUniquenessRate }
 
-  const gated = (
+  const filtered = (
     identifierSource: MatchSource,
-    filtered: Array<MatchableItem>,
+    candidates: Array<MatchableItem>,
   ): Array<MatchableItem> => {
-    return applyCandidateGates({
-      candidates: filtered,
+    return applyCandidateFilters({
+      candidates,
       identifierSource,
-      gates: candidateGates,
+      filters: candidateFilters,
       incoming,
       channel,
     })
@@ -231,7 +231,7 @@ export const selectMatchingItem = ({
     return
   }
 
-  const context: TierContext = { hashes, candidates, gated }
+  const context: TierContext = { hashes, candidates, filtered }
 
   const tryTier = (
     tier: (context: TierContext) => TierResult,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
-import { applyCandidateGates, contentChangeGate, enclosureConflictGate } from './gates.js'
+import { applyCandidateFilters, contentChangeFilter, enclosureConflictFilter } from './filters.js'
 import type {
-  CandidateGate,
-  CandidateGateContext,
+  CandidateFilter,
+  CandidateFilterContext,
   ItemHashes,
   MatchableItem,
   MatchSource,
@@ -23,126 +23,126 @@ const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
   }
 }
 
-describe('enclosureConflictGate', () => {
+describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on guid source', () => {
-    const value: CandidateGateContext = {
+    const value: CandidateFilterContext = {
       identifierSource: 'guid',
       incoming: { hashes: { enclosureHash: 'enc-new' } },
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
     }
 
-    expect(enclosureConflictGate.decide(value)).toEqual({
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({
       allow: false,
       reason: 'Enclosure hash mismatch',
     })
   })
 
   it('should reject when both sides have different enclosures on link source', () => {
-    const value: CandidateGateContext = {
+    const value: CandidateFilterContext = {
       identifierSource: 'link',
       incoming: { hashes: { enclosureHash: 'enc-new' } },
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
     }
 
-    expect(enclosureConflictGate.decide(value)).toEqual({
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({
       allow: false,
       reason: 'Enclosure hash mismatch',
     })
   })
 
   it('should allow when enclosures match', () => {
-    const value: CandidateGateContext = {
+    const value: CandidateFilterContext = {
       identifierSource: 'guid',
       incoming: { hashes: { enclosureHash: 'enc-same' } },
       candidate: makeItem({ enclosureHash: 'enc-same' }),
       channel: { linkUniquenessRate: 1.0 },
     }
 
-    expect(enclosureConflictGate.decide(value)).toEqual({ allow: true })
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
   })
 
   it('should allow when candidate has no enclosure', () => {
-    const value: CandidateGateContext = {
+    const value: CandidateFilterContext = {
       identifierSource: 'guid',
       incoming: { hashes: { enclosureHash: 'enc-new' } },
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
     }
 
-    expect(enclosureConflictGate.decide(value)).toEqual({ allow: true })
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
   })
 
   it('should allow when incoming has no enclosure', () => {
-    const value: CandidateGateContext = {
+    const value: CandidateFilterContext = {
       identifierSource: 'guid',
       incoming: { hashes: {} },
       candidate: makeItem({ enclosureHash: 'enc-existing' }),
       channel: { linkUniquenessRate: 1.0 },
     }
 
-    expect(enclosureConflictGate.decide(value)).toEqual({ allow: true })
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
   })
 
   it('should allow when neither side has enclosure', () => {
-    const value: CandidateGateContext = {
+    const value: CandidateFilterContext = {
       identifierSource: 'guid',
       incoming: { hashes: {} },
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
     }
 
-    expect(enclosureConflictGate.decide(value)).toEqual({ allow: true })
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
   })
 
   it('should only apply to guid and link sources', () => {
-    expect(enclosureConflictGate.appliesTo).toEqual(['guid', 'link'])
+    expect(enclosureConflictFilter.appliesTo).toEqual(['guid', 'link'])
   })
 })
 
-describe('contentChangeGate', () => {
-  it('should emit when title changes', () => {
+describe('contentChangeFilter', () => {
+  it('should update when title changes', () => {
     const value = {
       existing: makeItem({ titleHash: 'title-1' }),
       incomingHashes: { titleHash: 'title-2' } as ItemHashes,
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(true)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should emit when summary changes', () => {
+  it('should update when summary changes', () => {
     const value = {
       existing: makeItem({ summaryHash: 'sum-1' }),
       incomingHashes: { summaryHash: 'sum-2' } as ItemHashes,
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(true)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should emit when content changes', () => {
+  it('should update when content changes', () => {
     const value = {
       existing: makeItem({ contentHash: 'cnt-1' }),
       incomingHashes: { contentHash: 'cnt-2' } as ItemHashes,
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(true)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should emit when enclosure changes', () => {
+  it('should update when enclosure changes', () => {
     const value = {
       existing: makeItem({ enclosureHash: 'enc-1' }),
       incomingHashes: { enclosureHash: 'enc-2' } as ItemHashes,
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(true)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should not emit when all content hashes match', () => {
+  it('should not update when all content hashes match', () => {
     const value = {
       existing: makeItem({
         titleHash: 'title-1',
@@ -159,17 +159,17 @@ describe('contentChangeGate', () => {
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(false)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
   })
 
-  it('should not emit when null and undefined are compared', () => {
+  it('should not update when null and undefined are compared', () => {
     const value = {
       existing: makeItem({ titleHash: null, contentHash: null }),
       incomingHashes: {} as ItemHashes,
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(false)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
   })
 
   it('should ignore non-content hashes', () => {
@@ -179,24 +179,24 @@ describe('contentChangeGate', () => {
       identifierSource: 'guid' as MatchSource,
     }
 
-    expect(contentChangeGate.shouldEmit(value)).toBe(false)
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
   })
 })
 
-describe('applyCandidateGates', () => {
-  it('should return all candidates when no gates apply', () => {
+describe('applyCandidateFilters', () => {
+  it('should return all candidates when no filters apply', () => {
     const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
-    const gate: CandidateGate = {
+    const filter: CandidateFilter = {
       name: 'irrelevant',
       appliesTo: ['enclosure'],
-      decide: () => {
+      evaluate: () => {
         return { allow: false, reason: 'blocked' }
       },
     }
-    const value = applyCandidateGates({
+    const value = applyCandidateFilters({
       candidates,
       identifierSource: 'guid',
-      gates: [gate],
+      filters: [filter],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
     })
@@ -204,15 +204,15 @@ describe('applyCandidateGates', () => {
     expect(value).toEqual(candidates)
   })
 
-  it('should filter candidates using applicable gate', () => {
+  it('should filter candidates using applicable filter', () => {
     const candidates = [
       makeItem({ id: 'a', enclosureHash: 'enc-1' }),
       makeItem({ id: 'b', enclosureHash: 'enc-2' }),
     ]
-    const value = applyCandidateGates({
+    const value = applyCandidateFilters({
       candidates,
       identifierSource: 'guid',
-      gates: [enclosureConflictGate],
+      filters: [enclosureConflictFilter],
       incoming: { hashes: { enclosureHash: 'enc-1' } },
       channel: { linkUniquenessRate: 1.0 },
     })
@@ -221,19 +221,19 @@ describe('applyCandidateGates', () => {
     expect(value).toEqual(expected)
   })
 
-  it('should apply gate with appliesTo all', () => {
-    const gate: CandidateGate = {
+  it('should apply filter with appliesTo all', () => {
+    const filter: CandidateFilter = {
       name: 'blockAll',
       appliesTo: 'all',
-      decide: () => {
+      evaluate: () => {
         return { allow: false, reason: 'blocked' }
       },
     }
     const candidates = [makeItem({ id: 'a' })]
-    const value = applyCandidateGates({
+    const value = applyCandidateFilters({
       candidates,
       identifierSource: 'title',
-      gates: [gate],
+      filters: [filter],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
     })
@@ -241,30 +241,30 @@ describe('applyCandidateGates', () => {
     expect(value).toEqual([])
   })
 
-  it('should apply gates sequentially', () => {
-    const gateA: CandidateGate = {
+  it('should apply filters sequentially', () => {
+    const filterA: CandidateFilter = {
       name: 'removeB',
       appliesTo: 'all',
-      decide: (context) => {
+      evaluate: (context) => {
         return context.candidate.id === 'b'
           ? { allow: false, reason: 'removed b' }
           : { allow: true }
       },
     }
-    const gateB: CandidateGate = {
+    const filterB: CandidateFilter = {
       name: 'removeC',
       appliesTo: 'all',
-      decide: (context) => {
+      evaluate: (context) => {
         return context.candidate.id === 'c'
           ? { allow: false, reason: 'removed c' }
           : { allow: true }
       },
     }
     const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })]
-    const value = applyCandidateGates({
+    const value = applyCandidateFilters({
       candidates,
       identifierSource: 'guid',
-      gates: [gateA, gateB],
+      filters: [filterA, filterB],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
     })
@@ -274,18 +274,18 @@ describe('applyCandidateGates', () => {
   })
 
   it('should return empty array when all candidates are removed', () => {
-    const gate: CandidateGate = {
+    const filter: CandidateFilter = {
       name: 'blockAll',
       appliesTo: 'all',
-      decide: () => {
+      evaluate: () => {
         return { allow: false, reason: 'blocked' }
       },
     }
     const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
-    const value = applyCandidateGates({
+    const value = applyCandidateFilters({
       candidates,
       identifierSource: 'guid',
-      gates: [gate],
+      filters: [filter],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
     })
@@ -293,22 +293,22 @@ describe('applyCandidateGates', () => {
     expect(value).toEqual([])
   })
 
-  it('should pass correct context to gate decide function', () => {
-    const contexts: Array<CandidateGateContext> = []
-    const gate: CandidateGate = {
+  it('should pass correct context to filter evaluate function', () => {
+    const contexts: Array<CandidateFilterContext> = []
+    const filter: CandidateFilter = {
       name: 'spy',
       appliesTo: 'all',
-      decide: (context) => {
+      evaluate: (context) => {
         contexts.push(context)
         return { allow: true }
       },
     }
     const candidate = makeItem({ id: 'a' })
     const hashes: ItemHashes = { guidHash: 'guid-1' }
-    applyCandidateGates({
+    applyCandidateFilters({
       candidates: [candidate],
       identifierSource: 'link',
-      gates: [gate],
+      filters: [filter],
       incoming: { hashes },
       channel: { linkUniquenessRate: 0.5 },
     })

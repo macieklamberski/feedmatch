@@ -774,7 +774,7 @@ describe('matchByGuid', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [candidate],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByGuid(context)).toEqual({
@@ -788,7 +788,7 @@ describe('matchByGuid', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1', enclosureHash: 'enc-1' },
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByGuid(context)).toEqual({
@@ -802,7 +802,7 @@ describe('matchByGuid', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1', guidFragmentHash: 'gf-1' },
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByGuid(context)).toEqual({
@@ -816,7 +816,7 @@ describe('matchByGuid', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1', linkHash: 'link-1' },
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByGuid(context)).toEqual({
@@ -832,7 +832,7 @@ describe('matchByGuid', () => {
         makeItem({ id: 'a', guidHash: 'guid-1' }),
         makeItem({ id: 'b', guidHash: 'guid-1' }),
       ],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByGuid(context)).toEqual({
@@ -846,7 +846,7 @@ describe('matchByGuid', () => {
     const context: TierContext = {
       hashes: { linkHash: 'link-1' },
       candidates: [makeItem({ guidHash: 'guid-1' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByGuid(context)).toEqual({ outcome: 'pass' })
@@ -859,7 +859,7 @@ describe('matchByLink', () => {
     const context: TierContext = {
       hashes: { linkHash: 'link-1' },
       candidates: [candidate],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByLink(context)).toEqual({
@@ -873,7 +873,7 @@ describe('matchByLink', () => {
     const context: TierContext = {
       hashes: { linkHash: 'link-1', linkFragmentHash: 'frag-1' },
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByLink(context)).toEqual({
@@ -889,7 +889,7 @@ describe('matchByLink', () => {
         makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByLink(context)).toEqual({
@@ -903,7 +903,7 @@ describe('matchByLink', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [makeItem({ linkHash: 'link-1' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByLink(context)).toEqual({ outcome: 'pass' })
@@ -916,7 +916,7 @@ describe('matchByEnclosure', () => {
     const context: TierContext = {
       hashes: { enclosureHash: 'enc-1' },
       candidates: [candidate],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByEnclosure(context)).toEqual({
@@ -932,7 +932,7 @@ describe('matchByEnclosure', () => {
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByEnclosure(context)).toEqual({
@@ -946,7 +946,7 @@ describe('matchByEnclosure', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [makeItem({ enclosureHash: 'enc-1' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByEnclosure(context)).toEqual({ outcome: 'pass' })
@@ -959,7 +959,7 @@ describe('matchByTitle', () => {
     const context: TierContext = {
       hashes: { titleHash: 'title-1' },
       candidates: [candidate],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByTitle(context)).toEqual({
@@ -975,7 +975,7 @@ describe('matchByTitle', () => {
         makeItem({ id: 'a', titleHash: 'title-1' }),
         makeItem({ id: 'b', titleHash: 'title-1' }),
       ],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByTitle(context)).toEqual({
@@ -989,7 +989,7 @@ describe('matchByTitle', () => {
     const context: TierContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [makeItem({ titleHash: 'title-1' })],
-      gated: identity,
+      filtered: identity,
     }
 
     expect(matchByTitle(context)).toEqual({ outcome: 'pass' })

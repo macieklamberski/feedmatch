@@ -76,7 +76,10 @@ export type TierResult =
 export type TierContext = {
   hashes: ItemHashes
   candidates: Array<MatchableItem>
-  gated: (identifierSource: MatchSource, filtered: Array<MatchableItem>) => Array<MatchableItem>
+  filtered: (
+    identifierSource: MatchSource,
+    candidates: Array<MatchableItem>,
+  ) => Array<MatchableItem>
 }
 
 export type InsertAction<TItem> = {
@@ -93,30 +96,30 @@ export type UpdateAction<TItem> = {
   identifierSource: MatchSource
 }
 
-export type CandidateGateContext = {
+export type CandidateFilterContext = {
   identifierSource: MatchSource
   incoming: { hashes: ItemHashes }
   candidate: MatchableItem
   channel: { linkUniquenessRate: number }
 }
 
-export type CandidateGateResult = { allow: true } | { allow: false; reason: string }
+export type CandidateFilterResult = { allow: true } | { allow: false; reason: string }
 
-export type CandidateGate = {
+export type CandidateFilter = {
   name: string
   appliesTo: Array<MatchSource> | 'all'
-  decide: (context: CandidateGateContext) => CandidateGateResult
+  evaluate: (context: CandidateFilterContext) => CandidateFilterResult
 }
 
-export type UpdateGateContext = {
+export type UpdateFilterContext = {
   existing: MatchableItem
   incomingHashes: ItemHashes
   identifierSource: MatchSource
 }
 
-export type UpdateGate = {
+export type UpdateFilter = {
   name: string
-  shouldEmit: (context: UpdateGateContext) => boolean
+  shouldUpdate: (context: UpdateFilterContext) => boolean
 }
 
 export type ClassifyItemsInput<TItem extends HashableItem = HashableItem> = {

@@ -1,20 +1,20 @@
 import { hashMeta } from './meta.js'
 import type {
-  CandidateGate,
-  CandidateGateContext,
+  CandidateFilter,
+  CandidateFilterContext,
   ItemHashes,
   MatchableItem,
   MatchSource,
-  UpdateGate,
+  UpdateFilter,
 } from './types.js'
 
 // Rejects candidates where both sides have an enclosureHash and they differ.
 // Prevents merging items that share a URL but have different enclosures
 // (e.g. podcast episodes on a show page with regenerated GUIDs).
-export const enclosureConflictGate: CandidateGate = {
+export const enclosureConflictFilter: CandidateFilter = {
   name: 'enclosureConflict',
   appliesTo: ['guid', 'link'],
-  decide: (context) => {
+  evaluate: (context) => {
     const candidateEnclosure = context.candidate.enclosureHash
     const incomingEnclosure = context.incoming.hashes.enclosureHash
 
@@ -26,11 +26,11 @@ export const enclosureConflictGate: CandidateGate = {
   },
 }
 
-// Emits an update only when content hashes differ between existing and incoming.
+// Updates only when content hashes differ between existing and incoming.
 // Compares all isContent hashes (title, summary, content, enclosure).
-export const contentChangeGate: UpdateGate = {
+export const contentChangeFilter: UpdateFilter = {
   name: 'contentChange',
-  shouldEmit: (context) => {
+  shouldUpdate: (context) => {
     return (
       hashMeta
         .filter((meta) => meta.isContent)
@@ -40,36 +40,36 @@ export const contentChangeGate: UpdateGate = {
   },
 }
 
-// TODO: Consider splitting into prematch/classify gate arrays if a future
-// gate needs to apply only during classification (not pre-match).
-export const candidateGates: Array<CandidateGate> = [enclosureConflictGate]
-export const updateGates: Array<UpdateGate> = [contentChangeGate]
+// TODO: Consider splitting into prematch/classify filter arrays if a future
+// filter needs to apply only during classification (not pre-match).
+export const candidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
+export const updateFilters: Array<UpdateFilter> = [contentChangeFilter]
 
-// Apply all applicable candidate gates to a candidate list for a given source.
-// Gates are applied sequentially — each gate filters the output of the previous.
-export const applyCandidateGates = ({
+// Apply all applicable candidate filters to a candidate list for a given source.
+// Filters are applied sequentially — each filter narrows the output of the previous.
+export const applyCandidateFilters = ({
   candidates,
   identifierSource,
-  gates,
+  filters,
   incoming,
   channel,
 }: {
   candidates: Array<MatchableItem>
   identifierSource: MatchSource
-  gates: Array<CandidateGate>
+  filters: Array<CandidateFilter>
   incoming: { hashes: ItemHashes }
   channel: { linkUniquenessRate: number }
 }): Array<MatchableItem> => {
   let result = candidates
 
-  for (const gate of gates) {
-    if (gate.appliesTo !== 'all' && !gate.appliesTo.includes(identifierSource)) {
+  for (const filter of filters) {
+    if (filter.appliesTo !== 'all' && !filter.appliesTo.includes(identifierSource)) {
       continue
     }
 
     result = result.filter((candidate) => {
-      const context: CandidateGateContext = { identifierSource, incoming, candidate, channel }
-      return gate.decide(context).allow
+      const context: CandidateFilterContext = { identifierSource, incoming, candidate, channel }
+      return filter.evaluate(context).allow
     })
   }
 

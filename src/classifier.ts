@@ -1,4 +1,4 @@
-import { updateGates } from './gates.js'
+import { updateFilters } from './filters.js'
 import { composeItemIdentifier, resolveIdentityDepth } from './hashes.js'
 import { generateHash, isDefined } from './helpers.js'
 import { computeFeedProfile, findMatchCandidates, selectMatchingItem } from './matching.js'
@@ -146,8 +146,8 @@ export const classifyItems = <TItem extends HashableItem>(
       continue
     }
 
-    const shouldUpdate = updateGates.every((gate) => {
-      return gate.shouldEmit({
+    const shouldUpdate = updateFilters.every((filter) => {
+      return filter.shouldUpdate({
         existing: result.match,
         incomingHashes: item.hashes,
         identifierSource: result.identifierSource,

@@ -22,20 +22,6 @@ export const scoreItem = (hashes: ItemHashes): number => {
   return score
 }
 
-// Step 1: Map each item to its computed hashes.
-export const computeAllHashes = <TItem extends HashableItem>(
-  items: Array<TItem>,
-): Array<HashedFeedItem<TItem>> => {
-  return items.map((item) => ({ item, hashes: computeItemHashes(item) }))
-}
-
-// Step 2: Remove items where identifier is undefined.
-export const filterItemsWithIdentifier = <TItem>(
-  items: Array<ComposedFeedItem<TItem>>,
-): Array<IdentifiedFeedItem<TItem>> => {
-  return items.filter((item): item is IdentifiedFeedItem<TItem> => item.identifier !== undefined)
-}
-
 // Best-copy helper: keep the richer item (more hash slots populated).
 // On tie, keep existing (earlier — deterministic).
 const keepBest = <TItem>(
@@ -48,6 +34,20 @@ const keepBest = <TItem>(
   if (!existing || scoreItem(item.hashes) > scoreItem(existing.hashes)) {
     map.set(key, item)
   }
+}
+
+// Step 1: Map each item to its computed hashes.
+export const computeAllHashes = <TItem extends HashableItem>(
+  items: Array<TItem>,
+): Array<HashedFeedItem<TItem>> => {
+  return items.map((item) => ({ item, hashes: computeItemHashes(item) }))
+}
+
+// Step 2: Remove items where identifier is undefined.
+export const filterItemsWithIdentifier = <TItem>(
+  items: Array<ComposedFeedItem<TItem>>,
+): Array<IdentifiedFeedItem<TItem>> => {
+  return items.filter((item): item is IdentifiedFeedItem<TItem> => item.identifier !== undefined)
 }
 
 // Step 2b: Compose identifiers for all hashed items at a given depth.
