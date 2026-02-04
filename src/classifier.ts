@@ -3,15 +3,10 @@ import {
   computeItemHashes,
   generateHash,
   hashMeta,
-  isDefined,
   resolveFingerprintLevel,
 } from './hashes.js'
-import {
-  computeLinkUniquenessRate,
-  findMatchCandidates,
-  selectMatchingItem,
-  updateFilters,
-} from './matching.js'
+import { findMatchCandidates, selectMatchingItem, updateFilters } from './matching.js'
+import { computeFeedProfile } from './profile.js'
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
@@ -106,11 +101,11 @@ export const classifyItems = <TItem extends NewItem>(
   const hashedNewItems = computeAllHashes(newItems)
   const newItemsHashes = hashedNewItems.map((item) => item.hashes)
 
-  // Compute link uniqueness early — used for both pre-match exclusion and
-  // final classification. Uses raw (not deduped) incoming link hashes;
-  // duplicates lower uniqueness slightly, which is conservative (fewer link matches).
-  const newItemsLinkHashes = newItemsHashes.map((hashes) => hashes.linkHash).filter(isDefined)
-  const linkUniquenessRate = computeLinkUniquenessRate(existingItems, newItemsLinkHashes)
+  // Compute profile early — used for both pre-match exclusion and final
+  // classification. Uses raw (not deduped) incoming hashes; duplicates
+  // lower uniqueness slightly, which is conservative (fewer link matches).
+  const profile = computeFeedProfile(existingItems, newItemsHashes)
+  const linkUniquenessRate = profile.link.uniquenessRate
 
   // Pre-match: find existing items that are true updates and exclude them
   // from the level collision set. A match is "strong enough" when it's by

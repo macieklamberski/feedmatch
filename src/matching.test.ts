@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyCandidateFilters,
-  computeBatchLinkUniqueness,
-  computeLinkUniquenessRate,
   contentChangeFilter,
   enclosureConflictFilter,
   findMatchCandidates,
@@ -765,96 +763,6 @@ describe('selectMatchingItem', () => {
       linkUniquenessRate: 1.0,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
-  })
-})
-
-describe('computeBatchLinkUniqueness', () => {
-  it('should return 1.0 for all unique hashes', () => {
-    const value = ['hash-1', 'hash-2', 'hash-3']
-
-    expect(computeBatchLinkUniqueness(value)).toBe(1.0)
-  })
-
-  it('should return 0.5 for half-unique hashes', () => {
-    const value = ['hash-1', 'hash-1', 'hash-2', 'hash-2']
-
-    expect(computeBatchLinkUniqueness(value)).toBe(0.5)
-  })
-
-  it('should return 0 for empty array', () => {
-    expect(computeBatchLinkUniqueness([])).toBe(0)
-  })
-
-  it('should handle single hash', () => {
-    const value = ['hash-1']
-
-    expect(computeBatchLinkUniqueness(value)).toBe(1.0)
-  })
-})
-
-describe('computeLinkUniquenessRate', () => {
-  it('should return 1.0 when all link hashes are unique', () => {
-    const existingItems = [
-      makeItem({ id: 'a', linkHash: 'link-1' }),
-      makeItem({ id: 'b', linkHash: 'link-2' }),
-    ]
-    const incomingLinkHashes = ['link-3', 'link-4']
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
-  })
-
-  it('should return min of historical and batch rates', () => {
-    const existingItems = [
-      makeItem({ id: 'a', linkHash: 'link-1' }),
-      makeItem({ id: 'b', linkHash: 'link-1' }),
-    ]
-    const incomingLinkHashes = ['link-3', 'link-4']
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(0.5)
-  })
-
-  it('should use batch rate when no historical link data exists', () => {
-    const existingItems: Array<ExistingItem> = []
-    const incomingLinkHashes = ['link-1', 'link-2']
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
-  })
-
-  it('should use batch rate when existing items have only null link hashes', () => {
-    const existingItems = [
-      makeItem({ id: 'a', linkHash: null }),
-      makeItem({ id: 'b', linkHash: null }),
-    ]
-    const incomingLinkHashes = ['link-1', 'link-2']
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
-  })
-
-  it('should use historical rate when no incoming link hashes exist', () => {
-    const existingItems = [
-      makeItem({ id: 'a', linkHash: 'link-1' }),
-      makeItem({ id: 'b', linkHash: 'link-1' }),
-    ]
-    const incomingLinkHashes: Array<string> = []
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(0.5)
-  })
-
-  it('should return 0 when neither side has link data', () => {
-    const existingItems = [makeItem({ id: 'a' })]
-    const incomingLinkHashes: Array<string> = []
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(0)
-  })
-
-  it('should ignore null link hashes in existing items', () => {
-    const existingItems = [
-      makeItem({ id: 'a', linkHash: null }),
-      makeItem({ id: 'b', linkHash: 'link-1' }),
-    ]
-    const incomingLinkHashes = ['link-2']
-
-    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
   })
 })
 

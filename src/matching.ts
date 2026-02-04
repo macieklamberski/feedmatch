@@ -1,4 +1,4 @@
-import { hashMeta, hasStrongHash, isDefined } from './hashes.js'
+import { hashMeta, hasStrongHash } from './hashes.js'
 import type {
   CandidateFilter,
   CandidateFilterContext,
@@ -362,35 +362,4 @@ export const selectMatchingItem = ({
   }
 
   return
-}
-
-// Compute link uniqueness from the current batch (no DB needed).
-// Used as fallback for new channels with no historical items.
-export const computeBatchLinkUniqueness = (linkHashes: Array<string>): number => {
-  if (linkHashes.length === 0) {
-    return 0
-  }
-
-  return new Set(linkHashes).size / linkHashes.length
-}
-
-// Compute link uniqueness rate from existing + incoming hashes.
-// When one side has no data, uses the other side's rate instead of 0.
-export const computeLinkUniquenessRate = (
-  existingItems: Array<ExistingItem>,
-  incomingLinkHashes: Array<string>,
-): number => {
-  const existingItemsLinkHashes = existingItems.map((item) => item.linkHash).filter(isDefined)
-  const historicalRate = computeBatchLinkUniqueness(existingItemsLinkHashes)
-  const batchRate = computeBatchLinkUniqueness(incomingLinkHashes)
-
-  if (existingItemsLinkHashes.length === 0) {
-    return batchRate
-  }
-
-  if (incomingLinkHashes.length === 0) {
-    return historicalRate
-  }
-
-  return Math.min(historicalRate, batchRate)
 }
