@@ -15,7 +15,10 @@ export {
 
 // Build a tagged identifier using the level prefix up to and including
 // the given depth. Returns undefined when no hashes exist in the prefix.
-export const composeIdentifier = (hashes: ItemHashes, depth: IdentityDepth): string | undefined => {
+export const composeItemIdentifier = (
+  hashes: ItemHashes,
+  depth: IdentityDepth,
+): string | undefined => {
   const depthIndex = identityLevels.findIndex((entry) => entry.depth === depth)
   const prefix = identityLevels.slice(0, depthIndex + 1)
 
@@ -29,7 +32,7 @@ export const composeIdentifier = (hashes: ItemHashes, depth: IdentityDepth): str
 }
 
 // Compute the optimal identity depth for a set of item hashes. Finds the
-// strongest depth where composeIdentifier produces zero collisions and full
+// strongest depth where composeItemIdentifier produces zero collisions and full
 // coverage (every identifiable item produces an identifier). When a
 // currentDepth is provided and is valid it is returned unchanged; if it
 // collides or loses coverage, only weaker depths are considered (fast
@@ -42,7 +45,7 @@ export const resolveIdentityDepth = (
   // the same number — otherwise some items become unidentifiable.
   const maxDepth = identityLevels[identityLevels.length - 1].depth
   const maxIdentifiable = allItemHashes.filter(
-    (hashes) => composeIdentifier(hashes, maxDepth) !== undefined,
+    (hashes) => composeItemIdentifier(hashes, maxDepth) !== undefined,
   ).length
 
   if (maxIdentifiable === 0) {
@@ -59,7 +62,7 @@ export const resolveIdentityDepth = (
     let hasCollision = false
 
     for (const hashes of allItemHashes) {
-      const key = composeIdentifier(hashes, depth)
+      const key = composeItemIdentifier(hashes, depth)
 
       if (!key) {
         continue

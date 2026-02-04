@@ -2,10 +2,10 @@ import { describe, expect, it } from 'bun:test'
 import {
   _testTierMatchers,
   computeBatchLinkUniqueness,
-  computeChannelProfile,
-  findCandidatesForItem,
+  computeFeedProfile,
+  findMatchCandidates,
   isLinkOnly,
-  selectMatch,
+  selectMatchingItem,
 } from './matching.js'
 import type { ItemHashes, MatchableItem, MatchResult, TierContext } from './types.js'
 
@@ -58,7 +58,7 @@ describe('isLinkOnly', () => {
   })
 })
 
-describe('findCandidatesForItem', () => {
+describe('findMatchCandidates', () => {
   it('should match on guidHash', () => {
     const value: ItemHashes = { guidHash: 'guid-1' }
     const existing = [
@@ -67,7 +67,7 @@ describe('findCandidatesForItem', () => {
     ]
     const expected = [existing[0]]
 
-    expect(findCandidatesForItem(value, existing)).toEqual(expected)
+    expect(findMatchCandidates(value, existing)).toEqual(expected)
   })
 
   it('should match on linkHash', () => {
@@ -78,7 +78,7 @@ describe('findCandidatesForItem', () => {
     ]
     const expected = [existing[0]]
 
-    expect(findCandidatesForItem(value, existing)).toEqual(expected)
+    expect(findMatchCandidates(value, existing)).toEqual(expected)
   })
 
   it('should match on enclosureHash', () => {
@@ -89,7 +89,7 @@ describe('findCandidatesForItem', () => {
     ]
     const expected = [existing[0]]
 
-    expect(findCandidatesForItem(value, existing)).toEqual(expected)
+    expect(findMatchCandidates(value, existing)).toEqual(expected)
   })
 
   it('should match on titleHash', () => {
@@ -100,7 +100,7 @@ describe('findCandidatesForItem', () => {
     ]
     const expected = [existing[0]]
 
-    expect(findCandidatesForItem(value, existing)).toEqual(expected)
+    expect(findMatchCandidates(value, existing)).toEqual(expected)
   })
 
   it('should return multiple matches across different hashes', () => {
@@ -111,7 +111,7 @@ describe('findCandidatesForItem', () => {
     ]
     const expected = [existing[0], existing[1]]
 
-    expect(findCandidatesForItem(value, existing)).toEqual(expected)
+    expect(findMatchCandidates(value, existing)).toEqual(expected)
   })
 
   it('should not duplicate items matching on multiple hashes', () => {
@@ -119,20 +119,20 @@ describe('findCandidatesForItem', () => {
     const existing = [makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })]
     const expected = [existing[0]]
 
-    expect(findCandidatesForItem(value, existing)).toEqual(expected)
+    expect(findMatchCandidates(value, existing)).toEqual(expected)
   })
 
   it('should return empty array when no matches', () => {
     const value: ItemHashes = { guidHash: 'guid-x' }
     const existing = [makeItem({ id: 'a', guidHash: 'guid-1' })]
 
-    expect(findCandidatesForItem(value, existing)).toEqual([])
+    expect(findMatchCandidates(value, existing)).toEqual([])
   })
 
   it('should return empty array for empty existing items', () => {
     const value: ItemHashes = { guidHash: 'guid-1' }
 
-    expect(findCandidatesForItem(value, [])).toEqual([])
+    expect(findMatchCandidates(value, [])).toEqual([])
   })
 
   it('should not match on summaryHash', () => {
@@ -142,7 +142,7 @@ describe('findCandidatesForItem', () => {
       makeItem({ id: 'b', summaryHash: 'sum-2' }),
     ]
 
-    expect(findCandidatesForItem(value, existing)).toEqual([])
+    expect(findMatchCandidates(value, existing)).toEqual([])
   })
 
   it('should not match on contentHash', () => {
@@ -152,32 +152,32 @@ describe('findCandidatesForItem', () => {
       makeItem({ id: 'b', contentHash: 'cnt-2' }),
     ]
 
-    expect(findCandidatesForItem(value, existing)).toEqual([])
+    expect(findMatchCandidates(value, existing)).toEqual([])
   })
 
   it('should not match on titleHash when strong hashes present', () => {
     const value: ItemHashes = { guidHash: 'guid-1', titleHash: 'title-1' }
     const existing = [makeItem({ id: 'a', titleHash: 'title-1' })]
 
-    expect(findCandidatesForItem(value, existing)).toEqual([])
+    expect(findMatchCandidates(value, existing)).toEqual([])
   })
 
   it('should not match on null hash values', () => {
     const value: ItemHashes = {}
     const existing = [makeItem({ id: 'a', guidHash: null, linkHash: null })]
 
-    expect(findCandidatesForItem(value, existing)).toEqual([])
+    expect(findMatchCandidates(value, existing)).toEqual([])
   })
 })
 
-describe('selectMatch', () => {
+describe('selectMatchingItem', () => {
   it('should return null for empty candidates', () => {
     const value = {
       hashes: { guidHash: 'guid-1' },
       candidates: [],
       linkUniquenessRate: 1.0,
     }
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on guid with single candidate', () => {
@@ -192,7 +192,7 @@ describe('selectMatch', () => {
       identifierSource: 'guid',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return null for ambiguous guid matches with no narrowing hashes', () => {
@@ -205,7 +205,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 1.0,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should disambiguate guid matches by enclosure', () => {
@@ -217,7 +217,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: target, identifierSource: 'guid' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should disambiguate guid matches by link when enclosure does not narrow', () => {
@@ -229,7 +229,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: target, identifierSource: 'guid' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should disambiguate guid matches by guidFragmentHash', () => {
@@ -241,7 +241,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: target, identifierSource: 'guid' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return null when guidFragmentHash is also ambiguous', () => {
@@ -254,7 +254,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 1.0,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should return null when guid disambiguation still ambiguous', () => {
@@ -267,7 +267,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 1.0,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should reject guid match when enclosures conflict', () => {
@@ -276,7 +276,7 @@ describe('selectMatch', () => {
       candidates: [makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })],
       linkUniquenessRate: 1.0,
     }
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should allow guid match when enclosures are same', () => {
@@ -291,7 +291,7 @@ describe('selectMatch', () => {
       identifierSource: 'guid',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should allow guid match when candidate has no enclosure', () => {
@@ -306,7 +306,7 @@ describe('selectMatch', () => {
       identifierSource: 'guid',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should allow guid match when incoming has no enclosure', () => {
@@ -321,7 +321,7 @@ describe('selectMatch', () => {
       identifierSource: 'guid',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should match on link when high uniqueness', () => {
@@ -336,7 +336,7 @@ describe('selectMatch', () => {
       identifierSource: 'link',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should filter out link matches with enclosure conflict', () => {
@@ -345,7 +345,7 @@ describe('selectMatch', () => {
       candidates: [makeItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })],
       linkUniquenessRate: 0.98,
     }
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should allow link match when enclosures are same', () => {
@@ -360,7 +360,7 @@ describe('selectMatch', () => {
       identifierSource: 'link',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should allow link match when candidate has no enclosure', () => {
@@ -375,7 +375,7 @@ describe('selectMatch', () => {
       identifierSource: 'link',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should disambiguate link matches by fragment on high-uniqueness channel', () => {
@@ -387,7 +387,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: target, identifierSource: 'link' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return null when fragment is also ambiguous on high-uniqueness channel', () => {
@@ -400,7 +400,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 0.98,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should return null when incoming has no fragment and link is ambiguous', () => {
@@ -413,7 +413,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 0.98,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on enclosure when high uniqueness and no link match', () => {
@@ -428,7 +428,7 @@ describe('selectMatch', () => {
       identifierSource: 'enclosure',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should prioritize enclosure over link on low-uniqueness channel', () => {
@@ -446,7 +446,7 @@ describe('selectMatch', () => {
       identifierSource: 'enclosure',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should not match on link for non-link-only item on low-uniqueness channel', () => {
@@ -455,7 +455,7 @@ describe('selectMatch', () => {
       candidates: [makeItem({ linkHash: 'link-1' })],
       linkUniquenessRate: 0.3,
     }
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on link for link-only item on low-uniqueness channel', () => {
@@ -470,7 +470,7 @@ describe('selectMatch', () => {
       identifierSource: 'link',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should disambiguate link matches by fragment on low-uniqueness channel for link-only item', () => {
@@ -482,7 +482,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: target, identifierSource: 'link' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return null when fragment is also ambiguous on low-uniqueness channel', () => {
@@ -495,7 +495,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 0.3,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on title as last resort', () => {
@@ -510,7 +510,7 @@ describe('selectMatch', () => {
       identifierSource: 'title',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return null for ambiguous title matches', () => {
@@ -522,7 +522,7 @@ describe('selectMatch', () => {
       ],
       linkUniquenessRate: 1.0,
     }
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should not match on title when strong hashes present', () => {
@@ -532,7 +532,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 1.0,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should not match on summary-only candidates', () => {
@@ -542,7 +542,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 1.0,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should not match on content-only candidates', () => {
@@ -552,7 +552,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 1.0,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should prefer guid over link', () => {
@@ -568,7 +568,7 @@ describe('selectMatch', () => {
       identifierSource: 'guid',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should prefer link over enclosure on high-uniqueness channel', () => {
@@ -584,7 +584,7 @@ describe('selectMatch', () => {
       identifierSource: 'link',
     }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should disambiguate multiple guid matches by enclosure when no conflict', () => {
@@ -600,7 +600,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: target, identifierSource: 'guid' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return undefined for ambiguous enclosure matches on high-uniqueness channel', () => {
@@ -613,7 +613,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 0.98,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on enclosure on low-uniqueness channel', () => {
@@ -625,7 +625,7 @@ describe('selectMatch', () => {
     }
     const expected: MatchResult = { match: candidate, identifierSource: 'enclosure' }
 
-    expect(selectMatch(value)).toEqual(expected)
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should return undefined for ambiguous enclosure matches on low-uniqueness channel', () => {
@@ -638,7 +638,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 0.3,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should return undefined for ambiguous link-only matches on low-uniqueness channel', () => {
@@ -651,7 +651,7 @@ describe('selectMatch', () => {
       linkUniquenessRate: 0.3,
     }
 
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should return null when no hashes match any priority', () => {
@@ -660,7 +660,7 @@ describe('selectMatch', () => {
       candidates: [makeItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
       linkUniquenessRate: 1.0,
     }
-    expect(selectMatch(value)).toBeUndefined()
+    expect(selectMatchingItem(value)).toBeUndefined()
   })
 })
 
@@ -688,7 +688,7 @@ describe('computeBatchLinkUniqueness', () => {
   })
 })
 
-describe('computeChannelProfile', () => {
+describe('computeFeedProfile', () => {
   it('should return 1.0 when all link hashes are unique', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: 'link-1' }),
@@ -697,7 +697,7 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes = ['link-3', 'link-4']
     const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 
   it('should return min of historical and batch rates', () => {
@@ -708,7 +708,7 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes = ['link-3', 'link-4']
     const expected = { linkUniquenessRate: 0.5 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 
   it('should use batch rate when no historical link data exists', () => {
@@ -716,7 +716,7 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes = ['link-1', 'link-2']
     const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 
   it('should use batch rate when existing items have only null link hashes', () => {
@@ -727,7 +727,7 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes = ['link-1', 'link-2']
     const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 
   it('should use historical rate when no incoming link hashes exist', () => {
@@ -738,7 +738,7 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes: Array<string> = []
     const expected = { linkUniquenessRate: 0.5 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 
   it('should return 0 when neither side has link data', () => {
@@ -746,7 +746,7 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes: Array<string> = []
     const expected = { linkUniquenessRate: 0 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 
   it('should ignore null link hashes in existing items', () => {
@@ -757,11 +757,14 @@ describe('computeChannelProfile', () => {
     const incomingLinkHashes = ['link-2']
     const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeChannelProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
   })
 })
 
-const identity = (_source: string, filtered: Array<MatchableItem>): Array<MatchableItem> => {
+const identity = (
+  _identifierSource: string,
+  filtered: Array<MatchableItem>,
+): Array<MatchableItem> => {
   return filtered
 }
 
@@ -832,7 +835,11 @@ describe('matchByGuid', () => {
       gated: identity,
     }
 
-    expect(matchByGuid(context)).toEqual({ outcome: 'ambiguous', source: 'guid', count: 2 })
+    expect(matchByGuid(context)).toEqual({
+      outcome: 'ambiguous',
+      identifierSource: 'guid',
+      count: 2,
+    })
   })
 
   it('should pass when no guidHash', () => {
@@ -885,7 +892,11 @@ describe('matchByLink', () => {
       gated: identity,
     }
 
-    expect(matchByLink(context)).toEqual({ outcome: 'ambiguous', source: 'link', count: 2 })
+    expect(matchByLink(context)).toEqual({
+      outcome: 'ambiguous',
+      identifierSource: 'link',
+      count: 2,
+    })
   })
 
   it('should pass when no linkHash', () => {
@@ -926,7 +937,7 @@ describe('matchByEnclosure', () => {
 
     expect(matchByEnclosure(context)).toEqual({
       outcome: 'ambiguous',
-      source: 'enclosure',
+      identifierSource: 'enclosure',
       count: 2,
     })
   })
@@ -969,7 +980,7 @@ describe('matchByTitle', () => {
 
     expect(matchByTitle(context)).toEqual({
       outcome: 'ambiguous',
-      source: 'title',
+      identifierSource: 'title',
       count: 2,
     })
   })

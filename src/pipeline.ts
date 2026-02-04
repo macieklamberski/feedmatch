@@ -1,11 +1,12 @@
-import { computeItemHashes } from './hashes.js'
+import { composeItemIdentifier, computeItemHashes } from './hashes.js'
 import { hashMeta } from './meta.js'
 import type {
+  ComposedFeedItem,
   HashableItem,
   HashedFeedItem,
   IdentifiedFeedItem,
+  IdentityDepth,
   ItemHashes,
-  KeyedFeedItem,
 } from './types.js'
 
 // Score an item by how many hash slots are populated, weighted by signal strength.
@@ -29,8 +30,8 @@ export const computeAllHashes = <TItem extends HashableItem>(
 }
 
 // Step 2: Remove items where identifier is undefined.
-export const filterWithIdentifier = <TItem>(
-  items: Array<KeyedFeedItem<TItem>>,
+export const filterItemsWithIdentifier = <TItem>(
+  items: Array<ComposedFeedItem<TItem>>,
 ): Array<IdentifiedFeedItem<TItem>> => {
   return items.filter((item): item is IdentifiedFeedItem<TItem> => item.identifier !== undefined)
 }
@@ -49,8 +50,19 @@ const keepBest = <TItem>(
   }
 }
 
+// Step 2b: Compose identifiers for all hashed items at a given depth.
+export const composeItemIdentifiers = <TItem>(
+  items: Array<HashedFeedItem<TItem>>,
+  depth: IdentityDepth,
+): Array<ComposedFeedItem<TItem>> => {
+  return items.map((item) => ({
+    ...item,
+    identifier: composeItemIdentifier(item.hashes, depth),
+  }))
+}
+
 // Step 3: Best-copy-wins dedup by identifier.
-export const deduplicateByIdentifier = <TItem>(
+export const deduplicateItemsByIdentifier = <TItem>(
   items: Array<IdentifiedFeedItem<TItem>>,
 ): Array<IdentifiedFeedItem<TItem>> => {
   const bestByIdentifier = new Map<string, IdentifiedFeedItem<TItem>>()

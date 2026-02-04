@@ -2,7 +2,7 @@ import { applyCandidateGates, candidateGates } from './gates.js'
 import { isDefined } from './helpers.js'
 import { hashMeta, hasStrongHash } from './meta.js'
 import type {
-  ChannelProfile,
+  FeedProfile,
   ItemHashes,
   MatchableItem,
   MatchResult,
@@ -19,11 +19,11 @@ export const isLinkOnly = (hashes: ItemHashes): boolean => {
 }
 
 // In-memory filter: returns all existing items where any matchable hash matches.
-// Does NOT apply gating — that's selectMatch's job.
+// Does NOT apply gating — that's selectMatchingItem's job.
 // Non-matchable hashes (fragments, content, summary) are excluded: too volatile
 // or only used as tiebreakers. Title only checked when no strong hash exists —
-// prevents title pulling in unrelated candidates that would confuse selectMatch.
-export const findCandidatesForItem = (
+// prevents title pulling in unrelated candidates that would confuse selectMatchingItem.
+export const findMatchCandidates = (
   hashes: ItemHashes,
   existingItems: Array<MatchableItem>,
 ): Array<MatchableItem> => {
@@ -100,7 +100,7 @@ const matchByGuid = (context: TierContext): TierResult => {
       }
     }
 
-    return { outcome: 'ambiguous', source: 'guid', count: byGuid.length }
+    return { outcome: 'ambiguous', identifierSource: 'guid', count: byGuid.length }
   }
 
   return { outcome: 'pass' }
@@ -136,7 +136,7 @@ const matchByLink = (context: TierContext): TierResult => {
       }
     }
 
-    return { outcome: 'ambiguous', source: 'link', count: byLink.length }
+    return { outcome: 'ambiguous', identifierSource: 'link', count: byLink.length }
   }
 
   return { outcome: 'pass' }
@@ -165,13 +165,13 @@ const matchByEnclosure = (context: TierContext): TierResult => {
   }
 
   if (byEnclosure.length > 1) {
-    return { outcome: 'ambiguous', source: 'enclosure', count: byEnclosure.length }
+    return { outcome: 'ambiguous', identifierSource: 'enclosure', count: byEnclosure.length }
   }
 
   return { outcome: 'pass' }
 }
 
-// Tier matcher: title (no disambiguation, no hasStrongHash guard — that stays in selectMatch).
+// Tier matcher: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
 const matchByTitle = (context: TierContext): TierResult => {
   const { hashes, candidates, gated } = context
 
@@ -191,7 +191,7 @@ const matchByTitle = (context: TierContext): TierResult => {
   }
 
   if (byTitle.length > 1) {
-    return { outcome: 'ambiguous', source: 'title', count: byTitle.length }
+    return { outcome: 'ambiguous', identifierSource: 'title', count: byTitle.length }
   }
 
   return { outcome: 'pass' }
@@ -202,7 +202,7 @@ const matchByTitle = (context: TierContext): TierResult => {
 // Low uniqueness:  guid > enclosure > link (if link-only) > title
 // Summary/content excluded: too volatile for cross-scan matching.
 // Returns null for ambiguous matches (>1) — prefer insert over wrong merge.
-export const selectMatch = ({
+export const selectMatchingItem = ({
   hashes,
   candidates,
   linkUniquenessRate,
@@ -214,10 +214,13 @@ export const selectMatch = ({
   const incoming = { hashes }
   const channel = { linkUniquenessRate }
 
-  const gated = (source: MatchSource, filtered: Array<MatchableItem>): Array<MatchableItem> => {
+  const gated = (
+    identifierSource: MatchSource,
+    filtered: Array<MatchableItem>,
+  ): Array<MatchableItem> => {
     return applyCandidateGates({
       candidates: filtered,
-      source,
+      identifierSource,
       gates: candidateGates,
       incoming,
       channel,
@@ -308,15 +311,15 @@ export const computeBatchLinkUniqueness = (linkHashes: Array<string>): number =>
 
 // Pure profile computation from existing + incoming hashes.
 // When one side has no data, uses the other side's rate instead of 0.
-export const computeChannelProfile = (
+export const computeFeedProfile = (
   existingItems: Array<MatchableItem>,
   incomingLinkHashes: Array<string>,
-): ChannelProfile => {
-  const existingLinkHashes = existingItems.map((item) => item.linkHash).filter(isDefined)
-  const historicalRate = computeBatchLinkUniqueness(existingLinkHashes)
+): FeedProfile => {
+  const existingItemsLinkHashes = existingItems.map((item) => item.linkHash).filter(isDefined)
+  const historicalRate = computeBatchLinkUniqueness(existingItemsLinkHashes)
   const batchRate = computeBatchLinkUniqueness(incomingLinkHashes)
 
-  if (existingLinkHashes.length === 0) {
+  if (existingItemsLinkHashes.length === 0) {
     return { linkUniquenessRate: batchRate }
   }
 

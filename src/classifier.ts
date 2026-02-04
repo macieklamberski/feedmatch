@@ -1,9 +1,14 @@
 import { updateGates } from './gates.js'
-import { composeIdentifier, resolveIdentityDepth } from './hashes.js'
+import { composeItemIdentifier, resolveIdentityDepth } from './hashes.js'
 import { generateHash, isDefined } from './helpers.js'
-import { computeChannelProfile, findCandidatesForItem, selectMatch } from './matching.js'
+import { computeFeedProfile, findMatchCandidates, selectMatchingItem } from './matching.js'
 import { hashKeys } from './meta.js'
-import { computeAllHashes, deduplicateByIdentifier, filterWithIdentifier } from './pipeline.js'
+import {
+  composeItemIdentifiers,
+  computeAllHashes,
+  deduplicateItemsByIdentifier,
+  filterItemsWithIdentifier,
+} from './pipeline.js'
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
@@ -36,14 +41,14 @@ export const classifyItems = <TItem extends HashableItem>(
 ): ClassifyItemsResult<TItem> => {
   const { newItems, existingItems, identityDepth: inputDepth } = input
 
-  const hashedItems = computeAllHashes(newItems)
-  const incomingHashes = hashedItems.map((item) => item.hashes)
+  const hashedNewItems = computeAllHashes(newItems)
+  const newItemsHashes = hashedNewItems.map((item) => item.hashes)
 
   // Compute profile early — used for both pre-match exclusion and final
   // classification. Uses raw (not deduped) incoming link hashes; duplicates
   // lower uniqueness slightly, which is conservative (fewer link matches).
-  const incomingLinkHashes = incomingHashes.map((hashes) => hashes.linkHash).filter(isDefined)
-  const profile = computeChannelProfile(existingItems, incomingLinkHashes)
+  const newItemsLinkHashes = newItemsHashes.map((hashes) => hashes.linkHash).filter(isDefined)
+  const profile = computeFeedProfile(existingItems, newItemsLinkHashes)
 
   // Pre-match: find existing items that are true updates and exclude them
   // from the depth collision set. A match is "strong enough" when it's by
@@ -53,10 +58,10 @@ export const classifyItems = <TItem extends HashableItem>(
   // and must stay in the collision set so the depth can detect it.
   const matchedExistingIds = new Set<string>()
 
-  for (const { hashes } of hashedItems) {
-    const candidates = findCandidatesForItem(hashes, existingItems)
-    const result = selectMatch({
-      hashes,
+  for (const newItemHashes of newItemsHashes) {
+    const candidates = findMatchCandidates(newItemHashes, existingItems)
+    const result = selectMatchingItem({
+      hashes: newItemHashes,
       candidates,
       linkUniquenessRate: profile.linkUniquenessRate,
     })
@@ -71,15 +76,15 @@ export const classifyItems = <TItem extends HashableItem>(
     }
 
     // Link match: only exclude when max-depth identifiers agree (true duplicate).
-    const incomingMaxKey = composeIdentifier(hashes, 'title')
-    const existingMaxKey = composeIdentifier(toItemHashes(result.match), 'title')
+    const incomingMaxKey = composeItemIdentifier(newItemHashes, 'title')
+    const existingMaxKey = composeItemIdentifier(toItemHashes(result.match), 'title')
 
     if (incomingMaxKey === existingMaxKey) {
       matchedExistingIds.add(result.match.id)
     }
   }
 
-  const unmatchedExistingHashes = existingItems
+  const unmatchedExistingItemsHashes = existingItems
     .filter((item) => !matchedExistingIds.has(item.id))
     .map(toItemHashes)
 
@@ -87,8 +92,8 @@ export const classifyItems = <TItem extends HashableItem>(
   // duplicates, or same item with slightly different hash coverage) don't
   // cause false downgrades. Items with no level identity are skipped.
   const seenKeys = new Set<string>()
-  const depthHashes = [...incomingHashes, ...unmatchedExistingHashes].filter((hashes) => {
-    const maxKey = composeIdentifier(hashes, 'title')
+  const depthHashes = [...newItemsHashes, ...unmatchedExistingItemsHashes].filter((hashes) => {
+    const maxKey = composeItemIdentifier(hashes, 'title')
 
     if (!maxKey) {
       return false
@@ -99,35 +104,33 @@ export const classifyItems = <TItem extends HashableItem>(
     }
 
     seenKeys.add(maxKey)
+
     return true
   })
 
   // Resolve identity depth: validate/downgrade if provided, compute from data otherwise.
   const resolvedDepth = resolveIdentityDepth(depthHashes, inputDepth)
 
-  // Build keyed items using level identity at the resolved depth.
-  const keyed = hashedItems.map((item) => ({
-    ...item,
-    identifier: composeIdentifier(item.hashes, resolvedDepth),
-  }))
-  const identified = filterWithIdentifier(keyed)
-  const deduplicated = deduplicateByIdentifier(identified)
+  // Build composed items using level identity at the resolved depth.
+  const composedItems = composeItemIdentifiers(hashedNewItems, resolvedDepth)
+  const identifiedItems = filterItemsWithIdentifier(composedItems)
+  const deduplicatedItems = deduplicateItemsByIdentifier(identifiedItems)
 
   // Classify against existing items.
   const inserts: Array<InsertAction<TItem>> = []
   const updates: Array<UpdateAction<TItem>> = []
 
-  for (const item of deduplicated) {
+  for (const item of deduplicatedItems) {
     const identifierHash = generateHash(item.identifier)
-    const candidates = findCandidatesForItem(item.hashes, existingItems)
+    const candidates = findMatchCandidates(item.hashes, existingItems)
 
     // Reject candidates whose identifier differs from the incoming item.
     // This prevents matching (and merging) items that the levels consider distinct.
-    const depthFilteredCandidates = candidates.filter(
-      (candidate) => composeIdentifier(toItemHashes(candidate), resolvedDepth) === item.identifier,
-    )
+    const depthFilteredCandidates = candidates.filter((candidate) => {
+      return composeItemIdentifier(toItemHashes(candidate), resolvedDepth) === item.identifier
+    })
 
-    const result = selectMatch({
+    const result = selectMatchingItem({
       hashes: item.hashes,
       candidates: depthFilteredCandidates,
       linkUniquenessRate: profile.linkUniquenessRate,
@@ -139,6 +142,7 @@ export const classifyItems = <TItem extends HashableItem>(
         hashes: item.hashes,
         identifierHash,
       })
+
       continue
     }
 

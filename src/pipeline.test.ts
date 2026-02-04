@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'bun:test'
 import { computeItemHashes } from './hashes.js'
 import {
+  composeItemIdentifiers,
   computeAllHashes,
-  deduplicateByIdentifier,
-  filterWithIdentifier,
+  deduplicateItemsByIdentifier,
+  filterItemsWithIdentifier,
   scoreItem,
 } from './pipeline.js'
-import type { HashableItem, IdentifiedFeedItem, ItemHashes, KeyedFeedItem } from './types.js'
+import type {
+  ComposedFeedItem,
+  HashableItem,
+  HashedFeedItem,
+  IdentifiedFeedItem,
+  ItemHashes,
+} from './types.js'
 
 describe('scoreItem', () => {
   it('should sum weights for multiple hashes', () => {
@@ -62,9 +69,9 @@ describe('computeAllHashes', () => {
   })
 })
 
-describe('filterWithIdentifier', () => {
+describe('filterItemsWithIdentifier', () => {
   it('should keep items with identifier', () => {
-    const value: Array<KeyedFeedItem<HashableItem>> = [
+    const value: Array<ComposedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
         hashes: { guidHash: 'gh1' },
@@ -79,11 +86,11 @@ describe('filterWithIdentifier', () => {
       },
     ]
 
-    expect(filterWithIdentifier(value)).toEqual(expected)
+    expect(filterItemsWithIdentifier(value)).toEqual(expected)
   })
 
   it('should filter mixed items keeping only identified ones', () => {
-    const value: Array<KeyedFeedItem<HashableItem>> = [
+    const value: Array<ComposedFeedItem<HashableItem>> = [
       {
         item: { guid: 'g1' },
         hashes: { guidHash: 'gh1' },
@@ -113,11 +120,11 @@ describe('filterWithIdentifier', () => {
       },
     ]
 
-    expect(filterWithIdentifier(value)).toEqual(expected)
+    expect(filterItemsWithIdentifier(value)).toEqual(expected)
   })
 
   it('should return empty array when no items have identifier', () => {
-    const value: Array<KeyedFeedItem<HashableItem>> = [
+    const value: Array<ComposedFeedItem<HashableItem>> = [
       {
         item: {},
         hashes: {},
@@ -125,11 +132,11 @@ describe('filterWithIdentifier', () => {
       },
     ]
 
-    expect(filterWithIdentifier(value)).toEqual([])
+    expect(filterItemsWithIdentifier(value)).toEqual([])
   })
 })
 
-describe('deduplicateByIdentifier', () => {
+describe('deduplicateItemsByIdentifier', () => {
   it('should keep first item when duplicates have equal scores', () => {
     const value: Array<IdentifiedFeedItem<HashableItem>> = [
       {
@@ -151,7 +158,7 @@ describe('deduplicateByIdentifier', () => {
       },
     ]
 
-    expect(deduplicateByIdentifier(value)).toEqual(expected)
+    expect(deduplicateItemsByIdentifier(value)).toEqual(expected)
   })
 
   it('should keep richer item when scores differ', () => {
@@ -175,7 +182,7 @@ describe('deduplicateByIdentifier', () => {
       },
     ]
 
-    expect(deduplicateByIdentifier(value)).toEqual(expected)
+    expect(deduplicateItemsByIdentifier(value)).toEqual(expected)
   })
 
   it('should keep items with different identifiers', () => {
@@ -204,10 +211,38 @@ describe('deduplicateByIdentifier', () => {
       },
     ]
 
-    expect(deduplicateByIdentifier(value)).toEqual(expected)
+    expect(deduplicateItemsByIdentifier(value)).toEqual(expected)
   })
 
   it('should return empty array for empty input', () => {
-    expect(deduplicateByIdentifier([])).toEqual([])
+    expect(deduplicateItemsByIdentifier([])).toEqual([])
+  })
+})
+
+describe('composeItemIdentifiers', () => {
+  it('should compose identifiers for all items at given depth', () => {
+    const value: Array<HashedFeedItem<HashableItem>> = [
+      { item: { guid: 'g1' }, hashes: { guidHash: 'gh1', linkHash: 'lh1' } },
+      { item: { guid: 'g2' }, hashes: { guidHash: 'gh2' } },
+    ]
+    const expected: Array<ComposedFeedItem<HashableItem>> = [
+      { item: { guid: 'g1' }, hashes: { guidHash: 'gh1', linkHash: 'lh1' }, identifier: 'g:gh1' },
+      { item: { guid: 'g2' }, hashes: { guidHash: 'gh2' }, identifier: 'g:gh2' },
+    ]
+
+    expect(composeItemIdentifiers(value, 'guid')).toEqual(expected)
+  })
+
+  it('should return undefined identifier when no hashes in prefix', () => {
+    const value: Array<HashedFeedItem<HashableItem>> = [{ item: {}, hashes: {} }]
+    const expected: Array<ComposedFeedItem<HashableItem>> = [
+      { item: {}, hashes: {}, identifier: undefined },
+    ]
+
+    expect(composeItemIdentifiers(value, 'guid')).toEqual(expected)
+  })
+
+  it('should return empty array for empty input', () => {
+    expect(composeItemIdentifiers([], 'guid')).toEqual([])
   })
 })

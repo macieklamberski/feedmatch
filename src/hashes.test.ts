@@ -1,41 +1,41 @@
 import { describe, expect, it } from 'bun:test'
-import { composeIdentifier, computeItemHashes, resolveIdentityDepth } from './hashes.js'
+import { composeItemIdentifier, computeItemHashes, resolveIdentityDepth } from './hashes.js'
 import type { HashableItem, ItemHashes } from './types.js'
 
-describe('composeIdentifier', () => {
+describe('composeItemIdentifier', () => {
   it('should include only guid slot at depth=guid', () => {
     const value = { guidHash: 'g1', linkHash: 'l1', titleHash: 't1' }
     const expected = 'g:g1'
 
-    expect(composeIdentifier(value, 'guid')).toBe(expected)
+    expect(composeItemIdentifier(value, 'guid')).toBe(expected)
   })
 
   it('should include guid and guidFragment at depth=guidFragment', () => {
     const value = { guidHash: 'g1', guidFragmentHash: 'gf1', linkHash: 'l1' }
     const expected = 'g:g1|gf:gf1'
 
-    expect(composeIdentifier(value, 'guidFragment')).toBe(expected)
+    expect(composeItemIdentifier(value, 'guidFragment')).toBe(expected)
   })
 
   it('should include up to link at depth=link', () => {
     const value = { guidHash: 'g1', linkHash: 'l1', titleHash: 't1' }
     const expected = 'g:g1|gf:|l:l1'
 
-    expect(composeIdentifier(value, 'link')).toBe(expected)
+    expect(composeItemIdentifier(value, 'link')).toBe(expected)
   })
 
   it('should include up to linkFragment at depth=linkFragment', () => {
     const value = { guidHash: 'g1', linkHash: 'l1', linkFragmentHash: 'lf1' }
     const expected = 'g:g1|gf:|l:l1|lf:lf1'
 
-    expect(composeIdentifier(value, 'linkFragment')).toBe(expected)
+    expect(composeItemIdentifier(value, 'linkFragment')).toBe(expected)
   })
 
   it('should include up to enclosure at depth=enclosure', () => {
     const value = { guidHash: 'g1', linkHash: 'l1', enclosureHash: 'e1' }
     const expected = 'g:g1|gf:|l:l1|lf:|e:e1'
 
-    expect(composeIdentifier(value, 'enclosure')).toBe(expected)
+    expect(composeItemIdentifier(value, 'enclosure')).toBe(expected)
   })
 
   it('should include all six slots at depth=title', () => {
@@ -49,56 +49,56 @@ describe('composeIdentifier', () => {
     }
     const expected = 'g:g1|gf:gf1|l:l1|lf:lf1|e:e1|t:t1'
 
-    expect(composeIdentifier(value, 'title')).toBe(expected)
+    expect(composeItemIdentifier(value, 'title')).toBe(expected)
   })
 
   it('should produce empty slots for missing hashes', () => {
     const value = { guidHash: 'g1' }
     const expected = 'g:g1|gf:|l:|lf:|e:|t:'
 
-    expect(composeIdentifier(value, 'title')).toBe(expected)
+    expect(composeItemIdentifier(value, 'title')).toBe(expected)
   })
 
   it('should produce different identifiers for items with same link but different titles at depth=title', () => {
     const value1 = { linkHash: 'l1', titleHash: 't1' }
     const value2 = { linkHash: 'l1', titleHash: 't2' }
 
-    expect(composeIdentifier(value1, 'title')).not.toBe(composeIdentifier(value2, 'title'))
+    expect(composeItemIdentifier(value1, 'title')).not.toBe(composeItemIdentifier(value2, 'title'))
   })
 
   it('should produce same identifiers for items with same link but different titles at depth=link', () => {
     const value1 = { linkHash: 'l1', titleHash: 't1' }
     const value2 = { linkHash: 'l1', titleHash: 't2' }
 
-    expect(composeIdentifier(value1, 'link')).toBe(composeIdentifier(value2, 'link'))
+    expect(composeItemIdentifier(value1, 'link')).toBe(composeItemIdentifier(value2, 'link'))
   })
 
   it('should ignore fragments at depth=link', () => {
     const value1 = { linkHash: 'l1', linkFragmentHash: 'lf1' }
     const value2 = { linkHash: 'l1', linkFragmentHash: 'lf2' }
 
-    expect(composeIdentifier(value1, 'link')).toBe(composeIdentifier(value2, 'link'))
+    expect(composeItemIdentifier(value1, 'link')).toBe(composeItemIdentifier(value2, 'link'))
   })
 
   it('should include fragments at depth=linkFragment', () => {
     const value1 = { linkHash: 'l1', linkFragmentHash: 'lf1' }
     const value2 = { linkHash: 'l1', linkFragmentHash: 'lf2' }
 
-    expect(composeIdentifier(value1, 'linkFragment')).not.toBe(
-      composeIdentifier(value2, 'linkFragment'),
+    expect(composeItemIdentifier(value1, 'linkFragment')).not.toBe(
+      composeItemIdentifier(value2, 'linkFragment'),
     )
   })
 
   it('should return undefined when no hashes exist in prefix', () => {
     const value: ItemHashes = {}
 
-    expect(composeIdentifier(value, 'title')).toBeUndefined()
+    expect(composeItemIdentifier(value, 'title')).toBeUndefined()
   })
 
   it('should return undefined when only hashes below the min rung exist', () => {
     const value = { titleHash: 't1' }
 
-    expect(composeIdentifier(value, 'link')).toBeUndefined()
+    expect(composeItemIdentifier(value, 'link')).toBeUndefined()
   })
 })
 

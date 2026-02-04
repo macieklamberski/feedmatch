@@ -49,13 +49,13 @@ export const updateGates: Array<UpdateGate> = [contentChangeGate]
 // Gates are applied sequentially — each gate filters the output of the previous.
 export const applyCandidateGates = ({
   candidates,
-  source,
+  identifierSource,
   gates,
   incoming,
   channel,
 }: {
   candidates: Array<MatchableItem>
-  source: MatchSource
+  identifierSource: MatchSource
   gates: Array<CandidateGate>
   incoming: { hashes: ItemHashes }
   channel: { linkUniquenessRate: number }
@@ -63,12 +63,12 @@ export const applyCandidateGates = ({
   let result = candidates
 
   for (const gate of gates) {
-    if (gate.appliesTo !== 'all' && !gate.appliesTo.includes(source)) {
+    if (gate.appliesTo !== 'all' && !gate.appliesTo.includes(identifierSource)) {
       continue
     }
 
     result = result.filter((candidate) => {
-      const context: CandidateGateContext = { source, incoming, candidate, channel }
+      const context: CandidateGateContext = { identifierSource, incoming, candidate, channel }
       return gate.decide(context).allow
     })
   }

@@ -26,7 +26,7 @@ const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
 describe('enclosureConflictGate', () => {
   it('should reject when both sides have different enclosures on guid source', () => {
     const value: CandidateGateContext = {
-      source: 'guid',
+      identifierSource: 'guid',
       incoming: { hashes: { enclosureHash: 'enc-new' } },
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
@@ -40,7 +40,7 @@ describe('enclosureConflictGate', () => {
 
   it('should reject when both sides have different enclosures on link source', () => {
     const value: CandidateGateContext = {
-      source: 'link',
+      identifierSource: 'link',
       incoming: { hashes: { enclosureHash: 'enc-new' } },
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
@@ -54,7 +54,7 @@ describe('enclosureConflictGate', () => {
 
   it('should allow when enclosures match', () => {
     const value: CandidateGateContext = {
-      source: 'guid',
+      identifierSource: 'guid',
       incoming: { hashes: { enclosureHash: 'enc-same' } },
       candidate: makeItem({ enclosureHash: 'enc-same' }),
       channel: { linkUniquenessRate: 1.0 },
@@ -65,7 +65,7 @@ describe('enclosureConflictGate', () => {
 
   it('should allow when candidate has no enclosure', () => {
     const value: CandidateGateContext = {
-      source: 'guid',
+      identifierSource: 'guid',
       incoming: { hashes: { enclosureHash: 'enc-new' } },
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
@@ -76,7 +76,7 @@ describe('enclosureConflictGate', () => {
 
   it('should allow when incoming has no enclosure', () => {
     const value: CandidateGateContext = {
-      source: 'guid',
+      identifierSource: 'guid',
       incoming: { hashes: {} },
       candidate: makeItem({ enclosureHash: 'enc-existing' }),
       channel: { linkUniquenessRate: 1.0 },
@@ -87,7 +87,7 @@ describe('enclosureConflictGate', () => {
 
   it('should allow when neither side has enclosure', () => {
     const value: CandidateGateContext = {
-      source: 'guid',
+      identifierSource: 'guid',
       incoming: { hashes: {} },
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
@@ -195,7 +195,7 @@ describe('applyCandidateGates', () => {
     }
     const value = applyCandidateGates({
       candidates,
-      source: 'guid',
+      identifierSource: 'guid',
       gates: [gate],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
@@ -211,7 +211,7 @@ describe('applyCandidateGates', () => {
     ]
     const value = applyCandidateGates({
       candidates,
-      source: 'guid',
+      identifierSource: 'guid',
       gates: [enclosureConflictGate],
       incoming: { hashes: { enclosureHash: 'enc-1' } },
       channel: { linkUniquenessRate: 1.0 },
@@ -232,7 +232,7 @@ describe('applyCandidateGates', () => {
     const candidates = [makeItem({ id: 'a' })]
     const value = applyCandidateGates({
       candidates,
-      source: 'title',
+      identifierSource: 'title',
       gates: [gate],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
@@ -263,7 +263,7 @@ describe('applyCandidateGates', () => {
     const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })]
     const value = applyCandidateGates({
       candidates,
-      source: 'guid',
+      identifierSource: 'guid',
       gates: [gateA, gateB],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
@@ -284,7 +284,7 @@ describe('applyCandidateGates', () => {
     const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
     const value = applyCandidateGates({
       candidates,
-      source: 'guid',
+      identifierSource: 'guid',
       gates: [gate],
       incoming: { hashes: {} },
       channel: { linkUniquenessRate: 1.0 },
@@ -307,14 +307,14 @@ describe('applyCandidateGates', () => {
     const hashes: ItemHashes = { guidHash: 'guid-1' }
     applyCandidateGates({
       candidates: [candidate],
-      source: 'link',
+      identifierSource: 'link',
       gates: [gate],
       incoming: { hashes },
       channel: { linkUniquenessRate: 0.5 },
     })
 
     expect(contexts).toHaveLength(1)
-    expect(contexts[0].source).toBe('link')
+    expect(contexts[0].identifierSource).toBe('link')
     expect(contexts[0].incoming.hashes).toBe(hashes)
     expect(contexts[0].candidate).toBe(candidate)
     expect(contexts[0].channel.linkUniquenessRate).toBe(0.5)

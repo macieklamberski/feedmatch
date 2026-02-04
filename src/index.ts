@@ -1,6 +1,6 @@
 export { classifyItems } from './classifier.js'
 export {
-  composeIdentifier,
+  composeItemIdentifier,
   computeItemHashes,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
@@ -13,19 +13,20 @@ export {
 } from './hashes.js'
 export { identityLevels } from './meta.js'
 export {
+  composeItemIdentifiers,
   computeAllHashes,
-  deduplicateByIdentifier,
-  filterWithIdentifier,
+  deduplicateItemsByIdentifier,
+  filterItemsWithIdentifier,
 } from './pipeline.js'
 export type {
   ClassifyItemsInput,
   ClassifyItemsResult as ClassificationResult,
+  ComposedFeedItem,
   HashableItem,
   HashedFeedItem,
   IdentityDepth,
   InsertAction,
   ItemHashes,
-  KeyedFeedItem,
   MatchableItem,
   MatchSource,
   UpdateAction,

@@ -48,16 +48,16 @@ export type HashedFeedItem<TItem> = {
   hashes: ItemHashes
 }
 
-export type KeyedFeedItem<TItem> = HashedFeedItem<TItem> & {
+export type ComposedFeedItem<TItem> = HashedFeedItem<TItem> & {
   identifier: string | undefined
 }
 
-// KeyedFeedItem after filterWithIdentifier — identifier is guaranteed set.
+// ComposedFeedItem after filterItemsWithIdentifier — identifier is guaranteed set.
 export type IdentifiedFeedItem<TItem> = HashedFeedItem<TItem> & {
   identifier: string
 }
 
-export type ChannelProfile = {
+export type FeedProfile = {
   linkUniquenessRate: number
 }
 
@@ -70,13 +70,13 @@ export type MatchResult = {
 
 export type TierResult =
   | { outcome: 'matched'; result: MatchResult }
-  | { outcome: 'ambiguous'; source: MatchSource; count: number }
+  | { outcome: 'ambiguous'; identifierSource: MatchSource; count: number }
   | { outcome: 'pass' }
 
 export type TierContext = {
   hashes: ItemHashes
   candidates: Array<MatchableItem>
-  gated: (source: MatchSource, filtered: Array<MatchableItem>) => Array<MatchableItem>
+  gated: (identifierSource: MatchSource, filtered: Array<MatchableItem>) => Array<MatchableItem>
 }
 
 export type InsertAction<TItem> = {
@@ -94,7 +94,7 @@ export type UpdateAction<TItem> = {
 }
 
 export type CandidateGateContext = {
-  source: MatchSource
+  identifierSource: MatchSource
   incoming: { hashes: ItemHashes }
   candidate: MatchableItem
   channel: { linkUniquenessRate: number }
