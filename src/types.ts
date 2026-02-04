@@ -70,7 +70,7 @@ export type MatchResult = {
 
 export type MatchStrategyResult =
   | { outcome: 'matched'; result: MatchResult }
-  | { outcome: 'ambiguous'; identifierSource: MatchSource; count: number }
+  | { outcome: 'ambiguous'; source: MatchSource; count: number }
   | { outcome: 'pass' }
 
 export type MatchStrategyContext = {

@@ -100,7 +100,7 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
       }
     }
 
-    return { outcome: 'ambiguous', identifierSource: 'guid', count: byGuid.length }
+    return { outcome: 'ambiguous', source: 'guid', count: byGuid.length }
   }
 
   return { outcome: 'pass' }
@@ -136,7 +136,7 @@ export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult 
       }
     }
 
-    return { outcome: 'ambiguous', identifierSource: 'link', count: byLink.length }
+    return { outcome: 'ambiguous', source: 'link', count: byLink.length }
   }
 
   return { outcome: 'pass' }
@@ -165,7 +165,7 @@ export const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyRe
   }
 
   if (byEnclosure.length > 1) {
-    return { outcome: 'ambiguous', identifierSource: 'enclosure', count: byEnclosure.length }
+    return { outcome: 'ambiguous', source: 'enclosure', count: byEnclosure.length }
   }
 
   return { outcome: 'pass' }
@@ -191,7 +191,7 @@ export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult
   }
 
   if (byTitle.length > 1) {
-    return { outcome: 'ambiguous', identifierSource: 'title', count: byTitle.length }
+    return { outcome: 'ambiguous', source: 'title', count: byTitle.length }
   }
 
   return { outcome: 'pass' }

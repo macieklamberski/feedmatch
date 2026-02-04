@@ -838,7 +838,7 @@ describe('matchByGuid', () => {
 
     expect(matchByGuid(context)).toEqual({
       outcome: 'ambiguous',
-      identifierSource: 'guid',
+      source: 'guid',
       count: 2,
     })
   })
@@ -895,7 +895,7 @@ describe('matchByLink', () => {
 
     expect(matchByLink(context)).toEqual({
       outcome: 'ambiguous',
-      identifierSource: 'link',
+      source: 'link',
       count: 2,
     })
   })
@@ -938,7 +938,7 @@ describe('matchByEnclosure', () => {
 
     expect(matchByEnclosure(context)).toEqual({
       outcome: 'ambiguous',
-      identifierSource: 'enclosure',
+      source: 'enclosure',
       count: 2,
     })
   })
@@ -981,7 +981,7 @@ describe('matchByTitle', () => {
 
     expect(matchByTitle(context)).toEqual({
       outcome: 'ambiguous',
-      identifierSource: 'title',
+      source: 'title',
       count: 2,
     })
   })
