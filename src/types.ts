@@ -68,12 +68,12 @@ export type MatchResult = {
   identifierSource: MatchSource
 }
 
-export type TierResult =
+export type MatchStrategyResult =
   | { outcome: 'matched'; result: MatchResult }
   | { outcome: 'ambiguous'; identifierSource: MatchSource; count: number }
   | { outcome: 'pass' }
 
-export type TierContext = {
+export type MatchStrategyContext = {
   hashes: ItemHashes
   candidates: Array<MatchableItem>
   filtered: (

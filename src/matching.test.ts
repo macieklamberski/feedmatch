@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  _testTierMatchers,
+  _testMatchStrategies,
   computeBatchLinkUniqueness,
   computeFeedProfile,
   findMatchCandidates,
   isLinkOnly,
   selectMatchingItem,
 } from './matching.js'
-import type { ItemHashes, MatchableItem, MatchResult, TierContext } from './types.js'
+import type { ItemHashes, MatchableItem, MatchResult, MatchStrategyContext } from './types.js'
 
-const { matchByGuid, matchByLink, matchByEnclosure, matchByTitle } = _testTierMatchers
+const { matchByGuid, matchByLink, matchByEnclosure, matchByTitle } = _testMatchStrategies
 
 const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
   return {
@@ -771,7 +771,7 @@ const identity = (
 describe('matchByGuid', () => {
   it('should match single guid candidate', () => {
     const candidate = makeItem({ guidHash: 'guid-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [candidate],
       filtered: identity,
@@ -785,7 +785,7 @@ describe('matchByGuid', () => {
 
   it('should disambiguate by enclosure when multiple guid matches', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1', enclosureHash: 'enc-1' },
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
       filtered: identity,
@@ -799,7 +799,7 @@ describe('matchByGuid', () => {
 
   it('should disambiguate by guid fragment when enclosure fails', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1', guidFragmentHash: 'gf-1' },
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
       filtered: identity,
@@ -813,7 +813,7 @@ describe('matchByGuid', () => {
 
   it('should disambiguate by link when guid fragment fails', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1', linkHash: 'link-1' },
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
       filtered: identity,
@@ -826,7 +826,7 @@ describe('matchByGuid', () => {
   })
 
   it('should return ambiguous when all disambiguation fails', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [
         makeItem({ id: 'a', guidHash: 'guid-1' }),
@@ -843,7 +843,7 @@ describe('matchByGuid', () => {
   })
 
   it('should pass when no guidHash', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { linkHash: 'link-1' },
       candidates: [makeItem({ guidHash: 'guid-1' })],
       filtered: identity,
@@ -856,7 +856,7 @@ describe('matchByGuid', () => {
 describe('matchByLink', () => {
   it('should match single link candidate', () => {
     const candidate = makeItem({ linkHash: 'link-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { linkHash: 'link-1' },
       candidates: [candidate],
       filtered: identity,
@@ -870,7 +870,7 @@ describe('matchByLink', () => {
 
   it('should disambiguate by link fragment when multiple matches', () => {
     const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { linkHash: 'link-1', linkFragmentHash: 'frag-1' },
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
       filtered: identity,
@@ -883,7 +883,7 @@ describe('matchByLink', () => {
   })
 
   it('should return ambiguous when fragment fails', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { linkHash: 'link-1', linkFragmentHash: 'frag-shared' },
       candidates: [
         makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
@@ -900,7 +900,7 @@ describe('matchByLink', () => {
   })
 
   it('should pass when no linkHash', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [makeItem({ linkHash: 'link-1' })],
       filtered: identity,
@@ -913,7 +913,7 @@ describe('matchByLink', () => {
 describe('matchByEnclosure', () => {
   it('should match single enclosure candidate', () => {
     const candidate = makeItem({ enclosureHash: 'enc-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { enclosureHash: 'enc-1' },
       candidates: [candidate],
       filtered: identity,
@@ -926,7 +926,7 @@ describe('matchByEnclosure', () => {
   })
 
   it('should return ambiguous when multiple matches', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { enclosureHash: 'enc-1' },
       candidates: [
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
@@ -943,7 +943,7 @@ describe('matchByEnclosure', () => {
   })
 
   it('should pass when no enclosureHash', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [makeItem({ enclosureHash: 'enc-1' })],
       filtered: identity,
@@ -956,7 +956,7 @@ describe('matchByEnclosure', () => {
 describe('matchByTitle', () => {
   it('should match single title candidate', () => {
     const candidate = makeItem({ titleHash: 'title-1' })
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { titleHash: 'title-1' },
       candidates: [candidate],
       filtered: identity,
@@ -969,7 +969,7 @@ describe('matchByTitle', () => {
   })
 
   it('should return ambiguous when multiple matches', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { titleHash: 'title-1' },
       candidates: [
         makeItem({ id: 'a', titleHash: 'title-1' }),
@@ -986,7 +986,7 @@ describe('matchByTitle', () => {
   })
 
   it('should pass when no titleHash', () => {
-    const context: TierContext = {
+    const context: MatchStrategyContext = {
       hashes: { guidHash: 'guid-1' },
       candidates: [makeItem({ titleHash: 'title-1' })],
       filtered: identity,

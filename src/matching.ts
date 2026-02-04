@@ -7,8 +7,8 @@ import type {
   MatchableItem,
   MatchResult,
   MatchSource,
-  TierContext,
-  TierResult,
+  MatchStrategyContext,
+  MatchStrategyResult,
 } from './types.js'
 
 // Returns true when link is the item's only strong identifier
@@ -44,8 +44,8 @@ export const findMatchCandidates = (
   )
 }
 
-// Tier matcher: GUID with enclosure/guidFragment/link disambiguation.
-const matchByGuid = (context: TierContext): TierResult => {
+// Match strategy: GUID with enclosure/guidFragment/link disambiguation.
+const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.guidHash) {
@@ -106,8 +106,8 @@ const matchByGuid = (context: TierContext): TierResult => {
   return { outcome: 'pass' }
 }
 
-// Tier matcher: link with linkFragment disambiguation.
-const matchByLink = (context: TierContext): TierResult => {
+// Match strategy: link with linkFragment disambiguation.
+const matchByLink = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.linkHash) {
@@ -142,8 +142,8 @@ const matchByLink = (context: TierContext): TierResult => {
   return { outcome: 'pass' }
 }
 
-// Tier matcher: enclosure (no disambiguation).
-const matchByEnclosure = (context: TierContext): TierResult => {
+// Match strategy: enclosure (no disambiguation).
+const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.enclosureHash) {
@@ -171,8 +171,8 @@ const matchByEnclosure = (context: TierContext): TierResult => {
   return { outcome: 'pass' }
 }
 
-// Tier matcher: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
-const matchByTitle = (context: TierContext): TierResult => {
+// Match strategy: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
+const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.titleHash) {
@@ -231,18 +231,18 @@ export const selectMatchingItem = ({
     return
   }
 
-  const context: TierContext = { hashes, candidates, filtered }
+  const context: MatchStrategyContext = { hashes, candidates, filtered }
 
-  const tryTier = (
-    tier: (context: TierContext) => TierResult,
+  const tryStrategy = (
+    strategy: (context: MatchStrategyContext) => MatchStrategyResult,
   ): MatchResult | undefined | 'pass' => {
-    const tierResult = tier(context)
+    const strategyResult = strategy(context)
 
-    if (tierResult.outcome === 'matched') {
-      return tierResult.result
+    if (strategyResult.outcome === 'matched') {
+      return strategyResult.result
     }
 
-    if (tierResult.outcome === 'ambiguous') {
+    if (strategyResult.outcome === 'ambiguous') {
       return undefined
     }
 
@@ -250,36 +250,36 @@ export const selectMatchingItem = ({
   }
 
   // Priority 1: GUID match (always strongest).
-  const guidResult = tryTier(matchByGuid)
+  const guidResult = tryStrategy(matchByGuid)
 
   if (guidResult !== 'pass') {
     return guidResult
   }
 
-  // Channel-dependent tier ordering.
+  // Channel-dependent strategy ordering.
   if (linkUniquenessRate >= 0.95) {
     // High-uniqueness channel: link is reliable.
-    const linkResult = tryTier(matchByLink)
+    const linkResult = tryStrategy(matchByLink)
 
     if (linkResult !== 'pass') {
       return linkResult
     }
 
-    const enclosureResult = tryTier(matchByEnclosure)
+    const enclosureResult = tryStrategy(matchByEnclosure)
 
     if (enclosureResult !== 'pass') {
       return enclosureResult
     }
   } else {
     // Low-uniqueness channel: enclosure first, link only if link-only item.
-    const enclosureResult = tryTier(matchByEnclosure)
+    const enclosureResult = tryStrategy(matchByEnclosure)
 
     if (enclosureResult !== 'pass') {
       return enclosureResult
     }
 
     if (isLinkOnly(hashes)) {
-      const linkResult = tryTier(matchByLink)
+      const linkResult = tryStrategy(matchByLink)
 
       if (linkResult !== 'pass') {
         return linkResult
@@ -289,7 +289,7 @@ export const selectMatchingItem = ({
 
   // Weak fallback: title only when no strong hashes.
   if (!hasStrongHash(hashes)) {
-    const titleResult = tryTier(matchByTitle)
+    const titleResult = tryStrategy(matchByTitle)
 
     if (titleResult !== 'pass') {
       return titleResult
@@ -331,4 +331,4 @@ export const computeFeedProfile = (
 }
 
 // Exported for testing only — not part of public API.
-export const _testTierMatchers = { matchByGuid, matchByLink, matchByEnclosure, matchByTitle }
+export const _testMatchStrategies = { matchByGuid, matchByLink, matchByEnclosure, matchByTitle }
