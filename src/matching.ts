@@ -45,7 +45,7 @@ export const findMatchCandidates = (
 }
 
 // Match strategy: GUID with enclosure/guidFragment/link disambiguation.
-const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult => {
+export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.guidHash) {
@@ -107,7 +107,7 @@ const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult => {
 }
 
 // Match strategy: link with linkFragment disambiguation.
-const matchByLink = (context: MatchStrategyContext): MatchStrategyResult => {
+export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.linkHash) {
@@ -143,7 +143,7 @@ const matchByLink = (context: MatchStrategyContext): MatchStrategyResult => {
 }
 
 // Match strategy: enclosure (no disambiguation).
-const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyResult => {
+export const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.enclosureHash) {
@@ -172,7 +172,7 @@ const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyResult =>
 }
 
 // Match strategy: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
-const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult => {
+export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult => {
   const { hashes, candidates, filtered } = context
 
   if (!hashes.titleHash) {
@@ -329,6 +329,3 @@ export const computeFeedProfile = (
 
   return { linkUniquenessRate: Math.min(historicalRate, batchRate) }
 }
-
-// Exported for testing only — not part of public API.
-export const _testMatchStrategies = { matchByGuid, matchByLink, matchByEnclosure, matchByTitle }

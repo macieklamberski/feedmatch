@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  _testMatchStrategies,
   computeBatchLinkUniqueness,
   computeFeedProfile,
   findMatchCandidates,
   isLinkOnly,
+  matchByEnclosure,
+  matchByGuid,
+  matchByLink,
+  matchByTitle,
   selectMatchingItem,
 } from './matching.js'
 import type { ItemHashes, MatchableItem, MatchResult, MatchStrategyContext } from './types.js'
-
-const { matchByGuid, matchByLink, matchByEnclosure, matchByTitle } = _testMatchStrategies
 
 const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
   return {
