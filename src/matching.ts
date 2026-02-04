@@ -10,7 +10,6 @@ import type {
   MatchSource,
   TierContext,
   TierResult,
-  TraceEvent,
 } from './types.js'
 
 // Returns true when link is the item's only strong identifier
@@ -209,34 +208,26 @@ export const selectMatch = ({
   candidates,
   linkUniquenessRate,
   candidateGates,
-  trace,
 }: {
   hashes: ItemHashes
   candidates: Array<MatchableItem>
   linkUniquenessRate: number
   candidateGates: Array<CandidateGate>
-  trace?: (event: TraceEvent) => void
 }): MatchResult | undefined => {
   const incoming = { hashes }
   const channel = { linkUniquenessRate }
 
   const gated = (source: MatchSource, filtered: Array<MatchableItem>): Array<MatchableItem> => {
-    if (filtered.length > 0) {
-      trace?.({ kind: 'candidates.found', source, count: filtered.length })
-    }
-
     return applyCandidateGates({
       candidates: filtered,
       source,
       gates: candidateGates,
       incoming,
       channel,
-      trace,
     })
   }
 
   if (candidates.length === 0) {
-    trace?.({ kind: 'match.none' })
     return
   }
 
@@ -248,16 +239,10 @@ export const selectMatch = ({
     const tierResult = tier(context)
 
     if (tierResult.outcome === 'matched') {
-      trace?.({
-        kind: 'match.selected',
-        source: tierResult.result.identifierSource,
-        existingItemId: tierResult.result.match.id,
-      })
       return tierResult.result
     }
 
     if (tierResult.outcome === 'ambiguous') {
-      trace?.({ kind: 'match.ambiguous', source: tierResult.source, count: tierResult.count })
       return undefined
     }
 
@@ -299,12 +284,6 @@ export const selectMatch = ({
       if (linkResult !== 'pass') {
         return linkResult
       }
-    } else if (hashes.linkHash) {
-      trace?.({
-        kind: 'tier.skipped',
-        source: 'link',
-        reason: 'Low-uniqueness channel; non-link-only item',
-      })
     }
   }
 
@@ -315,11 +294,8 @@ export const selectMatch = ({
     if (titleResult !== 'pass') {
       return titleResult
     }
-  } else if (hashes.titleHash) {
-    trace?.({ kind: 'tier.skipped', source: 'title', reason: 'Strong hash present' })
   }
 
-  trace?.({ kind: 'match.none' })
   return
 }
 

@@ -11,8 +11,6 @@ import type {
   InsertAction,
   ItemHashes,
   MatchableItem,
-  TraceEvent,
-  TracePhase,
   UpdateAction,
 } from './types.js'
 
@@ -31,26 +29,12 @@ const toItemHashes = (item: MatchableItem): ItemHashes => {
   return hashes
 }
 
-// Pure function: classify new items against existing items into inserts/updates.
+// Classify new items against existing items into inserts/updates.
 // Uses level-based identity with auto-computed depth when not provided.
 export const classifyItems = <TItem extends HashableItem>(
   input: ClassifyItemsInput<TItem>,
 ): ClassifyItemsResult<TItem> => {
   const { newItems, existingItems, identityDepth: inputDepth, policy } = input
-  const trace = policy?.trace
-
-  const scopedTrace = (phase: TracePhase): ((event: TraceEvent) => void) | undefined => {
-    if (!trace) {
-      return undefined
-    }
-
-    return (event) => {
-      trace({ ...event, phase })
-    }
-  }
-
-  const prematchTrace = scopedTrace('prematch')
-  const classifyTrace = scopedTrace('classify')
 
   const candidateGates = [enclosureConflictGate, ...(policy?.candidateGates ?? [])]
   const updateGates = [contentChangeGate, ...(policy?.updateGates ?? [])]
@@ -79,7 +63,6 @@ export const classifyItems = <TItem extends HashableItem>(
       candidates,
       linkUniquenessRate: profile.linkUniquenessRate,
       candidateGates,
-      trace: prematchTrace,
     })
 
     if (!result) {
@@ -125,7 +108,6 @@ export const classifyItems = <TItem extends HashableItem>(
 
   // Resolve identity depth: validate/downgrade if provided, compute from data otherwise.
   const resolvedDepth = resolveIdentityDepth(depthHashes, inputDepth)
-  classifyTrace?.({ kind: 'identityDepth.resolved', identityDepth: resolvedDepth })
 
   // Build keyed items using level identity at the resolved depth.
   const keyed = hashedItems.map((item) => ({
@@ -149,21 +131,11 @@ export const classifyItems = <TItem extends HashableItem>(
       (candidate) => composeIdentifier(toItemHashes(candidate), resolvedDepth) === item.identifier,
     )
 
-    if (depthFilteredCandidates.length < candidates.length) {
-      classifyTrace?.({
-        kind: 'candidates.depthFiltered',
-        before: candidates.length,
-        after: depthFilteredCandidates.length,
-        identityDepth: resolvedDepth,
-      })
-    }
-
     const result = selectMatch({
       hashes: item.hashes,
       candidates: depthFilteredCandidates,
       linkUniquenessRate: profile.linkUniquenessRate,
       candidateGates,
-      trace: classifyTrace,
     })
 
     if (!result) {
@@ -172,7 +144,6 @@ export const classifyItems = <TItem extends HashableItem>(
         hashes: item.hashes,
         identifierHash,
       })
-      classifyTrace?.({ kind: 'classify.insert', identifierHash })
       continue
     }
 
@@ -192,9 +163,6 @@ export const classifyItems = <TItem extends HashableItem>(
         existingItemId: result.match.id,
         identifierSource: result.identifierSource,
       })
-      classifyTrace?.({ kind: 'classify.update', identifierHash, existingItemId: result.match.id })
-    } else {
-      classifyTrace?.({ kind: 'classify.skip', existingItemId: result.match.id })
     }
   }
 

@@ -33,8 +33,6 @@ export type {
   KeyedFeedItem,
   MatchableItem,
   MatchSource,
-  TraceEvent,
-  TracePhase,
   UpdateAction,
   UpdateGate,
   UpdateGateContext,

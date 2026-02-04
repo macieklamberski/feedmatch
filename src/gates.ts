@@ -5,7 +5,6 @@ import type {
   ItemHashes,
   MatchableItem,
   MatchSource,
-  TraceEvent,
   UpdateGate,
 } from './types.js'
 
@@ -50,14 +49,12 @@ export const applyCandidateGates = ({
   gates,
   incoming,
   channel,
-  trace,
 }: {
   candidates: Array<MatchableItem>
   source: MatchSource
   gates: Array<CandidateGate>
   incoming: { hashes: ItemHashes }
   channel: { linkUniquenessRate: number }
-  trace?: (event: TraceEvent) => void
 }): Array<MatchableItem> => {
   let result = candidates
 
@@ -66,32 +63,10 @@ export const applyCandidateGates = ({
       continue
     }
 
-    const before = result.length
-    let lastReason = ''
-
     result = result.filter((candidate) => {
       const context: CandidateGateContext = { source, incoming, candidate, channel }
-      const decision = gate.decide(context)
-
-      if (!decision.allow) {
-        lastReason = decision.reason
-      }
-
-      return decision.allow
+      return gate.decide(context).allow
     })
-
-    const after = result.length
-
-    if (before !== after) {
-      trace?.({
-        kind: 'candidates.gated',
-        source,
-        gateName: gate.name,
-        reason: lastReason,
-        before,
-        after,
-      })
-    }
   }
 
   return result

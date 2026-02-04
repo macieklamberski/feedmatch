@@ -6,7 +6,6 @@ import type {
   ItemHashes,
   MatchableItem,
   MatchSource,
-  TraceEvent,
 } from './types.js'
 
 const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
@@ -272,53 +271,6 @@ describe('applyCandidateGates', () => {
     const expected = [candidates[0]]
 
     expect(value).toEqual(expected)
-  })
-
-  it('should emit trace when gate removes candidates', () => {
-    const events: Array<TraceEvent> = []
-    const candidates = [
-      makeItem({ id: 'a', enclosureHash: 'enc-1' }),
-      makeItem({ id: 'b', enclosureHash: 'enc-2' }),
-    ]
-    applyCandidateGates({
-      candidates,
-      source: 'guid',
-      gates: [enclosureConflictGate],
-      incoming: { hashes: { enclosureHash: 'enc-1' } },
-      channel: { linkUniquenessRate: 1.0 },
-      trace: (event) => {
-        events.push(event)
-      },
-    })
-    const expected: Array<TraceEvent> = [
-      {
-        kind: 'candidates.gated',
-        source: 'guid',
-        gateName: 'enclosureConflict',
-        reason: 'Enclosure hash mismatch',
-        before: 2,
-        after: 1,
-      },
-    ]
-
-    expect(events).toEqual(expected)
-  })
-
-  it('should not emit trace when gate removes no candidates', () => {
-    const events: Array<TraceEvent> = []
-    const candidates = [makeItem({ id: 'a', enclosureHash: 'enc-1' })]
-    applyCandidateGates({
-      candidates,
-      source: 'guid',
-      gates: [enclosureConflictGate],
-      incoming: { hashes: { enclosureHash: 'enc-1' } },
-      channel: { linkUniquenessRate: 1.0 },
-      trace: (event) => {
-        events.push(event)
-      },
-    })
-
-    expect(events).toEqual([])
   })
 
   it('should return empty array when all candidates are removed', () => {
