@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   buildFingerprints,
   classifyItems,
-  composeHashedItems,
+  composeIncomingItems,
   deduplicateItemsByFingerprint,
   scoreItem,
 } from './classifier.js'
@@ -13,8 +13,8 @@ import type {
   ExistingItem,
   FingerprintedItem,
   FingerprintLevel,
+  IncomingItem,
   ItemHashes,
-  ItemWithHashes,
   NewItem,
 } from './types.js'
 
@@ -66,7 +66,7 @@ describe('scoreItem', () => {
   })
 })
 
-describe('composeHashedItems', () => {
+describe('composeIncomingItems', () => {
   it('should map items to hashed pairs', () => {
     const value: Array<NewItem> = [
       { guid: 'guid-1', title: 'Title 1' },
@@ -84,17 +84,17 @@ describe('composeHashedItems', () => {
       },
     ]
 
-    expect(composeHashedItems(value)).toEqual(expected)
+    expect(composeIncomingItems(value)).toEqual(expected)
   })
 
   it('should return empty array for empty input', () => {
-    expect(composeHashedItems([])).toEqual([])
+    expect(composeIncomingItems([])).toEqual([])
   })
 })
 
 describe('buildFingerprints', () => {
   it('should build fingerprints for all items at given level', () => {
-    const value: Array<ItemWithHashes> = [
+    const value: Array<IncomingItem> = [
       { guid: 'g1', ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }) },
       { guid: 'g2', ...makeHashes({ guidHash: 'gh2' }) },
     ]
@@ -107,7 +107,7 @@ describe('buildFingerprints', () => {
   })
 
   it('should drop items with no fingerprint', () => {
-    const value: Array<ItemWithHashes> = [
+    const value: Array<IncomingItem> = [
       { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }) },
       { ...makeHashes() },
       { title: 'Title', ...makeHashes({ titleHash: 'th1' }) },
@@ -125,7 +125,7 @@ describe('buildFingerprints', () => {
   })
 
   it('should return empty array when no items have fingerprint', () => {
-    const value: Array<ItemWithHashes> = [{ ...makeHashes() }]
+    const value: Array<IncomingItem> = [{ ...makeHashes() }]
 
     expect(buildFingerprints(value, 'guid')).toEqual([])
   })

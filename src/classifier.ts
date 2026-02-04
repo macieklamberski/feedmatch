@@ -12,9 +12,9 @@ import type {
   ClassifyItemsResult,
   FingerprintedItem,
   FingerprintLevel,
+  IncomingItem,
   InsertAction,
   ItemHashes,
-  ItemWithHashes,
   NewItem,
   UpdateAction,
 } from './types.js'
@@ -32,14 +32,14 @@ export const scoreItem = (hashes: ItemHashes): number => {
   return score
 }
 
-export const composeHashedItems = (items: Array<NewItem>): Array<ItemWithHashes> => {
+export const composeIncomingItems = (items: Array<NewItem>): Array<IncomingItem> => {
   return items.map((item) => ({ ...item, ...computeItemHashes(item) }))
 }
 
 // Build fingerprints for all hashed items at a given level.
 // Items that produce no fingerprint (no hashes in prefix) are dropped.
 export const buildFingerprints = (
-  items: Array<ItemWithHashes>,
+  items: Array<IncomingItem>,
   level: FingerprintLevel,
 ): Array<FingerprintedItem> => {
   const result: Array<FingerprintedItem> = []
@@ -76,12 +76,12 @@ export const deduplicateItemsByFingerprint = (
 export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult => {
   const { newItems, existingItems, fingerprintLevel: inputLevel } = input
 
-  const hashedNewItems = composeHashedItems(newItems)
+  const incomingItems = composeIncomingItems(newItems)
 
   // Compute profile early — used for both pre-match exclusion and final
   // classification. Uses raw (not deduped) incoming hashes; duplicates
   // lower uniqueness slightly, which is conservative (fewer link matches).
-  const feedProfile = computeFeedProfile(existingItems, hashedNewItems)
+  const feedProfile = computeFeedProfile(existingItems, incomingItems)
   const linkUniquenessRate = feedProfile.link.uniquenessRate
 
   // Pre-match: find existing items that are true updates and exclude them
@@ -92,10 +92,10 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   // and must stay in the collision set so the level can detect it.
   const matchedExistingIds = new Set<string>()
 
-  for (const hashedItem of hashedNewItems) {
-    const candidates = findMatchCandidates(hashedItem, existingItems)
+  for (const incomingItem of incomingItems) {
+    const candidates = findMatchCandidates(incomingItem, existingItems)
     const result = selectMatchingItem({
-      incoming: hashedItem,
+      incoming: incomingItem,
       candidates,
       linkUniquenessRate,
     })
@@ -110,7 +110,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
     }
 
     // Link match: only exclude when max-level fingerprints agree (true duplicate).
-    const incomingMaxKey = buildFingerprint(hashedItem, 'title')
+    const incomingMaxKey = buildFingerprint(incomingItem, 'title')
     const existingMaxKey = buildFingerprint(result.match, 'title')
 
     if (incomingMaxKey === existingMaxKey) {
@@ -126,7 +126,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   // duplicates, or same item with slightly different hash coverage) don't
   // cause false downgrades. Items with no level identity are skipped.
   const seenKeys = new Set<string>()
-  const levelHashes = [...hashedNewItems, ...unmatchedExistingItems].filter((item) => {
+  const levelHashes = [...incomingItems, ...unmatchedExistingItems].filter((item) => {
     const maxKey = buildFingerprint(item, 'title')
 
     if (!maxKey) {
@@ -146,7 +146,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   const resolvedLevel = resolveFingerprintLevel(levelHashes, inputLevel)
 
   // Build fingerprinted items at the resolved level.
-  const fingerprintedItems = buildFingerprints(hashedNewItems, resolvedLevel)
+  const fingerprintedItems = buildFingerprints(incomingItems, resolvedLevel)
   const deduplicatedItems = deduplicateItemsByFingerprint(fingerprintedItems)
 
   // Classify against existing items.

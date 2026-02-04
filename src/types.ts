@@ -22,13 +22,13 @@ export type ItemHashes = {
   enclosureHash: string | null
 }
 
-export type ItemWithHashes = NewItem & ItemHashes
+export type IncomingItem = NewItem & ItemHashes
 
-export type ExistingItem = ItemWithHashes & {
+export type ExistingItem = ItemHashes & {
   id: string
 }
 
-export type FingerprintedItem = ItemWithHashes & {
+export type FingerprintedItem = IncomingItem & {
   fingerprint: string
 }
 
@@ -64,18 +64,18 @@ export type MatchStrategyResult =
   | { outcome: 'pass' }
 
 export type MatchStrategyContext = {
-  incoming: ItemWithHashes
+  incoming: IncomingItem
   candidates: Array<ExistingItem>
   filtered: (matchedBy: MatchedBy, candidates: Array<ExistingItem>) => Array<ExistingItem>
 }
 
 export type InsertAction = {
-  item: ItemWithHashes
+  item: IncomingItem
   fingerprintHash: string
 }
 
 export type UpdateAction = {
-  item: ItemWithHashes
+  item: IncomingItem
   fingerprintHash: string
   existingItemId: string
   matchedBy: MatchedBy
@@ -83,7 +83,7 @@ export type UpdateAction = {
 
 export type CandidateFilterContext = {
   matchedBy: MatchedBy
-  incoming: ItemWithHashes
+  incoming: IncomingItem
   candidate: ExistingItem
   channel: { linkUniquenessRate: number }
 }
@@ -98,7 +98,7 @@ export type CandidateFilter = {
 
 export type UpdateFilterContext = {
   existing: ExistingItem
-  incoming: ItemWithHashes
+  incoming: IncomingItem
   matchedBy: MatchedBy
 }
 

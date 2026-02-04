@@ -4,8 +4,8 @@ import type {
   CandidateFilter,
   CandidateFilterContext,
   ExistingItem,
+  IncomingItem,
   ItemHashes,
-  ItemWithHashes,
   MatchedBy,
   MatchResult,
   MatchStrategyContext,
@@ -62,7 +62,7 @@ export const applyCandidateFilters = ({
   candidates: Array<ExistingItem>
   matchedBy: MatchedBy
   filters: Array<CandidateFilter>
-  incoming: ItemWithHashes
+  incoming: IncomingItem
   channel: { linkUniquenessRate: number }
 }): Array<ExistingItem> => {
   let result = candidates
@@ -277,7 +277,7 @@ export const selectMatchingItem = ({
   candidates,
   linkUniquenessRate,
 }: {
-  incoming: ItemWithHashes
+  incoming: IncomingItem
   candidates: Array<ExistingItem>
   linkUniquenessRate: number
 }): MatchResult | undefined => {
