@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyCandidateFilters,
+  classifyCandidateFilters,
   contentChangeFilter,
   enclosureConflictFilter,
   findMatchCandidates,
@@ -242,6 +243,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
@@ -252,6 +254,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -269,6 +272,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', guidHash: 'guid-1' }),
       ],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -283,6 +287,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
@@ -298,6 +303,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
@@ -313,6 +319,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
@@ -330,6 +337,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
       ],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -346,6 +354,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-shared' }),
       ],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -359,6 +368,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
@@ -372,6 +382,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -390,6 +401,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -405,6 +417,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -420,6 +433,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -437,6 +451,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [makeItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
@@ -450,6 +465,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -468,6 +484,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -486,6 +503,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
 
@@ -503,6 +521,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -516,6 +535,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
       ],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -527,6 +547,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -548,6 +569,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates,
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidates[0],
@@ -565,6 +587,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [makeItem({ linkHash: 'link-1' })],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
@@ -575,6 +598,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -593,6 +617,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
 
@@ -610,6 +635,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -621,6 +647,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ titleHash: 'title-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: candidate,
@@ -638,6 +665,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', titleHash: 'title-1' }),
       ],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
@@ -650,6 +678,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [makeItem({ titleHash: 'title-1' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -660,6 +689,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ summaryHash: 'sum-1' }),
       candidates: [makeItem({ summaryHash: 'sum-1' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -670,6 +700,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ contentHash: 'cnt-1' }),
       candidates: [makeItem({ contentHash: 'cnt-1' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -685,6 +716,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [guidCandidate, linkCandidate],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: guidCandidate,
@@ -704,6 +736,7 @@ describe('selectMatchingItem', () => {
       }),
       candidates: [linkCandidate, encCandidate],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
       match: linkCandidate,
@@ -726,6 +759,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'c', guidHash: 'guid-1', enclosureHash: null }),
       ],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
@@ -740,6 +774,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
       feedProfile: makeFeedProfile(0.98),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -751,6 +786,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: candidate, matchedBy: 'enclosure' }
 
@@ -765,6 +801,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -778,6 +815,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', linkHash: 'link-1' }),
       ],
       feedProfile: makeFeedProfile(0.3),
+      candidateFilters: classifyCandidateFilters,
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -788,6 +826,7 @@ describe('selectMatchingItem', () => {
       incoming: makeHashes({ guidHash: 'guid-x' }),
       candidates: [makeItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
       feedProfile: makeFeedProfile(1.0),
+      candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })

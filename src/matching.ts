@@ -46,9 +46,8 @@ export const contentChangeFilter: UpdateFilter = {
   },
 }
 
-// TODO: Consider splitting into prematch/classify filter arrays if a future
-// filter needs to apply only during classification (not pre-match).
-export const candidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
+export const prematchCandidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
+export const classifyCandidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
 export const updateFilters: Array<UpdateFilter> = [contentChangeFilter]
 
 // Apply all applicable candidate filters to a candidate list for a given source.
@@ -277,10 +276,12 @@ export const selectMatchingItem = ({
   incoming,
   candidates,
   feedProfile,
+  candidateFilters,
 }: {
   incoming: IncomingItem
   candidates: Array<ExistingItem>
   feedProfile: FeedProfile
+  candidateFilters: Array<CandidateFilter>
 }): MatchResult | undefined => {
   const linkUniquenessRate = feedProfile.link.effective.uniquenessRate
   const channel = { linkUniquenessRate }

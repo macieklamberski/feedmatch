@@ -5,7 +5,13 @@ import {
   generateHash,
   resolveFingerprintLevel,
 } from './hashes.js'
-import { findMatchCandidates, selectMatchingItem, updateFilters } from './matching.js'
+import {
+  classifyCandidateFilters,
+  findMatchCandidates,
+  prematchCandidateFilters,
+  selectMatchingItem,
+  updateFilters,
+} from './matching.js'
 import { computeFeedProfile } from './profile.js'
 import type {
   ClassifyItemsInput,
@@ -97,6 +103,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
       incoming: incomingItem,
       candidates,
       feedProfile,
+      candidateFilters: prematchCandidateFilters,
     })
 
     if (!result) {
@@ -167,6 +174,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
       incoming: item,
       candidates: levelFilteredCandidates,
       feedProfile,
+      candidateFilters: classifyCandidateFilters,
     })
 
     if (!result) {
