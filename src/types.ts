@@ -1,5 +1,5 @@
-// Identity depths, strongest → weakest.
-export const identityDepths = [
+// Fingerprint levels, strongest → weakest.
+export const fingerprintLevels = [
   'guid',
   'guidFragment',
   'link',
@@ -8,9 +8,9 @@ export const identityDepths = [
   'title',
 ] as const
 
-export type IdentityDepth = (typeof identityDepths)[number]
+export type FingerprintLevel = (typeof fingerprintLevels)[number]
 
-export type HashableItem = {
+export type NewItem = {
   guid?: string
   link?: string
   title?: string
@@ -31,7 +31,7 @@ export type ItemHashes = {
 }
 
 // Minimal shape for existing items — what matching + change detection need.
-export type MatchableItem = {
+export type ExistingItem = {
   id: string
   guidHash: string | null
   guidFragmentHash: string | null
@@ -43,63 +43,48 @@ export type MatchableItem = {
   contentHash: string | null
 }
 
-export type HashedFeedItem<TItem> = {
+export type FingerprintedItem<TItem> = {
   item: TItem
   hashes: ItemHashes
+  fingerprint: string
 }
 
-export type ComposedFeedItem<TItem> = HashedFeedItem<TItem> & {
-  identifier: string | undefined
-}
-
-// ComposedFeedItem after filterItemsWithIdentifier — identifier is guaranteed set.
-export type IdentifiedFeedItem<TItem> = HashedFeedItem<TItem> & {
-  identifier: string
-}
-
-export type FeedProfile = {
-  linkUniquenessRate: number
-}
-
-export type MatchSource = 'guid' | 'link' | 'enclosure' | 'title'
+export type MatchedBy = 'guid' | 'link' | 'enclosure' | 'title'
 
 export type MatchResult = {
-  match: MatchableItem
-  identifierSource: MatchSource
+  match: ExistingItem
+  matchedBy: MatchedBy
 }
 
 export type MatchStrategyResult =
   | { outcome: 'matched'; result: MatchResult }
-  | { outcome: 'ambiguous'; source: MatchSource; count: number }
+  | { outcome: 'ambiguous'; source: MatchedBy; count: number }
   | { outcome: 'pass' }
 
 export type MatchStrategyContext = {
   hashes: ItemHashes
-  candidates: Array<MatchableItem>
-  filtered: (
-    identifierSource: MatchSource,
-    candidates: Array<MatchableItem>,
-  ) => Array<MatchableItem>
+  candidates: Array<ExistingItem>
+  filtered: (matchedBy: MatchedBy, candidates: Array<ExistingItem>) => Array<ExistingItem>
 }
 
 export type InsertAction<TItem> = {
   item: TItem
   hashes: ItemHashes
-  identifierHash: string
+  fingerprintHash: string
 }
 
 export type UpdateAction<TItem> = {
   item: TItem
   hashes: ItemHashes
-  identifierHash: string
+  fingerprintHash: string
   existingItemId: string
-  identifierSource: MatchSource
+  matchedBy: MatchedBy
 }
 
 export type CandidateFilterContext = {
-  identifierSource: MatchSource
+  matchedBy: MatchedBy
   incoming: { hashes: ItemHashes }
-  candidate: MatchableItem
+  candidate: ExistingItem
   channel: { linkUniquenessRate: number }
 }
 
@@ -107,14 +92,14 @@ export type CandidateFilterResult = { allow: true } | { allow: false; reason: st
 
 export type CandidateFilter = {
   name: string
-  appliesTo: Array<MatchSource> | 'all'
+  appliesTo: Array<MatchedBy> | 'all'
   evaluate: (context: CandidateFilterContext) => CandidateFilterResult
 }
 
 export type UpdateFilterContext = {
-  existing: MatchableItem
+  existing: ExistingItem
   incomingHashes: ItemHashes
-  identifierSource: MatchSource
+  matchedBy: MatchedBy
 }
 
 export type UpdateFilter = {
@@ -122,14 +107,14 @@ export type UpdateFilter = {
   shouldUpdate: (context: UpdateFilterContext) => boolean
 }
 
-export type ClassifyItemsInput<TItem extends HashableItem = HashableItem> = {
+export type ClassifyItemsInput<TItem extends NewItem = NewItem> = {
   newItems: Array<TItem>
-  existingItems: Array<MatchableItem>
-  identityDepth?: IdentityDepth
+  existingItems: Array<ExistingItem>
+  fingerprintLevel?: FingerprintLevel
 }
 
 export type ClassifyItemsResult<TItem> = {
   inserts: Array<InsertAction<TItem>>
   updates: Array<UpdateAction<TItem>>
-  identityDepth: IdentityDepth
+  fingerprintLevel: FingerprintLevel
 }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  applyCandidateFilters,
   computeBatchLinkUniqueness,
-  computeFeedProfile,
+  computeLinkUniquenessRate,
+  contentChangeFilter,
+  enclosureConflictFilter,
   findMatchCandidates,
   isLinkOnly,
   matchByEnclosure,
@@ -10,9 +13,17 @@ import {
   matchByTitle,
   selectMatchingItem,
 } from './matching.js'
-import type { ItemHashes, MatchableItem, MatchResult, MatchStrategyContext } from './types.js'
+import type {
+  CandidateFilter,
+  CandidateFilterContext,
+  ExistingItem,
+  ItemHashes,
+  MatchedBy,
+  MatchResult,
+  MatchStrategyContext,
+} from './types.js'
 
-const makeItem = (overrides: Partial<MatchableItem> = {}): MatchableItem => {
+const makeItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
   return {
     id: 'item-1',
     guidHash: null,
@@ -219,7 +230,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'guid',
+      matchedBy: 'guid',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -248,7 +259,7 @@ describe('selectMatchingItem', () => {
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
       linkUniquenessRate: 1.0,
     }
-    const expected: MatchResult = { match: target, identifierSource: 'guid' }
+    const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -263,7 +274,7 @@ describe('selectMatchingItem', () => {
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
       linkUniquenessRate: 1.0,
     }
-    const expected: MatchResult = { match: target, identifierSource: 'guid' }
+    const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -278,7 +289,7 @@ describe('selectMatchingItem', () => {
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
       linkUniquenessRate: 1.0,
     }
-    const expected: MatchResult = { match: target, identifierSource: 'guid' }
+    const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -339,7 +350,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'guid',
+      matchedBy: 'guid',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -357,7 +368,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'guid',
+      matchedBy: 'guid',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -372,7 +383,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'guid',
+      matchedBy: 'guid',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -387,7 +398,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'link',
+      matchedBy: 'link',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -417,7 +428,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'link',
+      matchedBy: 'link',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -435,7 +446,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'link',
+      matchedBy: 'link',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -451,7 +462,7 @@ describe('selectMatchingItem', () => {
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
       linkUniquenessRate: 0.98,
     }
-    const expected: MatchResult = { match: target, identifierSource: 'link' }
+    const expected: MatchResult = { match: target, matchedBy: 'link' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -494,7 +505,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'enclosure',
+      matchedBy: 'enclosure',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -515,7 +526,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidates[0],
-      identifierSource: 'enclosure',
+      matchedBy: 'enclosure',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -542,7 +553,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'link',
+      matchedBy: 'link',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -558,7 +569,7 @@ describe('selectMatchingItem', () => {
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
       linkUniquenessRate: 0.3,
     }
-    const expected: MatchResult = { match: target, identifierSource: 'link' }
+    const expected: MatchResult = { match: target, matchedBy: 'link' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -588,7 +599,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: candidate,
-      identifierSource: 'title',
+      matchedBy: 'title',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -652,7 +663,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: guidCandidate,
-      identifierSource: 'guid',
+      matchedBy: 'guid',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -671,7 +682,7 @@ describe('selectMatchingItem', () => {
     }
     const expected: MatchResult = {
       match: linkCandidate,
-      identifierSource: 'link',
+      matchedBy: 'link',
     }
 
     expect(selectMatchingItem(value)).toEqual(expected)
@@ -691,7 +702,7 @@ describe('selectMatchingItem', () => {
       ],
       linkUniquenessRate: 1.0,
     }
-    const expected: MatchResult = { match: target, identifierSource: 'guid' }
+    const expected: MatchResult = { match: target, matchedBy: 'guid' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -716,7 +727,7 @@ describe('selectMatchingItem', () => {
       candidates: [candidate],
       linkUniquenessRate: 0.3,
     }
-    const expected: MatchResult = { match: candidate, identifierSource: 'enclosure' }
+    const expected: MatchResult = { match: candidate, matchedBy: 'enclosure' }
 
     expect(selectMatchingItem(value)).toEqual(expected)
   })
@@ -781,16 +792,15 @@ describe('computeBatchLinkUniqueness', () => {
   })
 })
 
-describe('computeFeedProfile', () => {
+describe('computeLinkUniquenessRate', () => {
   it('should return 1.0 when all link hashes are unique', () => {
     const existingItems = [
       makeItem({ id: 'a', linkHash: 'link-1' }),
       makeItem({ id: 'b', linkHash: 'link-2' }),
     ]
     const incomingLinkHashes = ['link-3', 'link-4']
-    const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
   })
 
   it('should return min of historical and batch rates', () => {
@@ -799,17 +809,15 @@ describe('computeFeedProfile', () => {
       makeItem({ id: 'b', linkHash: 'link-1' }),
     ]
     const incomingLinkHashes = ['link-3', 'link-4']
-    const expected = { linkUniquenessRate: 0.5 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(0.5)
   })
 
   it('should use batch rate when no historical link data exists', () => {
-    const existingItems: Array<MatchableItem> = []
+    const existingItems: Array<ExistingItem> = []
     const incomingLinkHashes = ['link-1', 'link-2']
-    const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
   })
 
   it('should use batch rate when existing items have only null link hashes', () => {
@@ -818,9 +826,8 @@ describe('computeFeedProfile', () => {
       makeItem({ id: 'b', linkHash: null }),
     ]
     const incomingLinkHashes = ['link-1', 'link-2']
-    const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
   })
 
   it('should use historical rate when no incoming link hashes exist', () => {
@@ -829,17 +836,15 @@ describe('computeFeedProfile', () => {
       makeItem({ id: 'b', linkHash: 'link-1' }),
     ]
     const incomingLinkHashes: Array<string> = []
-    const expected = { linkUniquenessRate: 0.5 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(0.5)
   })
 
   it('should return 0 when neither side has link data', () => {
     const existingItems = [makeItem({ id: 'a' })]
     const incomingLinkHashes: Array<string> = []
-    const expected = { linkUniquenessRate: 0 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(0)
   })
 
   it('should ignore null link hashes in existing items', () => {
@@ -848,16 +853,12 @@ describe('computeFeedProfile', () => {
       makeItem({ id: 'b', linkHash: 'link-1' }),
     ]
     const incomingLinkHashes = ['link-2']
-    const expected = { linkUniquenessRate: 1.0 }
 
-    expect(computeFeedProfile(existingItems, incomingLinkHashes)).toEqual(expected)
+    expect(computeLinkUniquenessRate(existingItems, incomingLinkHashes)).toBe(1.0)
   })
 })
 
-const identity = (
-  _identifierSource: string,
-  filtered: Array<MatchableItem>,
-): Array<MatchableItem> => {
+const identity = (_matchedBy: string, filtered: Array<ExistingItem>): Array<ExistingItem> => {
   return filtered
 }
 
@@ -872,7 +873,7 @@ describe('matchByGuid', () => {
 
     expect(matchByGuid(context)).toEqual({
       outcome: 'matched',
-      result: { match: candidate, identifierSource: 'guid' },
+      result: { match: candidate, matchedBy: 'guid' },
     })
   })
 
@@ -889,7 +890,7 @@ describe('matchByGuid', () => {
 
     expect(matchByGuid(context)).toEqual({
       outcome: 'matched',
-      result: { match: target, identifierSource: 'guid' },
+      result: { match: target, matchedBy: 'guid' },
     })
   })
 
@@ -906,7 +907,7 @@ describe('matchByGuid', () => {
 
     expect(matchByGuid(context)).toEqual({
       outcome: 'matched',
-      result: { match: target, identifierSource: 'guid' },
+      result: { match: target, matchedBy: 'guid' },
     })
   })
 
@@ -923,7 +924,7 @@ describe('matchByGuid', () => {
 
     expect(matchByGuid(context)).toEqual({
       outcome: 'matched',
-      result: { match: target, identifierSource: 'guid' },
+      result: { match: target, matchedBy: 'guid' },
     })
   })
 
@@ -966,7 +967,7 @@ describe('matchByLink', () => {
 
     expect(matchByLink(context)).toEqual({
       outcome: 'matched',
-      result: { match: candidate, identifierSource: 'link' },
+      result: { match: candidate, matchedBy: 'link' },
     })
   })
 
@@ -983,7 +984,7 @@ describe('matchByLink', () => {
 
     expect(matchByLink(context)).toEqual({
       outcome: 'matched',
-      result: { match: target, identifierSource: 'link' },
+      result: { match: target, matchedBy: 'link' },
     })
   })
 
@@ -1029,7 +1030,7 @@ describe('matchByEnclosure', () => {
 
     expect(matchByEnclosure(context)).toEqual({
       outcome: 'matched',
-      result: { match: candidate, identifierSource: 'enclosure' },
+      result: { match: candidate, matchedBy: 'enclosure' },
     })
   })
 
@@ -1072,7 +1073,7 @@ describe('matchByTitle', () => {
 
     expect(matchByTitle(context)).toEqual({
       outcome: 'matched',
-      result: { match: candidate, identifierSource: 'title' },
+      result: { match: candidate, matchedBy: 'title' },
     })
   })
 
@@ -1101,5 +1102,303 @@ describe('matchByTitle', () => {
     }
 
     expect(matchByTitle(context)).toEqual({ outcome: 'pass' })
+  })
+})
+
+describe('enclosureConflictFilter', () => {
+  it('should reject when both sides have different enclosures on guid source', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
+      candidate: makeItem({ enclosureHash: 'enc-old' }),
+      channel: { linkUniquenessRate: 1.0 },
+    }
+
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({
+      allow: false,
+      reason: 'Enclosure hash mismatch',
+    })
+  })
+
+  it('should reject when both sides have different enclosures on link source', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'link',
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
+      candidate: makeItem({ enclosureHash: 'enc-old' }),
+      channel: { linkUniquenessRate: 1.0 },
+    }
+
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({
+      allow: false,
+      reason: 'Enclosure hash mismatch',
+    })
+  })
+
+  it('should allow when enclosures match', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-same' }) },
+      candidate: makeItem({ enclosureHash: 'enc-same' }),
+      channel: { linkUniquenessRate: 1.0 },
+    }
+
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should allow when candidate has no enclosure', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
+      candidate: makeItem({ enclosureHash: null }),
+      channel: { linkUniquenessRate: 1.0 },
+    }
+
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should allow when incoming has no enclosure', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: { hashes: makeHashes() },
+      candidate: makeItem({ enclosureHash: 'enc-existing' }),
+      channel: { linkUniquenessRate: 1.0 },
+    }
+
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should allow when neither side has enclosure', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: { hashes: makeHashes() },
+      candidate: makeItem({ enclosureHash: null }),
+      channel: { linkUniquenessRate: 1.0 },
+    }
+
+    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should only apply to guid and link sources', () => {
+    expect(enclosureConflictFilter.appliesTo).toEqual(['guid', 'link'])
+  })
+})
+
+describe('contentChangeFilter', () => {
+  it('should update when title changes', () => {
+    const value = {
+      existing: makeItem({ titleHash: 'title-1' }),
+      incomingHashes: makeHashes({ titleHash: 'title-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when summary changes', () => {
+    const value = {
+      existing: makeItem({ summaryHash: 'sum-1' }),
+      incomingHashes: makeHashes({ summaryHash: 'sum-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when content changes', () => {
+    const value = {
+      existing: makeItem({ contentHash: 'cnt-1' }),
+      incomingHashes: makeHashes({ contentHash: 'cnt-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when enclosure changes', () => {
+    const value = {
+      existing: makeItem({ enclosureHash: 'enc-1' }),
+      incomingHashes: makeHashes({ enclosureHash: 'enc-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should not update when all content hashes match', () => {
+    const value = {
+      existing: makeItem({
+        titleHash: 'title-1',
+        summaryHash: 'sum-1',
+        contentHash: 'cnt-1',
+        enclosureHash: 'enc-1',
+      }),
+      incomingHashes: makeHashes({
+        titleHash: 'title-1',
+        summaryHash: 'sum-1',
+        contentHash: 'cnt-1',
+        enclosureHash: 'enc-1',
+      }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should not update when null and undefined are compared', () => {
+    const value = {
+      existing: makeItem({ titleHash: null, contentHash: null }),
+      incomingHashes: makeHashes(),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should ignore non-content hashes', () => {
+    const value = {
+      existing: makeItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
+      incomingHashes: makeHashes({ guidHash: 'guid-2', linkHash: 'link-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+  })
+})
+
+describe('applyCandidateFilters', () => {
+  it('should return all candidates when no filters apply', () => {
+    const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
+    const filter: CandidateFilter = {
+      name: 'irrelevant',
+      appliesTo: ['enclosure'],
+      evaluate: () => {
+        return { allow: false, reason: 'blocked' }
+      },
+    }
+    const value = applyCandidateFilters({
+      candidates,
+      matchedBy: 'guid',
+      filters: [filter],
+      incoming: { hashes: makeHashes() },
+      channel: { linkUniquenessRate: 1.0 },
+    })
+
+    expect(value).toEqual(candidates)
+  })
+
+  it('should filter candidates using applicable filter', () => {
+    const candidates = [
+      makeItem({ id: 'a', enclosureHash: 'enc-1' }),
+      makeItem({ id: 'b', enclosureHash: 'enc-2' }),
+    ]
+    const value = applyCandidateFilters({
+      candidates,
+      matchedBy: 'guid',
+      filters: [enclosureConflictFilter],
+      incoming: { hashes: makeHashes({ enclosureHash: 'enc-1' }) },
+      channel: { linkUniquenessRate: 1.0 },
+    })
+    const expected = [candidates[0]]
+
+    expect(value).toEqual(expected)
+  })
+
+  it('should apply filter with appliesTo all', () => {
+    const filter: CandidateFilter = {
+      name: 'blockAll',
+      appliesTo: 'all',
+      evaluate: () => {
+        return { allow: false, reason: 'blocked' }
+      },
+    }
+    const candidates = [makeItem({ id: 'a' })]
+    const value = applyCandidateFilters({
+      candidates,
+      matchedBy: 'title',
+      filters: [filter],
+      incoming: { hashes: makeHashes() },
+      channel: { linkUniquenessRate: 1.0 },
+    })
+
+    expect(value).toEqual([])
+  })
+
+  it('should apply filters sequentially', () => {
+    const filterA: CandidateFilter = {
+      name: 'removeB',
+      appliesTo: 'all',
+      evaluate: (context) => {
+        return context.candidate.id === 'b'
+          ? { allow: false, reason: 'removed b' }
+          : { allow: true }
+      },
+    }
+    const filterB: CandidateFilter = {
+      name: 'removeC',
+      appliesTo: 'all',
+      evaluate: (context) => {
+        return context.candidate.id === 'c'
+          ? { allow: false, reason: 'removed c' }
+          : { allow: true }
+      },
+    }
+    const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })]
+    const value = applyCandidateFilters({
+      candidates,
+      matchedBy: 'guid',
+      filters: [filterA, filterB],
+      incoming: { hashes: makeHashes() },
+      channel: { linkUniquenessRate: 1.0 },
+    })
+    const expected = [candidates[0]]
+
+    expect(value).toEqual(expected)
+  })
+
+  it('should return empty array when all candidates are removed', () => {
+    const filter: CandidateFilter = {
+      name: 'blockAll',
+      appliesTo: 'all',
+      evaluate: () => {
+        return { allow: false, reason: 'blocked' }
+      },
+    }
+    const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
+    const value = applyCandidateFilters({
+      candidates,
+      matchedBy: 'guid',
+      filters: [filter],
+      incoming: { hashes: makeHashes() },
+      channel: { linkUniquenessRate: 1.0 },
+    })
+
+    expect(value).toEqual([])
+  })
+
+  it('should pass correct context to filter evaluate function', () => {
+    const contexts: Array<CandidateFilterContext> = []
+    const filter: CandidateFilter = {
+      name: 'spy',
+      appliesTo: 'all',
+      evaluate: (context) => {
+        contexts.push(context)
+        return { allow: true }
+      },
+    }
+    const candidate = makeItem({ id: 'a' })
+    const hashes = makeHashes({ guidHash: 'guid-1' })
+    applyCandidateFilters({
+      candidates: [candidate],
+      matchedBy: 'link',
+      filters: [filter],
+      incoming: { hashes },
+      channel: { linkUniquenessRate: 0.5 },
+    })
+
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0].matchedBy).toBe('link')
+    expect(contexts[0].incoming.hashes).toBe(hashes)
+    expect(contexts[0].candidate).toBe(candidate)
+    expect(contexts[0].channel.linkUniquenessRate).toBe(0.5)
   })
 })

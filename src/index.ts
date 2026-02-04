@@ -1,7 +1,13 @@
-export { classifyItems } from './classifier.js'
 export {
-  composeItemIdentifier,
+  buildFingerprints,
+  classifyItems,
+  computeAllHashes,
+  deduplicateItemsByFingerprint,
+} from './classifier.js'
+export {
+  buildFingerprint,
   computeItemHashes,
+  fingerprintLevelMeta,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
   normalizeGuidFragmentForHashing,
@@ -9,26 +15,18 @@ export {
   normalizeLinkForHashing,
   normalizeLinkFragmentForHashing,
   normalizeTextForHashing,
-  resolveIdentityDepth,
+  resolveFingerprintLevel,
 } from './hashes.js'
-export { identityLevels } from './meta.js'
-export {
-  composeItemIdentifiers,
-  computeAllHashes,
-  deduplicateItemsByIdentifier,
-  filterItemsWithIdentifier,
-} from './pipeline.js'
 export type {
   ClassifyItemsInput,
-  ClassifyItemsResult as ClassificationResult,
-  ComposedFeedItem,
-  HashableItem,
-  HashedFeedItem,
-  IdentityDepth,
+  ClassifyItemsResult,
+  ExistingItem,
+  FingerprintedItem,
+  FingerprintLevel,
   InsertAction,
   ItemHashes,
-  MatchableItem,
-  MatchSource,
+  MatchedBy,
+  NewItem,
   UpdateAction,
 } from './types.js'
-export { identityDepths } from './types.js'
+export { fingerprintLevels } from './types.js'

@@ -1,44 +1,123 @@
-import { updateFilters } from './filters.js'
-import { composeItemIdentifier, resolveIdentityDepth } from './hashes.js'
-import { generateHash, isDefined } from './helpers.js'
-import { computeFeedProfile, findMatchCandidates, selectMatchingItem } from './matching.js'
 import {
-  composeItemIdentifiers,
-  computeAllHashes,
-  deduplicateItemsByIdentifier,
-  filterItemsWithIdentifier,
-} from './pipeline.js'
+  buildFingerprint,
+  computeItemHashes,
+  generateHash,
+  hashMeta,
+  isDefined,
+  resolveFingerprintLevel,
+} from './hashes.js'
+import {
+  computeLinkUniquenessRate,
+  findMatchCandidates,
+  selectMatchingItem,
+  updateFilters,
+} from './matching.js'
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
-  HashableItem,
+  ExistingItem,
+  FingerprintedItem,
+  FingerprintLevel,
   InsertAction,
-  MatchableItem,
+  ItemHashes,
+  NewItem,
   UpdateAction,
 } from './types.js'
 
+// Internal type for items after hashing but before fingerprinting.
+type HashedItem<TItem> = {
+  item: TItem
+  hashes: ItemHashes
+}
+
+// Score an item by how many hash slots are populated, weighted by signal strength.
+export const scoreItem = (hashes: ItemHashes): number => {
+  let score = 0
+
+  for (const { key, weight } of hashMeta) {
+    if (hashes[key]) {
+      score += weight
+    }
+  }
+
+  return score
+}
+
+// Best-copy helper: keep the richer item (more hash slots populated).
+// On tie, keep existing (earlier — deterministic).
+const keepBest = <TItem>(
+  map: Map<string, FingerprintedItem<TItem>>,
+  key: string,
+  item: FingerprintedItem<TItem>,
+): void => {
+  const existing = map.get(key)
+
+  if (!existing || scoreItem(item.hashes) > scoreItem(existing.hashes)) {
+    map.set(key, item)
+  }
+}
+
+// Map each item to its computed hashes.
+export const computeAllHashes = <TItem extends NewItem>(
+  items: Array<TItem>,
+): Array<HashedItem<TItem>> => {
+  return items.map((item) => ({ item, hashes: computeItemHashes(item) }))
+}
+
+// Build fingerprints for all hashed items at a given level.
+// Items that produce no fingerprint (no hashes in prefix) are dropped.
+export const buildFingerprints = <TItem>(
+  items: Array<HashedItem<TItem>>,
+  level: FingerprintLevel,
+): Array<FingerprintedItem<TItem>> => {
+  const result: Array<FingerprintedItem<TItem>> = []
+
+  for (const item of items) {
+    const fingerprint = buildFingerprint(item.hashes, level)
+
+    if (fingerprint !== undefined) {
+      result.push({ ...item, fingerprint })
+    }
+  }
+
+  return result
+}
+
+// Best-copy-wins dedup by fingerprint.
+export const deduplicateItemsByFingerprint = <TItem>(
+  items: Array<FingerprintedItem<TItem>>,
+): Array<FingerprintedItem<TItem>> => {
+  const bestByFingerprint = new Map<string, FingerprintedItem<TItem>>()
+
+  for (const item of items) {
+    keepBest(bestByFingerprint, item.fingerprint, item)
+  }
+
+  return [...bestByFingerprint.values()]
+}
+
 // Classify new items against existing items into inserts/updates.
-// Uses level-based identity with auto-computed depth when not provided.
-export const classifyItems = <TItem extends HashableItem>(
+// Uses level-based fingerprinting with auto-computed level when not provided.
+export const classifyItems = <TItem extends NewItem>(
   input: ClassifyItemsInput<TItem>,
 ): ClassifyItemsResult<TItem> => {
-  const { newItems, existingItems, identityDepth: inputDepth } = input
+  const { newItems, existingItems, fingerprintLevel: inputLevel } = input
 
   const hashedNewItems = computeAllHashes(newItems)
   const newItemsHashes = hashedNewItems.map((item) => item.hashes)
 
-  // Compute profile early — used for both pre-match exclusion and final
-  // classification. Uses raw (not deduped) incoming link hashes; duplicates
-  // lower uniqueness slightly, which is conservative (fewer link matches).
+  // Compute link uniqueness early — used for both pre-match exclusion and
+  // final classification. Uses raw (not deduped) incoming link hashes;
+  // duplicates lower uniqueness slightly, which is conservative (fewer link matches).
   const newItemsLinkHashes = newItemsHashes.map((hashes) => hashes.linkHash).filter(isDefined)
-  const profile = computeFeedProfile(existingItems, newItemsLinkHashes)
+  const linkUniquenessRate = computeLinkUniquenessRate(existingItems, newItemsLinkHashes)
 
   // Pre-match: find existing items that are true updates and exclude them
-  // from the depth collision set. A match is "strong enough" when it's by
+  // from the level collision set. A match is "strong enough" when it's by
   // guid, enclosure, or title — those are unambiguously the same item. A
-  // link match is only trusted when the max-depth identifiers agree (true
+  // link match is only trusted when the max-level fingerprints agree (true
   // duplicate); a bare link match with different titles could be hub onset
-  // and must stay in the collision set so the depth can detect it.
+  // and must stay in the collision set so the level can detect it.
   const matchedExistingIds = new Set<string>()
 
   for (const newItemHashes of newItemsHashes) {
@@ -46,21 +125,21 @@ export const classifyItems = <TItem extends HashableItem>(
     const result = selectMatchingItem({
       hashes: newItemHashes,
       candidates,
-      linkUniquenessRate: profile.linkUniquenessRate,
+      linkUniquenessRate,
     })
 
     if (!result) {
       continue
     }
 
-    if (result.identifierSource !== 'link') {
+    if (result.matchedBy !== 'link') {
       matchedExistingIds.add(result.match.id)
       continue
     }
 
-    // Link match: only exclude when max-depth identifiers agree (true duplicate).
-    const incomingMaxKey = composeItemIdentifier(newItemHashes, 'title')
-    const existingMaxKey = composeItemIdentifier(result.match, 'title')
+    // Link match: only exclude when max-level fingerprints agree (true duplicate).
+    const incomingMaxKey = buildFingerprint(newItemHashes, 'title')
+    const existingMaxKey = buildFingerprint(result.match, 'title')
 
     if (incomingMaxKey === existingMaxKey) {
       matchedExistingIds.add(result.match.id)
@@ -71,12 +150,15 @@ export const classifyItems = <TItem extends HashableItem>(
     return !matchedExistingIds.has(item.id)
   })
 
-  // Dedup by max-depth identifier so identity-equivalent items (literal
+  // Dedup by max-level fingerprint so identity-equivalent items (literal
   // duplicates, or same item with slightly different hash coverage) don't
   // cause false downgrades. Items with no level identity are skipped.
   const seenKeys = new Set<string>()
-  const depthHashes = [...newItemsHashes, ...unmatchedExistingItems].filter((hashes) => {
-    const maxKey = composeItemIdentifier(hashes, 'title')
+  const levelHashes: Array<ItemHashes | ExistingItem> = [
+    ...newItemsHashes,
+    ...unmatchedExistingItems,
+  ].filter((hashes) => {
+    const maxKey = buildFingerprint(hashes, 'title')
 
     if (!maxKey) {
       return false
@@ -91,39 +173,38 @@ export const classifyItems = <TItem extends HashableItem>(
     return true
   })
 
-  // Resolve identity depth: validate/downgrade if provided, compute from data otherwise.
-  const resolvedDepth = resolveIdentityDepth(depthHashes, inputDepth)
+  // Resolve fingerprint level: validate/downgrade if provided, compute from data otherwise.
+  const resolvedLevel = resolveFingerprintLevel(levelHashes, inputLevel)
 
-  // Build composed items using level identity at the resolved depth.
-  const composedItems = composeItemIdentifiers(hashedNewItems, resolvedDepth)
-  const identifiedItems = filterItemsWithIdentifier(composedItems)
-  const deduplicatedItems = deduplicateItemsByIdentifier(identifiedItems)
+  // Build fingerprinted items at the resolved level.
+  const fingerprintedItems = buildFingerprints(hashedNewItems, resolvedLevel)
+  const deduplicatedItems = deduplicateItemsByFingerprint(fingerprintedItems)
 
   // Classify against existing items.
   const inserts: Array<InsertAction<TItem>> = []
   const updates: Array<UpdateAction<TItem>> = []
 
   for (const item of deduplicatedItems) {
-    const identifierHash = generateHash(item.identifier)
+    const fingerprintHash = generateHash(item.fingerprint)
     const candidates = findMatchCandidates(item.hashes, existingItems)
 
-    // Reject candidates whose identifier differs from the incoming item.
+    // Reject candidates whose fingerprint differs from the incoming item.
     // This prevents matching (and merging) items that the levels consider distinct.
-    const depthFilteredCandidates = candidates.filter((candidate) => {
-      return composeItemIdentifier(candidate, resolvedDepth) === item.identifier
+    const levelFilteredCandidates = candidates.filter((candidate) => {
+      return buildFingerprint(candidate, resolvedLevel) === item.fingerprint
     })
 
     const result = selectMatchingItem({
       hashes: item.hashes,
-      candidates: depthFilteredCandidates,
-      linkUniquenessRate: profile.linkUniquenessRate,
+      candidates: levelFilteredCandidates,
+      linkUniquenessRate,
     })
 
     if (!result) {
       inserts.push({
         item: item.item,
         hashes: item.hashes,
-        identifierHash,
+        fingerprintHash,
       })
 
       continue
@@ -133,7 +214,7 @@ export const classifyItems = <TItem extends HashableItem>(
       return filter.shouldUpdate({
         existing: result.match,
         incomingHashes: item.hashes,
-        identifierSource: result.identifierSource,
+        matchedBy: result.matchedBy,
       })
     })
 
@@ -141,12 +222,12 @@ export const classifyItems = <TItem extends HashableItem>(
       updates.push({
         item: item.item,
         hashes: item.hashes,
-        identifierHash,
+        fingerprintHash,
         existingItemId: result.match.id,
-        identifierSource: result.identifierSource,
+        matchedBy: result.matchedBy,
       })
     }
   }
 
-  return { inserts, updates, identityDepth: resolvedDepth }
+  return { inserts, updates, fingerprintLevel: resolvedLevel }
 }

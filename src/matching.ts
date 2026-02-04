@@ -1,15 +1,83 @@
-import { applyCandidateFilters, candidateFilters } from './filters.js'
-import { isDefined } from './helpers.js'
-import { hashMeta, hasStrongHash } from './meta.js'
+import { hashMeta, hasStrongHash, isDefined } from './hashes.js'
 import type {
-  FeedProfile,
+  CandidateFilter,
+  CandidateFilterContext,
+  ExistingItem,
   ItemHashes,
-  MatchableItem,
+  MatchedBy,
   MatchResult,
-  MatchSource,
   MatchStrategyContext,
   MatchStrategyResult,
+  UpdateFilter,
 } from './types.js'
+
+// Rejects candidates where both sides have an enclosureHash and they differ.
+// Prevents merging items that share a URL but have different enclosures
+// (e.g. podcast episodes on a show page with regenerated GUIDs).
+export const enclosureConflictFilter: CandidateFilter = {
+  name: 'enclosureConflict',
+  appliesTo: ['guid', 'link'],
+  evaluate: (context) => {
+    const candidateEnclosure = context.candidate.enclosureHash
+    const incomingEnclosure = context.incoming.hashes.enclosureHash
+
+    if (candidateEnclosure && incomingEnclosure && candidateEnclosure !== incomingEnclosure) {
+      return { allow: false, reason: 'Enclosure hash mismatch' }
+    }
+
+    return { allow: true }
+  },
+}
+
+// Updates only when content hashes differ between existing and incoming.
+// Compares all isContent hashes (title, summary, content, enclosure).
+export const contentChangeFilter: UpdateFilter = {
+  name: 'contentChange',
+  shouldUpdate: (context) => {
+    return (
+      hashMeta
+        .filter((meta) => meta.isContent)
+        /* biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined. */
+        .some((meta) => context.existing[meta.key] != context.incomingHashes[meta.key])
+    )
+  },
+}
+
+// TODO: Consider splitting into prematch/classify filter arrays if a future
+// filter needs to apply only during classification (not pre-match).
+export const candidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
+export const updateFilters: Array<UpdateFilter> = [contentChangeFilter]
+
+// Apply all applicable candidate filters to a candidate list for a given source.
+// Filters are applied sequentially — each filter narrows the output of the previous.
+export const applyCandidateFilters = ({
+  candidates,
+  matchedBy,
+  filters,
+  incoming,
+  channel,
+}: {
+  candidates: Array<ExistingItem>
+  matchedBy: MatchedBy
+  filters: Array<CandidateFilter>
+  incoming: { hashes: ItemHashes }
+  channel: { linkUniquenessRate: number }
+}): Array<ExistingItem> => {
+  let result = candidates
+
+  for (const filter of filters) {
+    if (filter.appliesTo !== 'all' && !filter.appliesTo.includes(matchedBy)) {
+      continue
+    }
+
+    result = result.filter((candidate) => {
+      const context: CandidateFilterContext = { matchedBy, incoming, candidate, channel }
+      return filter.evaluate(context).allow
+    })
+  }
+
+  return result
+}
 
 // Returns true when link is the item's only strong identifier
 // (no guid, no enclosure). Link-only items always get link matching
@@ -25,8 +93,8 @@ export const isLinkOnly = (hashes: ItemHashes): boolean => {
 // prevents title pulling in unrelated candidates that would confuse selectMatchingItem.
 export const findMatchCandidates = (
   hashes: ItemHashes,
-  existingItems: Array<MatchableItem>,
-): Array<MatchableItem> => {
+  existingItems: Array<ExistingItem>,
+): Array<ExistingItem> => {
   const hasStrong = hasStrongHash(hashes)
 
   return existingItems.filter((existing) =>
@@ -60,7 +128,7 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
   )
 
   if (byGuid.length === 1) {
-    return { outcome: 'matched', result: { match: byGuid[0], identifierSource: 'guid' } }
+    return { outcome: 'matched', result: { match: byGuid[0], matchedBy: 'guid' } }
   }
 
   if (byGuid.length > 1) {
@@ -71,7 +139,7 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
       })
 
       if (byEnclosure.length === 1) {
-        return { outcome: 'matched', result: { match: byEnclosure[0], identifierSource: 'guid' } }
+        return { outcome: 'matched', result: { match: byEnclosure[0], matchedBy: 'guid' } }
       }
     }
 
@@ -84,7 +152,7 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
       if (byGuidFragment.length === 1) {
         return {
           outcome: 'matched',
-          result: { match: byGuidFragment[0], identifierSource: 'guid' },
+          result: { match: byGuidFragment[0], matchedBy: 'guid' },
         }
       }
     }
@@ -96,7 +164,7 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
       })
 
       if (byLink.length === 1) {
-        return { outcome: 'matched', result: { match: byLink[0], identifierSource: 'guid' } }
+        return { outcome: 'matched', result: { match: byLink[0], matchedBy: 'guid' } }
       }
     }
 
@@ -122,7 +190,7 @@ export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult 
   )
 
   if (byLink.length === 1) {
-    return { outcome: 'matched', result: { match: byLink[0], identifierSource: 'link' } }
+    return { outcome: 'matched', result: { match: byLink[0], matchedBy: 'link' } }
   }
 
   if (byLink.length > 1) {
@@ -132,7 +200,7 @@ export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult 
       })
 
       if (byFragment.length === 1) {
-        return { outcome: 'matched', result: { match: byFragment[0], identifierSource: 'link' } }
+        return { outcome: 'matched', result: { match: byFragment[0], matchedBy: 'link' } }
       }
     }
 
@@ -160,7 +228,7 @@ export const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyRe
   if (byEnclosure.length === 1) {
     return {
       outcome: 'matched',
-      result: { match: byEnclosure[0], identifierSource: 'enclosure' },
+      result: { match: byEnclosure[0], matchedBy: 'enclosure' },
     }
   }
 
@@ -187,7 +255,7 @@ export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult
   )
 
   if (byTitle.length === 1) {
-    return { outcome: 'matched', result: { match: byTitle[0], identifierSource: 'title' } }
+    return { outcome: 'matched', result: { match: byTitle[0], matchedBy: 'title' } }
   }
 
   if (byTitle.length > 1) {
@@ -201,26 +269,23 @@ export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult
 // High uniqueness: guid > link > enclosure > title
 // Low uniqueness:  guid > enclosure > link (if link-only) > title
 // Summary/content excluded: too volatile for cross-scan matching.
-// Returns null for ambiguous matches (>1) — prefer insert over wrong merge.
+// Returns undefined for ambiguous matches (>1) — prefer insert over wrong merge.
 export const selectMatchingItem = ({
   hashes,
   candidates,
   linkUniquenessRate,
 }: {
   hashes: ItemHashes
-  candidates: Array<MatchableItem>
+  candidates: Array<ExistingItem>
   linkUniquenessRate: number
 }): MatchResult | undefined => {
   const incoming = { hashes }
   const channel = { linkUniquenessRate }
 
-  const filtered = (
-    identifierSource: MatchSource,
-    candidates: Array<MatchableItem>,
-  ): Array<MatchableItem> => {
+  const filtered = (matchedBy: MatchedBy, candidates: Array<ExistingItem>): Array<ExistingItem> => {
     return applyCandidateFilters({
       candidates,
-      identifierSource,
+      matchedBy,
       filters: candidateFilters,
       incoming,
       channel,
@@ -309,23 +374,23 @@ export const computeBatchLinkUniqueness = (linkHashes: Array<string>): number =>
   return new Set(linkHashes).size / linkHashes.length
 }
 
-// Pure profile computation from existing + incoming hashes.
+// Compute link uniqueness rate from existing + incoming hashes.
 // When one side has no data, uses the other side's rate instead of 0.
-export const computeFeedProfile = (
-  existingItems: Array<MatchableItem>,
+export const computeLinkUniquenessRate = (
+  existingItems: Array<ExistingItem>,
   incomingLinkHashes: Array<string>,
-): FeedProfile => {
+): number => {
   const existingItemsLinkHashes = existingItems.map((item) => item.linkHash).filter(isDefined)
   const historicalRate = computeBatchLinkUniqueness(existingItemsLinkHashes)
   const batchRate = computeBatchLinkUniqueness(incomingLinkHashes)
 
   if (existingItemsLinkHashes.length === 0) {
-    return { linkUniquenessRate: batchRate }
+    return batchRate
   }
 
   if (incomingLinkHashes.length === 0) {
-    return { linkUniquenessRate: historicalRate }
+    return historicalRate
   }
 
-  return { linkUniquenessRate: Math.min(historicalRate, batchRate) }
+  return Math.min(historicalRate, batchRate)
 }
