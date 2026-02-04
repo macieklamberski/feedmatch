@@ -1,8 +1,8 @@
+import { hashMeta } from './constants.js'
 import {
   buildFingerprint,
   computeItemHashes,
   generateHash,
-  hashMeta,
   resolveFingerprintLevel,
 } from './hashes.js'
 import { findMatchCandidates, selectMatchingItem, updateFilters } from './matching.js'
@@ -19,7 +19,6 @@ import type {
   UpdateAction,
 } from './types.js'
 
-// Internal type for items after hashing but before fingerprinting.
 type HashedItem<TItem> = {
   item: TItem
   hashes: ItemHashes
@@ -36,20 +35,6 @@ export const scoreItem = (hashes: ItemHashes): number => {
   }
 
   return score
-}
-
-// Best-copy helper: keep the richer item (more hash slots populated).
-// On tie, keep existing (earlier — deterministic).
-const keepBest = <TItem>(
-  map: Map<string, FingerprintedItem<TItem>>,
-  key: string,
-  item: FingerprintedItem<TItem>,
-): void => {
-  const existing = map.get(key)
-
-  if (!existing || scoreItem(item.hashes) > scoreItem(existing.hashes)) {
-    map.set(key, item)
-  }
 }
 
 // Map each item to its computed hashes.
@@ -78,14 +63,17 @@ export const buildFingerprints = <TItem>(
   return result
 }
 
-// Best-copy-wins dedup by fingerprint.
 export const deduplicateItemsByFingerprint = <TItem>(
   items: Array<FingerprintedItem<TItem>>,
 ): Array<FingerprintedItem<TItem>> => {
   const bestByFingerprint = new Map<string, FingerprintedItem<TItem>>()
 
   for (const item of items) {
-    keepBest(bestByFingerprint, item.fingerprint, item)
+    const existing = bestByFingerprint.get(item.fingerprint)
+
+    if (!existing || scoreItem(item.hashes) > scoreItem(existing.hashes)) {
+      bestByFingerprint.set(item.fingerprint, item)
+    }
   }
 
   return [...bestByFingerprint.values()]

@@ -1,12 +1,4 @@
-// Fingerprint levels, strongest → weakest.
-export const fingerprintLevels = [
-  'guid',
-  'guidFragment',
-  'link',
-  'linkFragment',
-  'enclosure',
-  'title',
-] as const
+import type { fingerprintLevels } from './constants.js'
 
 export type FingerprintLevel = (typeof fingerprintLevels)[number]
 
@@ -24,23 +16,33 @@ export type ItemHashes = {
   guidFragmentHash: string | null
   linkHash: string | null
   linkFragmentHash: string | null
-  enclosureHash: string | null
   titleHash: string | null
   summaryHash: string | null
   contentHash: string | null
+  enclosureHash: string | null
 }
 
-// Minimal shape for existing items — what matching + change detection need.
-export type ExistingItem = {
+export type HashKey = keyof ItemHashes
+
+export type HashMeta = {
+  key: HashKey
+  tag: string
+  weight: number
+  isStrongHash: boolean
+  isMatchable: boolean
+  isContent: boolean
+  normalizeFn: (item: NewItem) => string | undefined
+  level?: FingerprintLevel
+}
+
+export type FingerprintLevelMeta = {
+  level: FingerprintLevel
+  key: HashKey
+  tag: string
+}
+
+export type ExistingItem = ItemHashes & {
   id: string
-  guidHash: string | null
-  guidFragmentHash: string | null
-  linkHash: string | null
-  linkFragmentHash: string | null
-  enclosureHash: string | null
-  titleHash: string | null
-  summaryHash: string | null
-  contentHash: string | null
 }
 
 export type FingerprintedItem<TItem> = {

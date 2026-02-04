@@ -4,10 +4,10 @@ export {
   computeAllHashes,
   deduplicateItemsByFingerprint,
 } from './classifier.js'
+export { fingerprintLevelMeta, fingerprintLevels } from './constants.js'
 export {
   buildFingerprint,
   computeItemHashes,
-  fingerprintLevelMeta,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
   normalizeGuidFragmentForHashing,
@@ -29,4 +29,3 @@ export type {
   NewItem,
   UpdateAction,
 } from './types.js'
-export { fingerprintLevels } from './types.js'

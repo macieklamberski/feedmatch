@@ -1,13 +1,5 @@
 import { createHash } from 'node:crypto'
-import {
-  normalizeEnclosureForHashing,
-  normalizeGuidForHashing,
-  normalizeGuidFragmentForHashing,
-  normalizeHtmlForHashing,
-  normalizeLinkForHashing,
-  normalizeLinkFragmentForHashing,
-  normalizeTextForHashing,
-} from './normalize.js'
+import { fingerprintLevelMeta, hashMeta } from './constants.js'
 import type { FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
@@ -29,127 +21,9 @@ export const isDefined = <T>(value: T | null | undefined): value is T => {
   return value != null
 }
 
-// Hash key from ItemHashes.
-export type HashKey = keyof ItemHashes
-
-// Metadata for a single hash key.
-export type HashMeta = {
-  key: HashKey
-  tag: string
-  weight: number
-  isStrongHash: boolean
-  isMatchable: boolean
-  isContent: boolean
-  normalizeFn: (item: NewItem) => string | undefined
-  level?: FingerprintLevel
-}
-
-// Single source of truth for hash key metadata.
-// Order determines fingerprintLevelMeta derivation order.
-export const hashMeta: Array<HashMeta> = [
-  {
-    key: 'guidHash',
-    tag: 'g',
-    weight: 32,
-    isStrongHash: true,
-    isMatchable: true,
-    isContent: false,
-    normalizeFn: (item) => normalizeGuidForHashing(item.guid),
-    level: 'guid',
-  },
-  {
-    key: 'guidFragmentHash',
-    tag: 'gf',
-    weight: 0,
-    isStrongHash: false,
-    isMatchable: false,
-    isContent: false,
-    normalizeFn: (item) => normalizeGuidFragmentForHashing(item.guid),
-    level: 'guidFragment',
-  },
-  {
-    key: 'linkHash',
-    tag: 'l',
-    weight: 8,
-    isStrongHash: true,
-    isMatchable: true,
-    isContent: false,
-    normalizeFn: (item) => normalizeLinkForHashing(item.link),
-    level: 'link',
-  },
-  {
-    key: 'linkFragmentHash',
-    tag: 'lf',
-    weight: 0,
-    isStrongHash: false,
-    isMatchable: false,
-    isContent: false,
-    normalizeFn: (item) => normalizeLinkFragmentForHashing(item.link),
-    level: 'linkFragment',
-  },
-  {
-    key: 'enclosureHash',
-    tag: 'e',
-    weight: 16,
-    isStrongHash: true,
-    isMatchable: true,
-    isContent: true,
-    normalizeFn: (item) => normalizeEnclosureForHashing(item.enclosures),
-    level: 'enclosure',
-  },
-  {
-    key: 'titleHash',
-    tag: 't',
-    weight: 4,
-    isStrongHash: false,
-    isMatchable: true,
-    isContent: true,
-    normalizeFn: (item) => normalizeTextForHashing(item.title),
-    level: 'title',
-  },
-  {
-    key: 'contentHash',
-    tag: 'c',
-    weight: 2,
-    isStrongHash: false,
-    isMatchable: false,
-    isContent: true,
-    normalizeFn: (item) => normalizeHtmlForHashing(item.content),
-  },
-  {
-    key: 'summaryHash',
-    tag: 's',
-    weight: 1,
-    isStrongHash: false,
-    isMatchable: false,
-    isContent: true,
-    normalizeFn: (item) => normalizeHtmlForHashing(item.summary),
-  },
-]
-
-// Check if any strong hash (guid/link/enclosure) is present.
 export const hasStrongHash = (hashes: ItemHashes): boolean => {
   return hashMeta.some((meta) => meta.isStrongHash && hashes[meta.key])
 }
-
-// Fingerprint level metadata ordered strongest → weakest.
-export type FingerprintLevelMeta = {
-  level: FingerprintLevel
-  key: HashKey
-  tag: string
-}
-
-// Derived from hashMeta — entries with level form the fingerprint level metadata.
-export const fingerprintLevelMeta: Array<FingerprintLevelMeta> = hashMeta
-  .filter((meta): meta is HashMeta & { level: FingerprintLevel } => {
-    return meta.level !== undefined
-  })
-  .map((meta) => {
-    return { level: meta.level, key: meta.key, tag: meta.tag }
-  })
-
-// All hash keys derived from hashMeta.
-export const hashKeys: Array<HashKey> = hashMeta.map((meta) => meta.key)
 
 // Build a tagged fingerprint using the level prefix up to and including
 // the given level. Returns undefined when no hashes exist in the prefix.

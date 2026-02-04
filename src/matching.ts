@@ -1,4 +1,5 @@
-import { hashMeta, hasStrongHash } from './hashes.js'
+import { hashMeta } from './constants.js'
+import { hasStrongHash } from './hashes.js'
 import type {
   CandidateFilter,
   CandidateFilterContext,

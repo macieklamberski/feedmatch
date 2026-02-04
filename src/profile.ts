@@ -1,5 +1,6 @@
+import { signalHashKeys } from './constants.js'
 import { isDefined } from './hashes.js'
-import type { ExistingItem, ItemHashes, MatchedBy } from './types.js'
+import type { ExistingItem, ItemHashes } from './types.js'
 
 export type SignalStats = {
   present: number
@@ -15,14 +16,6 @@ export type FeedProfile = {
   enclosure: SignalStats
   title: SignalStats
 }
-
-// Signal-to-hash-key mapping for the four matchable signals.
-const signalHashKeys: Array<[MatchedBy, keyof ItemHashes]> = [
-  ['guid', 'guidHash'],
-  ['link', 'linkHash'],
-  ['enclosure', 'enclosureHash'],
-  ['title', 'titleHash'],
-]
 
 // Compute stats for a single signal from a set of hash values.
 export const computeSignalStats = (values: Array<string | null>): SignalStats => {
