@@ -5,6 +5,7 @@ import type {
   CandidateFilterContext,
   ExistingItem,
   ItemHashes,
+  ItemWithHashes,
   MatchedBy,
   MatchResult,
   MatchStrategyContext,
@@ -20,7 +21,7 @@ export const enclosureConflictFilter: CandidateFilter = {
   appliesTo: ['guid', 'link'],
   evaluate: (context) => {
     const candidateEnclosure = context.candidate.enclosureHash
-    const incomingEnclosure = context.incoming.hashes.enclosureHash
+    const incomingEnclosure = context.incoming.enclosureHash
 
     if (candidateEnclosure && incomingEnclosure && candidateEnclosure !== incomingEnclosure) {
       return { allow: false, reason: 'Enclosure hash mismatch' }
@@ -39,7 +40,7 @@ export const contentChangeFilter: UpdateFilter = {
       hashMeta
         .filter((meta) => meta.isContent)
         /* biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined. */
-        .some((meta) => context.existing[meta.key] != context.incomingHashes[meta.key])
+        .some((meta) => context.existing[meta.key] != context.incoming[meta.key])
     )
   },
 }
@@ -61,7 +62,7 @@ export const applyCandidateFilters = ({
   candidates: Array<ExistingItem>
   matchedBy: MatchedBy
   filters: Array<CandidateFilter>
-  incoming: { hashes: ItemHashes }
+  incoming: ItemWithHashes
   channel: { linkUniquenessRate: number }
 }): Array<ExistingItem> => {
   let result = candidates
@@ -115,16 +116,16 @@ export const findMatchCandidates = (
 
 // Match strategy: GUID with enclosure/guidFragment/link disambiguation.
 export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult => {
-  const { hashes, candidates, filtered } = context
+  const { incoming, candidates, filtered } = context
 
-  if (!hashes.guidHash) {
+  if (!incoming.guidHash) {
     return { outcome: 'pass' }
   }
 
   const byGuid = filtered(
     'guid',
     candidates.filter((candidate) => {
-      return candidate.guidHash === hashes.guidHash
+      return candidate.guidHash === incoming.guidHash
     }),
   )
 
@@ -134,9 +135,9 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
 
   if (byGuid.length > 1) {
     // Try narrowing by enclosure.
-    if (hashes.enclosureHash) {
+    if (incoming.enclosureHash) {
       const byEnclosure = byGuid.filter((candidate) => {
-        return candidate.enclosureHash === hashes.enclosureHash
+        return candidate.enclosureHash === incoming.enclosureHash
       })
 
       if (byEnclosure.length === 1) {
@@ -145,9 +146,9 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
     }
 
     // Try narrowing by guid fragment.
-    if (hashes.guidFragmentHash) {
+    if (incoming.guidFragmentHash) {
       const byGuidFragment = byGuid.filter((candidate) => {
-        return candidate.guidFragmentHash === hashes.guidFragmentHash
+        return candidate.guidFragmentHash === incoming.guidFragmentHash
       })
 
       if (byGuidFragment.length === 1) {
@@ -159,9 +160,9 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
     }
 
     // Try narrowing by link.
-    if (hashes.linkHash) {
+    if (incoming.linkHash) {
       const byLink = byGuid.filter((candidate) => {
-        return candidate.linkHash === hashes.linkHash
+        return candidate.linkHash === incoming.linkHash
       })
 
       if (byLink.length === 1) {
@@ -177,16 +178,16 @@ export const matchByGuid = (context: MatchStrategyContext): MatchStrategyResult 
 
 // Match strategy: link with linkFragment disambiguation.
 export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult => {
-  const { hashes, candidates, filtered } = context
+  const { incoming, candidates, filtered } = context
 
-  if (!hashes.linkHash) {
+  if (!incoming.linkHash) {
     return { outcome: 'pass' }
   }
 
   const byLink = filtered(
     'link',
     candidates.filter((candidate) => {
-      return candidate.linkHash === hashes.linkHash
+      return candidate.linkHash === incoming.linkHash
     }),
   )
 
@@ -195,9 +196,9 @@ export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult 
   }
 
   if (byLink.length > 1) {
-    if (hashes.linkFragmentHash) {
+    if (incoming.linkFragmentHash) {
       const byFragment = byLink.filter((candidate) => {
-        return candidate.linkFragmentHash === hashes.linkFragmentHash
+        return candidate.linkFragmentHash === incoming.linkFragmentHash
       })
 
       if (byFragment.length === 1) {
@@ -213,16 +214,16 @@ export const matchByLink = (context: MatchStrategyContext): MatchStrategyResult 
 
 // Match strategy: enclosure (no disambiguation).
 export const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyResult => {
-  const { hashes, candidates, filtered } = context
+  const { incoming, candidates, filtered } = context
 
-  if (!hashes.enclosureHash) {
+  if (!incoming.enclosureHash) {
     return { outcome: 'pass' }
   }
 
   const byEnclosure = filtered(
     'enclosure',
     candidates.filter((candidate) => {
-      return candidate.enclosureHash === hashes.enclosureHash
+      return candidate.enclosureHash === incoming.enclosureHash
     }),
   )
 
@@ -242,16 +243,16 @@ export const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyRe
 
 // Match strategy: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
 export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult => {
-  const { hashes, candidates, filtered } = context
+  const { incoming, candidates, filtered } = context
 
-  if (!hashes.titleHash) {
+  if (!incoming.titleHash) {
     return { outcome: 'pass' }
   }
 
   const byTitle = filtered(
     'title',
     candidates.filter((candidate) => {
-      return candidate.titleHash === hashes.titleHash
+      return candidate.titleHash === incoming.titleHash
     }),
   )
 
@@ -272,15 +273,14 @@ export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult
 // Summary/content excluded: too volatile for cross-scan matching.
 // Returns undefined for ambiguous matches (>1) — prefer insert over wrong merge.
 export const selectMatchingItem = ({
-  hashes,
+  incoming,
   candidates,
   linkUniquenessRate,
 }: {
-  hashes: ItemHashes
+  incoming: ItemWithHashes
   candidates: Array<ExistingItem>
   linkUniquenessRate: number
 }): MatchResult | undefined => {
-  const incoming = { hashes }
   const channel = { linkUniquenessRate }
 
   const filtered = (matchedBy: MatchedBy, candidates: Array<ExistingItem>): Array<ExistingItem> => {
@@ -297,7 +297,7 @@ export const selectMatchingItem = ({
     return
   }
 
-  const context: MatchStrategyContext = { hashes, candidates, filtered }
+  const context: MatchStrategyContext = { incoming, candidates, filtered }
 
   const tryStrategy = (
     strategy: (context: MatchStrategyContext) => MatchStrategyResult,
@@ -344,7 +344,7 @@ export const selectMatchingItem = ({
       return enclosureResult
     }
 
-    if (isLinkOnly(hashes)) {
+    if (isLinkOnly(incoming)) {
       const linkResult = tryStrategy(matchByLink)
 
       if (linkResult !== 'pass') {
@@ -354,7 +354,7 @@ export const selectMatchingItem = ({
   }
 
   // Weak fallback: title only when no strong hashes.
-  if (!hasStrongHash(hashes)) {
+  if (!hasStrongHash(incoming)) {
     const titleResult = tryStrategy(matchByTitle)
 
     if (titleResult !== 'pass') {

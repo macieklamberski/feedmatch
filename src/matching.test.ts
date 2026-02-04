@@ -212,7 +212,7 @@ describe('findMatchCandidates', () => {
 describe('selectMatchingItem', () => {
   it('should return null for empty candidates', () => {
     const value = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [],
       linkUniquenessRate: 1.0,
     }
@@ -222,7 +222,7 @@ describe('selectMatchingItem', () => {
   it('should match on guid with single candidate', () => {
     const candidate = makeItem({ guidHash: 'guid-1' })
     const value = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
       linkUniquenessRate: 1.0,
     }
@@ -236,7 +236,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null for ambiguous guid matches with no narrowing hashes', () => {
     const value = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [
         makeItem({ id: 'a', guidHash: 'guid-1' }),
         makeItem({ id: 'b', guidHash: 'guid-1' }),
@@ -250,7 +250,7 @@ describe('selectMatchingItem', () => {
   it('should disambiguate guid matches by enclosure', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         enclosureHash: 'enc-1',
       }),
@@ -265,7 +265,7 @@ describe('selectMatchingItem', () => {
   it('should disambiguate guid matches by link when enclosure does not narrow', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         linkHash: 'link-1',
       }),
@@ -280,7 +280,7 @@ describe('selectMatchingItem', () => {
   it('should disambiguate guid matches by guidFragmentHash', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         guidFragmentHash: 'gf-1',
       }),
@@ -294,7 +294,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null when guidFragmentHash is also ambiguous', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         guidFragmentHash: 'gf-shared',
       }),
@@ -310,7 +310,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null when guid disambiguation still ambiguous', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         linkHash: 'link-shared',
       }),
@@ -326,7 +326,7 @@ describe('selectMatchingItem', () => {
 
   it('should reject guid match when enclosures conflict', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         enclosureHash: 'enc-new',
       }),
@@ -339,7 +339,7 @@ describe('selectMatchingItem', () => {
   it('should allow guid match when enclosures are same', () => {
     const candidate = makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-same' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         enclosureHash: 'enc-same',
       }),
@@ -357,7 +357,7 @@ describe('selectMatchingItem', () => {
   it('should allow guid match when candidate has no enclosure', () => {
     const candidate = makeItem({ guidHash: 'guid-1', enclosureHash: null })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         enclosureHash: 'enc-new',
       }),
@@ -375,7 +375,7 @@ describe('selectMatchingItem', () => {
   it('should allow guid match when incoming has no enclosure', () => {
     const candidate = makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-existing' })
     const value = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
       linkUniquenessRate: 1.0,
     }
@@ -390,7 +390,7 @@ describe('selectMatchingItem', () => {
   it('should match on link when high uniqueness', () => {
     const candidate = makeItem({ linkHash: 'link-1' })
     const value = {
-      hashes: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
       linkUniquenessRate: 0.98,
     }
@@ -404,7 +404,7 @@ describe('selectMatchingItem', () => {
 
   it('should filter out link matches with enclosure conflict', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         enclosureHash: 'enc-new',
       }),
@@ -417,7 +417,7 @@ describe('selectMatchingItem', () => {
   it('should allow link match when enclosures are same', () => {
     const candidate = makeItem({ linkHash: 'link-1', enclosureHash: 'enc-same' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         enclosureHash: 'enc-same',
       }),
@@ -435,7 +435,7 @@ describe('selectMatchingItem', () => {
   it('should allow link match when candidate has no enclosure', () => {
     const candidate = makeItem({ linkHash: 'link-1', enclosureHash: null })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         enclosureHash: 'enc-new',
       }),
@@ -453,7 +453,7 @@ describe('selectMatchingItem', () => {
   it('should disambiguate link matches by fragment on high-uniqueness channel', () => {
     const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-1',
       }),
@@ -467,7 +467,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null when fragment is also ambiguous on high-uniqueness channel', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-shared',
       }),
@@ -483,7 +483,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null when incoming has no fragment and link is ambiguous', () => {
     const value = {
-      hashes: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [
         makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' }),
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
@@ -497,7 +497,7 @@ describe('selectMatchingItem', () => {
   it('should match on enclosure when high uniqueness and no link match', () => {
     const candidate = makeItem({ enclosureHash: 'enc-1' })
     const value = {
-      hashes: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
       linkUniquenessRate: 0.98,
     }
@@ -515,7 +515,7 @@ describe('selectMatchingItem', () => {
       makeItem({ id: 'b', linkHash: 'link-shared', enclosureHash: 'enc-2' }),
     ]
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-shared',
         enclosureHash: 'enc-1',
       }),
@@ -532,7 +532,7 @@ describe('selectMatchingItem', () => {
 
   it('should not match on link for non-link-only item on low-uniqueness channel', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         guidHash: 'guid-x',
       }),
@@ -545,7 +545,7 @@ describe('selectMatchingItem', () => {
   it('should match on link for link-only item on low-uniqueness channel', () => {
     const candidate = makeItem({ linkHash: 'link-1' })
     const value = {
-      hashes: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
       linkUniquenessRate: 0.3,
     }
@@ -560,7 +560,7 @@ describe('selectMatchingItem', () => {
   it('should disambiguate link matches by fragment on low-uniqueness channel for link-only item', () => {
     const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-1',
       }),
@@ -574,7 +574,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null when fragment is also ambiguous on low-uniqueness channel', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-shared',
       }),
@@ -591,7 +591,7 @@ describe('selectMatchingItem', () => {
   it('should match on title as last resort', () => {
     const candidate = makeItem({ titleHash: 'title-1' })
     const value = {
-      hashes: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeHashes({ titleHash: 'title-1' }),
       candidates: [candidate],
       linkUniquenessRate: 1.0,
     }
@@ -605,7 +605,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null for ambiguous title matches', () => {
     const value = {
-      hashes: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeHashes({ titleHash: 'title-1' }),
       candidates: [
         makeItem({ id: 'a', titleHash: 'title-1' }),
         makeItem({ id: 'b', titleHash: 'title-1' }),
@@ -617,7 +617,7 @@ describe('selectMatchingItem', () => {
 
   it('should not match on title when strong hashes present', () => {
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-x',
         titleHash: 'title-1',
       }),
@@ -630,7 +630,7 @@ describe('selectMatchingItem', () => {
 
   it('should not match on summary-only candidates', () => {
     const value = {
-      hashes: makeHashes({ summaryHash: 'sum-1' }),
+      incoming: makeHashes({ summaryHash: 'sum-1' }),
       candidates: [makeItem({ summaryHash: 'sum-1' })],
       linkUniquenessRate: 1.0,
     }
@@ -640,7 +640,7 @@ describe('selectMatchingItem', () => {
 
   it('should not match on content-only candidates', () => {
     const value = {
-      hashes: makeHashes({ contentHash: 'cnt-1' }),
+      incoming: makeHashes({ contentHash: 'cnt-1' }),
       candidates: [makeItem({ contentHash: 'cnt-1' })],
       linkUniquenessRate: 1.0,
     }
@@ -652,7 +652,7 @@ describe('selectMatchingItem', () => {
     const guidCandidate = makeItem({ id: 'guid-match', guidHash: 'guid-1' })
     const linkCandidate = makeItem({ id: 'link-match', linkHash: 'link-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         linkHash: 'link-1',
       }),
@@ -671,7 +671,7 @@ describe('selectMatchingItem', () => {
     const linkCandidate = makeItem({ id: 'link-match', linkHash: 'link-1' })
     const encCandidate = makeItem({ id: 'enc-match', enclosureHash: 'enc-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         enclosureHash: 'enc-1',
       }),
@@ -689,7 +689,7 @@ describe('selectMatchingItem', () => {
   it('should disambiguate multiple guid matches by enclosure when no conflict', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
     const value = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         enclosureHash: 'enc-1',
       }),
@@ -707,7 +707,7 @@ describe('selectMatchingItem', () => {
 
   it('should return undefined for ambiguous enclosure matches on high-uniqueness channel', () => {
     const value = {
-      hashes: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
@@ -721,7 +721,7 @@ describe('selectMatchingItem', () => {
   it('should match on enclosure on low-uniqueness channel', () => {
     const candidate = makeItem({ enclosureHash: 'enc-1' })
     const value = {
-      hashes: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
       linkUniquenessRate: 0.3,
     }
@@ -732,7 +732,7 @@ describe('selectMatchingItem', () => {
 
   it('should return undefined for ambiguous enclosure matches on low-uniqueness channel', () => {
     const value = {
-      hashes: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
@@ -745,7 +745,7 @@ describe('selectMatchingItem', () => {
 
   it('should return undefined for ambiguous link-only matches on low-uniqueness channel', () => {
     const value = {
-      hashes: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [
         makeItem({ id: 'a', linkHash: 'link-1' }),
         makeItem({ id: 'b', linkHash: 'link-1' }),
@@ -758,7 +758,7 @@ describe('selectMatchingItem', () => {
 
   it('should return null when no hashes match any priority', () => {
     const value = {
-      hashes: makeHashes({ guidHash: 'guid-x' }),
+      incoming: makeHashes({ guidHash: 'guid-x' }),
       candidates: [makeItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
       linkUniquenessRate: 1.0,
     }
@@ -774,7 +774,7 @@ describe('matchByGuid', () => {
   it('should match single guid candidate', () => {
     const candidate = makeItem({ guidHash: 'guid-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -788,7 +788,7 @@ describe('matchByGuid', () => {
   it('should disambiguate by enclosure when multiple guid matches', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         enclosureHash: 'enc-1',
       }),
@@ -805,7 +805,7 @@ describe('matchByGuid', () => {
   it('should disambiguate by guid fragment when enclosure fails', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         guidFragmentHash: 'gf-1',
       }),
@@ -822,7 +822,7 @@ describe('matchByGuid', () => {
   it('should disambiguate by link when guid fragment fails', () => {
     const target = makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         guidHash: 'guid-1',
         linkHash: 'link-1',
       }),
@@ -838,7 +838,7 @@ describe('matchByGuid', () => {
 
   it('should return ambiguous when all disambiguation fails', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [
         makeItem({ id: 'a', guidHash: 'guid-1' }),
         makeItem({ id: 'b', guidHash: 'guid-1' }),
@@ -855,7 +855,7 @@ describe('matchByGuid', () => {
 
   it('should pass when no guidHash', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [makeItem({ guidHash: 'guid-1' })],
       filtered: identity,
     }
@@ -868,7 +868,7 @@ describe('matchByLink', () => {
   it('should match single link candidate', () => {
     const candidate = makeItem({ linkHash: 'link-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -882,7 +882,7 @@ describe('matchByLink', () => {
   it('should disambiguate by link fragment when multiple matches', () => {
     const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-1',
       }),
@@ -898,7 +898,7 @@ describe('matchByLink', () => {
 
   it('should return ambiguous when fragment fails', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({
+      incoming: makeHashes({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-shared',
       }),
@@ -918,7 +918,7 @@ describe('matchByLink', () => {
 
   it('should pass when no linkHash', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [makeItem({ linkHash: 'link-1' })],
       filtered: identity,
     }
@@ -931,7 +931,7 @@ describe('matchByEnclosure', () => {
   it('should match single enclosure candidate', () => {
     const candidate = makeItem({ enclosureHash: 'enc-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -944,7 +944,7 @@ describe('matchByEnclosure', () => {
 
   it('should return ambiguous when multiple matches', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
@@ -961,7 +961,7 @@ describe('matchByEnclosure', () => {
 
   it('should pass when no enclosureHash', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [makeItem({ enclosureHash: 'enc-1' })],
       filtered: identity,
     }
@@ -974,7 +974,7 @@ describe('matchByTitle', () => {
   it('should match single title candidate', () => {
     const candidate = makeItem({ titleHash: 'title-1' })
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeHashes({ titleHash: 'title-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -987,7 +987,7 @@ describe('matchByTitle', () => {
 
   it('should return ambiguous when multiple matches', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeHashes({ titleHash: 'title-1' }),
       candidates: [
         makeItem({ id: 'a', titleHash: 'title-1' }),
         makeItem({ id: 'b', titleHash: 'title-1' }),
@@ -1004,7 +1004,7 @@ describe('matchByTitle', () => {
 
   it('should pass when no titleHash', () => {
     const context: MatchStrategyContext = {
-      hashes: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [makeItem({ titleHash: 'title-1' })],
       filtered: identity,
     }
@@ -1017,7 +1017,7 @@ describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on guid source', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
+      incoming: makeHashes({ enclosureHash: 'enc-new' }),
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -1031,7 +1031,7 @@ describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on link source', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'link',
-      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
+      incoming: makeHashes({ enclosureHash: 'enc-new' }),
       candidate: makeItem({ enclosureHash: 'enc-old' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -1045,7 +1045,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when enclosures match', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: { hashes: makeHashes({ enclosureHash: 'enc-same' }) },
+      incoming: makeHashes({ enclosureHash: 'enc-same' }),
       candidate: makeItem({ enclosureHash: 'enc-same' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -1056,7 +1056,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when candidate has no enclosure', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: { hashes: makeHashes({ enclosureHash: 'enc-new' }) },
+      incoming: makeHashes({ enclosureHash: 'enc-new' }),
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -1067,7 +1067,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when incoming has no enclosure', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: { hashes: makeHashes() },
+      incoming: makeHashes(),
       candidate: makeItem({ enclosureHash: 'enc-existing' }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -1078,7 +1078,7 @@ describe('enclosureConflictFilter', () => {
   it('should allow when neither side has enclosure', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: { hashes: makeHashes() },
+      incoming: makeHashes(),
       candidate: makeItem({ enclosureHash: null }),
       channel: { linkUniquenessRate: 1.0 },
     }
@@ -1095,7 +1095,7 @@ describe('contentChangeFilter', () => {
   it('should update when title changes', () => {
     const value = {
       existing: makeItem({ titleHash: 'title-1' }),
-      incomingHashes: makeHashes({ titleHash: 'title-2' }),
+      incoming: makeHashes({ titleHash: 'title-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1105,7 +1105,7 @@ describe('contentChangeFilter', () => {
   it('should update when summary changes', () => {
     const value = {
       existing: makeItem({ summaryHash: 'sum-1' }),
-      incomingHashes: makeHashes({ summaryHash: 'sum-2' }),
+      incoming: makeHashes({ summaryHash: 'sum-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1115,7 +1115,7 @@ describe('contentChangeFilter', () => {
   it('should update when content changes', () => {
     const value = {
       existing: makeItem({ contentHash: 'cnt-1' }),
-      incomingHashes: makeHashes({ contentHash: 'cnt-2' }),
+      incoming: makeHashes({ contentHash: 'cnt-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1125,7 +1125,7 @@ describe('contentChangeFilter', () => {
   it('should update when enclosure changes', () => {
     const value = {
       existing: makeItem({ enclosureHash: 'enc-1' }),
-      incomingHashes: makeHashes({ enclosureHash: 'enc-2' }),
+      incoming: makeHashes({ enclosureHash: 'enc-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1140,7 +1140,7 @@ describe('contentChangeFilter', () => {
         contentHash: 'cnt-1',
         enclosureHash: 'enc-1',
       }),
-      incomingHashes: makeHashes({
+      incoming: makeHashes({
         titleHash: 'title-1',
         summaryHash: 'sum-1',
         contentHash: 'cnt-1',
@@ -1155,7 +1155,7 @@ describe('contentChangeFilter', () => {
   it('should not update when null and undefined are compared', () => {
     const value = {
       existing: makeItem({ titleHash: null, contentHash: null }),
-      incomingHashes: makeHashes(),
+      incoming: makeHashes(),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1165,7 +1165,7 @@ describe('contentChangeFilter', () => {
   it('should ignore non-content hashes', () => {
     const value = {
       existing: makeItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
-      incomingHashes: makeHashes({ guidHash: 'guid-2', linkHash: 'link-2' }),
+      incoming: makeHashes({ guidHash: 'guid-2', linkHash: 'link-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1187,7 +1187,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       matchedBy: 'guid',
       filters: [filter],
-      incoming: { hashes: makeHashes() },
+      incoming: makeHashes(),
       channel: { linkUniquenessRate: 1.0 },
     })
 
@@ -1203,7 +1203,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       matchedBy: 'guid',
       filters: [enclosureConflictFilter],
-      incoming: { hashes: makeHashes({ enclosureHash: 'enc-1' }) },
+      incoming: makeHashes({ enclosureHash: 'enc-1' }),
       channel: { linkUniquenessRate: 1.0 },
     })
     const expected = [candidates[0]]
@@ -1224,7 +1224,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       matchedBy: 'title',
       filters: [filter],
-      incoming: { hashes: makeHashes() },
+      incoming: makeHashes(),
       channel: { linkUniquenessRate: 1.0 },
     })
 
@@ -1255,7 +1255,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       matchedBy: 'guid',
       filters: [filterA, filterB],
-      incoming: { hashes: makeHashes() },
+      incoming: makeHashes(),
       channel: { linkUniquenessRate: 1.0 },
     })
     const expected = [candidates[0]]
@@ -1276,7 +1276,7 @@ describe('applyCandidateFilters', () => {
       candidates,
       matchedBy: 'guid',
       filters: [filter],
-      incoming: { hashes: makeHashes() },
+      incoming: makeHashes(),
       channel: { linkUniquenessRate: 1.0 },
     })
 
@@ -1299,13 +1299,13 @@ describe('applyCandidateFilters', () => {
       candidates: [candidate],
       matchedBy: 'link',
       filters: [filter],
-      incoming: { hashes },
+      incoming: hashes,
       channel: { linkUniquenessRate: 0.5 },
     })
 
     expect(contexts).toHaveLength(1)
     expect(contexts[0].matchedBy).toBe('link')
-    expect(contexts[0].incoming.hashes).toBe(hashes)
+    expect(contexts[0].incoming).toBe(hashes)
     expect(contexts[0].candidate).toBe(candidate)
     expect(contexts[0].channel.linkUniquenessRate).toBe(0.5)
   })

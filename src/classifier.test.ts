@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   buildFingerprints,
   classifyItems,
-  computeAllHashes,
+  composeHashedItems,
   deduplicateItemsByFingerprint,
   scoreItem,
 } from './classifier.js'
@@ -14,6 +14,7 @@ import type {
   FingerprintedItem,
   FingerprintLevel,
   ItemHashes,
+  ItemWithHashes,
   NewItem,
 } from './types.js'
 
@@ -65,7 +66,7 @@ describe('scoreItem', () => {
   })
 })
 
-describe('computeAllHashes', () => {
+describe('composeHashedItems', () => {
   it('should map items to hashed pairs', () => {
     const value: Array<NewItem> = [
       { guid: 'guid-1', title: 'Title 1' },
@@ -73,69 +74,49 @@ describe('computeAllHashes', () => {
     ]
     const expected = [
       {
-        item: { guid: 'guid-1', title: 'Title 1' },
-        hashes: computeItemHashes({ guid: 'guid-1', title: 'Title 1' }),
+        guid: 'guid-1',
+        title: 'Title 1',
+        ...computeItemHashes({ guid: 'guid-1', title: 'Title 1' }),
       },
       {
-        item: { link: 'https://example.com/post' },
-        hashes: computeItemHashes({ link: 'https://example.com/post' }),
+        link: 'https://example.com/post',
+        ...computeItemHashes({ link: 'https://example.com/post' }),
       },
     ]
 
-    expect(computeAllHashes(value)).toEqual(expected)
+    expect(composeHashedItems(value)).toEqual(expected)
   })
 
   it('should return empty array for empty input', () => {
-    expect(computeAllHashes([])).toEqual([])
+    expect(composeHashedItems([])).toEqual([])
   })
 })
 
 describe('buildFingerprints', () => {
   it('should build fingerprints for all items at given level', () => {
-    const value: Array<{ item: NewItem; hashes: ItemHashes }> = [
-      { item: { guid: 'g1' }, hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }) },
-      { item: { guid: 'g2' }, hashes: makeHashes({ guidHash: 'gh2' }) },
+    const value: Array<ItemWithHashes> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }) },
+      { guid: 'g2', ...makeHashes({ guidHash: 'gh2' }) },
     ]
-    const expected: Array<FingerprintedItem<NewItem>> = [
-      {
-        item: { guid: 'g1' },
-        hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
-        fingerprint: 'g:gh1',
-      },
-      {
-        item: { guid: 'g2' },
-        hashes: makeHashes({ guidHash: 'gh2' }),
-        fingerprint: 'g:gh2',
-      },
+    const expected: Array<FingerprintedItem> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }), fingerprint: 'g:gh1' },
+      { guid: 'g2', ...makeHashes({ guidHash: 'gh2' }), fingerprint: 'g:gh2' },
     ]
 
     expect(buildFingerprints(value, 'guid')).toEqual(expected)
   })
 
   it('should drop items with no fingerprint', () => {
-    const value: Array<{ item: NewItem; hashes: ItemHashes }> = [
-      {
-        item: { guid: 'g1' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-      },
-      {
-        item: {},
-        hashes: makeHashes(),
-      },
-      {
-        item: { title: 'Title' },
-        hashes: makeHashes({ titleHash: 'th1' }),
-      },
+    const value: Array<ItemWithHashes> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }) },
+      { ...makeHashes() },
+      { title: 'Title', ...makeHashes({ titleHash: 'th1' }) },
     ]
-    const expected: Array<FingerprintedItem<NewItem>> = [
+    const expected: Array<FingerprintedItem> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'g:gh1|gf:|l:|lf:|e:|t:' },
       {
-        item: { guid: 'g1' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'g:gh1|gf:|l:|lf:|e:|t:',
-      },
-      {
-        item: { title: 'Title' },
-        hashes: makeHashes({ titleHash: 'th1' }),
+        title: 'Title',
+        ...makeHashes({ titleHash: 'th1' }),
         fingerprint: 'g:|gf:|l:|lf:|e:|t:th1',
       },
     ]
@@ -144,7 +125,7 @@ describe('buildFingerprints', () => {
   })
 
   it('should return empty array when no items have fingerprint', () => {
-    const value: Array<{ item: NewItem; hashes: ItemHashes }> = [{ item: {}, hashes: makeHashes() }]
+    const value: Array<ItemWithHashes> = [{ ...makeHashes() }]
 
     expect(buildFingerprints(value, 'guid')).toEqual([])
   })
@@ -156,46 +137,32 @@ describe('buildFingerprints', () => {
 
 describe('deduplicateItemsByFingerprint', () => {
   it('should keep first item when duplicates have equal scores', () => {
-    const value: Array<FingerprintedItem<NewItem>> = [
-      {
-        item: { guid: 'g1', content: 'first' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'key1',
-      },
-      {
-        item: { guid: 'g1', content: 'second' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'key1',
-      },
+    const value: Array<FingerprintedItem> = [
+      { guid: 'g1', content: 'first', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
+      { guid: 'g1', content: 'second', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
     ]
-    const expected: Array<FingerprintedItem<NewItem>> = [
-      {
-        item: { guid: 'g1', content: 'first' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'key1',
-      },
+    const expected: Array<FingerprintedItem> = [
+      { guid: 'g1', content: 'first', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
     ]
 
     expect(deduplicateItemsByFingerprint(value)).toEqual(expected)
   })
 
   it('should keep richer item when scores differ', () => {
-    const value: Array<FingerprintedItem<NewItem>> = [
+    const value: Array<FingerprintedItem> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
       {
-        item: { guid: 'g1' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'key1',
-      },
-      {
-        item: { guid: 'g1', link: 'https://example.com' },
-        hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
+        guid: 'g1',
+        link: 'https://example.com',
+        ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
         fingerprint: 'key1',
       },
     ]
-    const expected: Array<FingerprintedItem<NewItem>> = [
+    const expected: Array<FingerprintedItem> = [
       {
-        item: { guid: 'g1', link: 'https://example.com' },
-        hashes: makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
+        guid: 'g1',
+        link: 'https://example.com',
+        ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
         fingerprint: 'key1',
       },
     ]
@@ -204,29 +171,13 @@ describe('deduplicateItemsByFingerprint', () => {
   })
 
   it('should keep items with different fingerprints', () => {
-    const value: Array<FingerprintedItem<NewItem>> = [
-      {
-        item: { guid: 'g1' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'key1',
-      },
-      {
-        item: { guid: 'g2' },
-        hashes: makeHashes({ guidHash: 'gh2' }),
-        fingerprint: 'key2',
-      },
+    const value: Array<FingerprintedItem> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
+      { guid: 'g2', ...makeHashes({ guidHash: 'gh2' }), fingerprint: 'key2' },
     ]
-    const expected: Array<FingerprintedItem<NewItem>> = [
-      {
-        item: { guid: 'g1' },
-        hashes: makeHashes({ guidHash: 'gh1' }),
-        fingerprint: 'key1',
-      },
-      {
-        item: { guid: 'g2' },
-        hashes: makeHashes({ guidHash: 'gh2' }),
-        fingerprint: 'key2',
-      },
+    const expected: Array<FingerprintedItem> = [
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
+      { guid: 'g2', ...makeHashes({ guidHash: 'gh2' }), fingerprint: 'key2' },
     ]
 
     expect(deduplicateItemsByFingerprint(value)).toEqual(expected)
@@ -247,16 +198,22 @@ describe('classifyItems', () => {
         ],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: { guid: 'guid-1', title: 'Post 1' },
-            hashes: computeItemHashes({ guid: 'guid-1', title: 'Post 1' }),
+            item: {
+              guid: 'guid-1',
+              title: 'Post 1',
+              ...computeItemHashes({ guid: 'guid-1', title: 'Post 1' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: { guid: 'guid-2', title: 'Post 2' },
-            hashes: computeItemHashes({ guid: 'guid-2', title: 'Post 2' }),
+            item: {
+              guid: 'guid-2',
+              title: 'Post 2',
+              ...computeItemHashes({ guid: 'guid-2', title: 'Post 2' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -279,16 +236,20 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: { guid: 'guid-1', title: 'Updated Title', content: 'New content' },
-            hashes: computeItemHashes({
+            item: {
               guid: 'guid-1',
               title: 'Updated Title',
               content: 'New content',
-            }),
+              ...computeItemHashes({
+                guid: 'guid-1',
+                title: 'Updated Title',
+                content: 'New content',
+              }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -321,18 +282,25 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: { guid: 'guid-3', title: 'Brand New' },
-            hashes: computeItemHashes({ guid: 'guid-3', title: 'Brand New' }),
+            item: {
+              guid: 'guid-3',
+              title: 'Brand New',
+              ...computeItemHashes({ guid: 'guid-3', title: 'Brand New' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
         updates: [
           {
-            item: { guid: 'guid-2', title: 'Changed Title', content: 'New' },
-            hashes: computeItemHashes({ guid: 'guid-2', title: 'Changed Title', content: 'New' }),
+            item: {
+              guid: 'guid-2',
+              title: 'Changed Title',
+              content: 'New',
+              ...computeItemHashes({ guid: 'guid-2', title: 'Changed Title', content: 'New' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-2',
             matchedBy: 'guid',
@@ -356,7 +324,7 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'guid',
@@ -376,7 +344,7 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'guid',
@@ -405,7 +373,7 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'guid',
@@ -450,17 +418,16 @@ describe('classifyItems', () => {
       expect(sortByHash(forward.updates)).toEqual(sortByHash(reversed.updates))
     })
 
-    it('should preserve generic item type in output', () => {
+    it('should preserve extra fields in output', () => {
       const feedItem = { guid: 'guid-1', title: 'Post', customField: 'extra' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -476,7 +443,7 @@ describe('classifyItems', () => {
         newItems: [{ content: 'Only content, no identifiable fields' }],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'title',
@@ -490,7 +457,7 @@ describe('classifyItems', () => {
         newItems: [],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'title',
@@ -507,16 +474,14 @@ describe('classifyItems', () => {
         newItems: [feedItem1, feedItem2, feedItem3],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem1,
-            hashes: computeItemHashes(feedItem1),
+            item: { ...feedItem1, ...computeItemHashes(feedItem1) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItem3,
-            hashes: computeItemHashes(feedItem3),
+            item: { ...feedItem3, ...computeItemHashes(feedItem3) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -549,11 +514,14 @@ describe('classifyItems', () => {
         ],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: { guid: 'guid-1', title: 'Post' },
-            hashes: computeItemHashes({ guid: 'guid-1', title: 'Post' }),
+            item: {
+              guid: 'guid-1',
+              title: 'Post',
+              ...computeItemHashes({ guid: 'guid-1', title: 'Post' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -571,11 +539,10 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -592,11 +559,10 @@ describe('classifyItems', () => {
         newItems: [feedItem, feedItem, feedItem, feedItem, feedItem],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -614,11 +580,10 @@ describe('classifyItems', () => {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -653,7 +618,7 @@ describe('classifyItems', () => {
         ],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
             item: {
@@ -661,13 +626,13 @@ describe('classifyItems', () => {
               link: 'https://example.com/event',
               title: 'Event',
               content: 'Date: Jan',
+              ...computeItemHashes({
+                guid: 'guid-1',
+                link: 'https://example.com/event',
+                title: 'Event',
+                content: 'Date: Jan',
+              }),
             },
-            hashes: computeItemHashes({
-              guid: 'guid-1',
-              link: 'https://example.com/event',
-              title: 'Event',
-              content: 'Date: Jan',
-            }),
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -687,15 +652,19 @@ describe('classifyItems', () => {
         ],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: { link: 'https://example.com/post', title: 'Post', content: 'Version 1' },
-            hashes: computeItemHashes({
+            item: {
               link: 'https://example.com/post',
               title: 'Post',
               content: 'Version 1',
-            }),
+              ...computeItemHashes({
+                link: 'https://example.com/post',
+                title: 'Post',
+                content: 'Version 1',
+              }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -724,11 +693,14 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: { guid: 'guid-2', title: 'Title B' },
-            hashes: computeItemHashes({ guid: 'guid-2', title: 'Title B' }),
+            item: {
+              guid: 'guid-2',
+              title: 'Title B',
+              ...computeItemHashes({ guid: 'guid-2', title: 'Title B' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -753,12 +725,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItemRich,
-            hashes: computeItemHashes(feedItemRich),
+            item: { ...feedItemRich, ...computeItemHashes(feedItemRich) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -777,11 +748,10 @@ describe('classifyItems', () => {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -802,16 +772,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -830,16 +798,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem1,
-            hashes: computeItemHashes(feedItem1),
+            item: { ...feedItem1, ...computeItemHashes(feedItem1) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItem2,
-            hashes: computeItemHashes(feedItem2),
+            item: { ...feedItem2, ...computeItemHashes(feedItem2) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -858,16 +824,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -899,11 +863,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -927,11 +890,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -949,16 +911,14 @@ describe('classifyItems', () => {
         newItems: [feedItem1, feedItem2],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem1,
-            hashes: computeItemHashes(feedItem1),
+            item: { ...feedItem1, ...computeItemHashes(feedItem1) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItem2,
-            hashes: computeItemHashes(feedItem2),
+            item: { ...feedItem2, ...computeItemHashes(feedItem2) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -977,16 +937,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1005,16 +963,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1041,16 +997,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1077,16 +1031,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1105,16 +1057,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem1,
-            hashes: computeItemHashes(feedItem1),
+            item: { ...feedItem1, ...computeItemHashes(feedItem1) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItem2,
-            hashes: computeItemHashes(feedItem2),
+            item: { ...feedItem2, ...computeItemHashes(feedItem2) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1133,16 +1083,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1159,7 +1107,7 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'guid',
@@ -1180,7 +1128,7 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'guid',
@@ -1206,7 +1154,7 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'title',
@@ -1241,16 +1189,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1275,16 +1221,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1303,16 +1247,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'enclosure',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1331,16 +1273,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1367,16 +1307,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1403,16 +1341,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1439,16 +1375,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1475,16 +1409,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1511,7 +1443,7 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'guid',
@@ -1534,12 +1466,16 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: { guid: 'guid-1', title: 'Updated', content: 'New content' },
-            hashes: computeItemHashes({ guid: 'guid-1', title: 'Updated', content: 'New content' }),
+            item: {
+              guid: 'guid-1',
+              title: 'Updated',
+              content: 'New content',
+              ...computeItemHashes({ guid: 'guid-1', title: 'Updated', content: 'New content' }),
+            },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -1573,12 +1509,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
@@ -1607,11 +1542,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1629,16 +1563,14 @@ describe('classifyItems', () => {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1667,11 +1599,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1700,12 +1631,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'link',
@@ -1741,12 +1671,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'enclosure',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
@@ -1771,11 +1700,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1799,11 +1727,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1827,11 +1754,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'linkFragment',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1859,11 +1785,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1887,11 +1812,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1920,11 +1844,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -1949,12 +1872,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -1984,11 +1906,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2016,11 +1937,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2055,12 +1975,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-2',
             matchedBy: 'link',
@@ -2084,12 +2003,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'title',
@@ -2120,11 +2038,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2154,11 +2071,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2187,11 +2103,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'enclosure',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2227,11 +2142,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2259,11 +2173,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2296,11 +2209,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2334,18 +2246,16 @@ describe('classifyItems', () => {
         newItems: [targetItem, fillerItem, fillerItem, fillerItem],
         existingItems: [makeMatchable(existingItem)],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: fillerItem,
-            hashes: computeItemHashes(fillerItem),
+            item: { ...fillerItem, ...computeItemHashes(fillerItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
         updates: [
           {
-            item: targetItem,
-            hashes: computeItemHashes(targetItem),
+            item: { ...targetItem, ...computeItemHashes(targetItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
@@ -2376,12 +2286,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-a',
             matchedBy: 'guid',
@@ -2406,11 +2315,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2459,12 +2367,11 @@ describe('classifyItems', () => {
         newItems: [feedItem],
         existingItems: [targetExisting, ...uniques, duplicate1, duplicate2],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'target',
             matchedBy: 'link',
@@ -2520,12 +2427,11 @@ describe('classifyItems', () => {
         newItems: [feedItem],
         existingItems: [targetExisting, ...uniques, duplicate1, duplicate2, duplicate3],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'target',
             matchedBy: 'enclosure',
@@ -2563,12 +2469,11 @@ describe('classifyItems', () => {
         newItems: [feedItem],
         existingItems: [targetExisting, ...filler],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'target',
             matchedBy: 'link',
@@ -2612,18 +2517,16 @@ describe('classifyItems', () => {
         newItems: [feedItem, ...duplicates],
         existingItems: [targetExisting, ...filler],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: duplicateItem,
-            hashes: computeItemHashes(duplicateItem),
+            item: { ...duplicateItem, ...computeItemHashes(duplicateItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'target',
             matchedBy: 'enclosure',
@@ -2659,11 +2562,10 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -2693,12 +2595,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'link',
@@ -2727,12 +2628,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -2760,12 +2660,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -2800,12 +2699,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'link',
@@ -2846,19 +2744,17 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'title',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'link',
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-2',
             matchedBy: 'link',
@@ -2893,12 +2789,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-2',
             matchedBy: 'link',
@@ -2937,12 +2832,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-a',
             matchedBy: 'guid',
@@ -2978,12 +2872,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'v1',
             matchedBy: 'guid',
@@ -3024,12 +2917,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 's1',
             matchedBy: 'link',
@@ -3068,12 +2960,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3102,12 +2993,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3145,12 +3035,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'enclosure',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
@@ -3170,16 +3059,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guidFragment',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3206,16 +3093,14 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'enclosure',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemA,
-            hashes: computeItemHashes(feedItemA),
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
           {
-            item: feedItemB,
-            hashes: computeItemHashes(feedItemB),
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3239,7 +3124,7 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'link',
@@ -3262,12 +3147,11 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'guid',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3298,18 +3182,16 @@ describe('classifyItems', () => {
         ],
         fingerprintLevel: 'link',
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItemNew,
-            hashes: computeItemHashes(feedItemNew),
+            item: { ...feedItemNew, ...computeItemHashes(feedItemNew) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
         updates: [
           {
-            item: feedItemUpdate,
-            hashes: computeItemHashes(feedItemUpdate),
+            item: { ...feedItemUpdate, ...computeItemHashes(feedItemUpdate) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'link',
@@ -3328,7 +3210,7 @@ describe('classifyItems', () => {
         newItems: [{ guid: '   ', title: '   ', content: 'Some content' }],
         existingItems: [],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [],
         fingerprintLevel: 'title',
@@ -3362,12 +3244,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3391,11 +3272,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3423,11 +3303,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3456,12 +3335,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3491,12 +3369,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3521,11 +3398,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3549,12 +3425,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3579,12 +3454,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
@@ -3621,11 +3495,10 @@ describe('classifyItems', () => {
           ...filler,
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3661,11 +3534,10 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
           },
         ],
@@ -3693,12 +3565,11 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const expected: ClassifyItemsResult<NewItem> = {
+      const expected: ClassifyItemsResult = {
         inserts: [],
         updates: [
           {
-            item: feedItem,
-            hashes: computeItemHashes(feedItem),
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',

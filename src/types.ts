@@ -22,6 +22,16 @@ export type ItemHashes = {
   enclosureHash: string | null
 }
 
+export type ItemWithHashes = NewItem & ItemHashes
+
+export type ExistingItem = ItemWithHashes & {
+  id: string
+}
+
+export type FingerprintedItem = ItemWithHashes & {
+  fingerprint: string
+}
+
 export type HashKey = keyof ItemHashes
 
 export type HashMeta = {
@@ -41,16 +51,6 @@ export type FingerprintLevelMeta = {
   tag: string
 }
 
-export type ExistingItem = ItemHashes & {
-  id: string
-}
-
-export type FingerprintedItem<TItem> = {
-  item: TItem
-  hashes: ItemHashes
-  fingerprint: string
-}
-
 export type MatchedBy = 'guid' | 'link' | 'enclosure' | 'title'
 
 export type MatchResult = {
@@ -64,20 +64,18 @@ export type MatchStrategyResult =
   | { outcome: 'pass' }
 
 export type MatchStrategyContext = {
-  hashes: ItemHashes
+  incoming: ItemWithHashes
   candidates: Array<ExistingItem>
   filtered: (matchedBy: MatchedBy, candidates: Array<ExistingItem>) => Array<ExistingItem>
 }
 
-export type InsertAction<TItem> = {
-  item: TItem
-  hashes: ItemHashes
+export type InsertAction = {
+  item: ItemWithHashes
   fingerprintHash: string
 }
 
-export type UpdateAction<TItem> = {
-  item: TItem
-  hashes: ItemHashes
+export type UpdateAction = {
+  item: ItemWithHashes
   fingerprintHash: string
   existingItemId: string
   matchedBy: MatchedBy
@@ -85,7 +83,7 @@ export type UpdateAction<TItem> = {
 
 export type CandidateFilterContext = {
   matchedBy: MatchedBy
-  incoming: { hashes: ItemHashes }
+  incoming: ItemWithHashes
   candidate: ExistingItem
   channel: { linkUniquenessRate: number }
 }
@@ -100,7 +98,7 @@ export type CandidateFilter = {
 
 export type UpdateFilterContext = {
   existing: ExistingItem
-  incomingHashes: ItemHashes
+  incoming: ItemWithHashes
   matchedBy: MatchedBy
 }
 
@@ -109,14 +107,14 @@ export type UpdateFilter = {
   shouldUpdate: (context: UpdateFilterContext) => boolean
 }
 
-export type ClassifyItemsInput<TItem extends NewItem = NewItem> = {
-  newItems: Array<TItem>
+export type ClassifyItemsInput = {
+  newItems: Array<NewItem>
   existingItems: Array<ExistingItem>
   fingerprintLevel?: FingerprintLevel
 }
 
-export type ClassifyItemsResult<TItem> = {
-  inserts: Array<InsertAction<TItem>>
-  updates: Array<UpdateAction<TItem>>
+export type ClassifyItemsResult = {
+  inserts: Array<InsertAction>
+  updates: Array<UpdateAction>
   fingerprintLevel: FingerprintLevel
 }
