@@ -145,7 +145,7 @@ export const applyCandidateFilters = ({
   let result = candidates
 
   for (const filter of filters) {
-    if (filter.appliesTo !== 'all' && !filter.appliesTo.includes(matchedBy)) {
+    if (!filter.appliesTo.includes(matchedBy)) {
       continue
     }
 

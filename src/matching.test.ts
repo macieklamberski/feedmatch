@@ -1703,10 +1703,10 @@ describe('applyCandidateFilters', () => {
     expect(value).toEqual(expected)
   })
 
-  it('should apply filter with appliesTo all', () => {
+  it('should apply filter to all match types', () => {
     const filter: CandidateFilter = {
       name: 'blockAll',
-      appliesTo: 'all',
+      appliesTo: ['guid', 'link', 'enclosure', 'title'],
       evaluate: () => {
         return { allow: false, reason: 'blocked' }
       },
@@ -1726,7 +1726,7 @@ describe('applyCandidateFilters', () => {
   it('should apply filters sequentially', () => {
     const filterA: CandidateFilter = {
       name: 'removeB',
-      appliesTo: 'all',
+      appliesTo: ['guid', 'link', 'enclosure', 'title'],
       evaluate: (context) => {
         return context.candidate.id === 'b'
           ? { allow: false, reason: 'removed b' }
@@ -1735,7 +1735,7 @@ describe('applyCandidateFilters', () => {
     }
     const filterB: CandidateFilter = {
       name: 'removeC',
-      appliesTo: 'all',
+      appliesTo: ['guid', 'link', 'enclosure', 'title'],
       evaluate: (context) => {
         return context.candidate.id === 'c'
           ? { allow: false, reason: 'removed c' }
@@ -1762,7 +1762,7 @@ describe('applyCandidateFilters', () => {
   it('should return empty array when all candidates are removed', () => {
     const filter: CandidateFilter = {
       name: 'blockAll',
-      appliesTo: 'all',
+      appliesTo: ['guid', 'link', 'enclosure', 'title'],
       evaluate: () => {
         return { allow: false, reason: 'blocked' }
       },
@@ -1783,7 +1783,7 @@ describe('applyCandidateFilters', () => {
     const contexts: Array<CandidateFilterContext> = []
     const filter: CandidateFilter = {
       name: 'spy',
-      appliesTo: 'all',
+      appliesTo: ['guid', 'link', 'enclosure', 'title'],
       evaluate: (context) => {
         contexts.push(context)
         return { allow: true }

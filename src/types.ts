@@ -132,7 +132,7 @@ export type CandidateFilterResult = { allow: true } | { allow: false; reason: st
 
 export type CandidateFilter = {
   name: string
-  appliesTo: Array<MatchedBy> | 'all'
+  appliesTo: Array<MatchedBy>
   evaluate: (context: CandidateFilterContext) => CandidateFilterResult
 }
 
