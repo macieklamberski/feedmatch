@@ -6,10 +6,11 @@ import {
   computeMatchPolicy,
   computeSignalStats,
   contentChangeFilter,
+  dateProximityFilter,
   enclosureConflictFilter,
   findMatchCandidates,
+  hasLinkOnly,
   highUniquenessStrategies,
-  isLinkOnly,
   lowUniquenessStrategies,
   matchByEnclosure,
   matchByGuid,
@@ -32,7 +33,7 @@ import type {
   MatchStrategyContext,
 } from './types.js'
 
-const makeItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
+const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
   return {
     id: 'item-1',
     guidHash: null,
@@ -177,8 +178,8 @@ describe('computeSignalStats', () => {
 describe('computeFeedProfile', () => {
   it('should return 1.0 effective uniqueness when all link hashes are unique', () => {
     const existingItems = [
-      makeItem({ id: 'a', linkHash: 'l-1' }),
-      makeItem({ id: 'b', linkHash: 'l-2' }),
+      makeExistingItem({ id: 'a', linkHash: 'l-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'l-2' }),
     ]
     const incomingItems = [
       makeIncomingItem({ linkHash: 'l-3' }),
@@ -195,8 +196,8 @@ describe('computeFeedProfile', () => {
 
   it('should return min of existing and incoming uniqueness rates', () => {
     const existingItems = [
-      makeItem({ id: 'a', linkHash: 'l-1' }),
-      makeItem({ id: 'b', linkHash: 'l-1' }),
+      makeExistingItem({ id: 'a', linkHash: 'l-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'l-1' }),
     ]
     const incomingItems = [
       makeIncomingItem({ linkHash: 'l-3' }),
@@ -228,8 +229,8 @@ describe('computeFeedProfile', () => {
 
   it('should use incoming stats when existing items have only null link hashes', () => {
     const existingItems = [
-      makeItem({ id: 'a', linkHash: null }),
-      makeItem({ id: 'b', linkHash: null }),
+      makeExistingItem({ id: 'a', linkHash: null }),
+      makeExistingItem({ id: 'b', linkHash: null }),
     ]
     const incomingItems = [
       makeIncomingItem({ linkHash: 'l-1' }),
@@ -246,8 +247,8 @@ describe('computeFeedProfile', () => {
 
   it('should use existing stats when no incoming items', () => {
     const existingItems = [
-      makeItem({ id: 'a', linkHash: 'l-1' }),
-      makeItem({ id: 'b', linkHash: 'l-1' }),
+      makeExistingItem({ id: 'a', linkHash: 'l-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'l-1' }),
     ]
     const incomingItems: Array<IncomingItem> = []
     const profile = computeFeedProfile(existingItems, incomingItems)
@@ -260,7 +261,7 @@ describe('computeFeedProfile', () => {
   })
 
   it('should fall back to incoming when neither side has present link values', () => {
-    const existingItems = [makeItem({ id: 'a' })]
+    const existingItems = [makeExistingItem({ id: 'a' })]
     const incomingItems: Array<IncomingItem> = []
     const profile = computeFeedProfile(existingItems, incomingItems)
 
@@ -273,8 +274,8 @@ describe('computeFeedProfile', () => {
 
   it('should compute min effective rate when existing has mixed null values', () => {
     const existingItems = [
-      makeItem({ id: 'a', linkHash: null }),
-      makeItem({ id: 'b', linkHash: 'l-1' }),
+      makeExistingItem({ id: 'a', linkHash: null }),
+      makeExistingItem({ id: 'b', linkHash: 'l-1' }),
     ]
     const incomingItems = [makeIncomingItem({ linkHash: 'l-2' })]
     const profile = computeFeedProfile(existingItems, incomingItems)
@@ -288,14 +289,14 @@ describe('computeFeedProfile', () => {
 
   it('should compute independent stats per signal', () => {
     const existingItems = [
-      makeItem({
+      makeExistingItem({
         id: 'a',
         guidHash: 'g-1',
         linkHash: 'l-shared',
         enclosureHash: 'e-1',
         titleHash: 't-shared',
       }),
-      makeItem({
+      makeExistingItem({
         id: 'b',
         guidHash: 'g-2',
         linkHash: 'l-shared',
@@ -336,7 +337,7 @@ describe('computeFeedProfile', () => {
   })
 
   it('should return zero stats for absent signals across both sides', () => {
-    const existingItems = [makeItem({ id: 'a', guidHash: 'g-1' })]
+    const existingItems = [makeExistingItem({ id: 'a', guidHash: 'g-1' })]
     const incomingItems = [makeIncomingItem({ guidHash: 'g-2' })]
     const profile = computeFeedProfile(existingItems, incomingItems)
 
@@ -349,8 +350,8 @@ describe('computeFeedProfile', () => {
 
   it('should return 1.0 effective rates when all items on both sides are unique', () => {
     const existingItems = [
-      makeItem({ id: 'a', guidHash: 'g-1' }),
-      makeItem({ id: 'b', guidHash: 'g-2' }),
+      makeExistingItem({ id: 'a', guidHash: 'g-1' }),
+      makeExistingItem({ id: 'b', guidHash: 'g-2' }),
     ]
     const incomingItems = [makeIncomingItem({ guidHash: 'g-3' })]
     const profile = computeFeedProfile(existingItems, incomingItems)
@@ -363,41 +364,41 @@ describe('computeFeedProfile', () => {
   })
 })
 
-describe('isLinkOnly', () => {
+describe('hasLinkOnly', () => {
   it('should return true when only linkHash is present', () => {
-    const value = makeHashes({ linkHash: 'abc' })
+    const value = makeIncomingItem({ linkHash: 'abc' })
 
-    expect(isLinkOnly(value)).toBe(true)
+    expect(hasLinkOnly(value)).toBe(true)
   })
 
   it('should return false when guidHash is also present', () => {
-    const value = makeHashes({
+    const value = makeIncomingItem({
       linkHash: 'abc',
       guidHash: 'def',
     })
 
-    expect(isLinkOnly(value)).toBe(false)
+    expect(hasLinkOnly(value)).toBe(false)
   })
 
   it('should return false when enclosureHash is also present', () => {
-    const value = makeHashes({
+    const value = makeIncomingItem({
       linkHash: 'abc',
       enclosureHash: 'def',
     })
 
-    expect(isLinkOnly(value)).toBe(false)
+    expect(hasLinkOnly(value)).toBe(false)
   })
 
   it('should return false when no linkHash', () => {
-    const value = makeHashes({ guidHash: 'abc' })
+    const value = makeIncomingItem({ guidHash: 'abc' })
 
-    expect(isLinkOnly(value)).toBe(false)
+    expect(hasLinkOnly(value)).toBe(false)
   })
 
   it('should return false when empty', () => {
-    const value = makeHashes()
+    const value = makeIncomingItem()
 
-    expect(isLinkOnly(value)).toBe(false)
+    expect(hasLinkOnly(value)).toBe(false)
   })
 })
 
@@ -405,8 +406,8 @@ describe('findMatchCandidates', () => {
   it('should match on guidHash', () => {
     const value = makeHashes({ guidHash: 'guid-1' })
     const existing = [
-      makeItem({ id: 'a', guidHash: 'guid-1' }),
-      makeItem({ id: 'b', guidHash: 'guid-2' }),
+      makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
+      makeExistingItem({ id: 'b', guidHash: 'guid-2' }),
     ]
     const expected = [existing[0]]
 
@@ -416,8 +417,8 @@ describe('findMatchCandidates', () => {
   it('should match on linkHash', () => {
     const value = makeHashes({ linkHash: 'link-1' })
     const existing = [
-      makeItem({ id: 'a', linkHash: 'link-1' }),
-      makeItem({ id: 'b', linkHash: 'link-2' }),
+      makeExistingItem({ id: 'a', linkHash: 'link-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'link-2' }),
     ]
     const expected = [existing[0]]
 
@@ -427,8 +428,8 @@ describe('findMatchCandidates', () => {
   it('should match on enclosureHash', () => {
     const value = makeHashes({ enclosureHash: 'enc-1' })
     const existing = [
-      makeItem({ id: 'a', enclosureHash: 'enc-1' }),
-      makeItem({ id: 'b', enclosureHash: 'enc-2' }),
+      makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
+      makeExistingItem({ id: 'b', enclosureHash: 'enc-2' }),
     ]
     const expected = [existing[0]]
 
@@ -438,8 +439,8 @@ describe('findMatchCandidates', () => {
   it('should match on titleHash', () => {
     const value = makeHashes({ titleHash: 'title-1' })
     const existing = [
-      makeItem({ id: 'a', titleHash: 'title-1' }),
-      makeItem({ id: 'b', titleHash: 'title-2' }),
+      makeExistingItem({ id: 'a', titleHash: 'title-1' }),
+      makeExistingItem({ id: 'b', titleHash: 'title-2' }),
     ]
     const expected = [existing[0]]
 
@@ -452,8 +453,8 @@ describe('findMatchCandidates', () => {
       linkHash: 'link-2',
     })
     const existing = [
-      makeItem({ id: 'a', guidHash: 'guid-1' }),
-      makeItem({ id: 'b', linkHash: 'link-2' }),
+      makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'link-2' }),
     ]
     const expected = [existing[0], existing[1]]
 
@@ -465,7 +466,7 @@ describe('findMatchCandidates', () => {
       guidHash: 'guid-1',
       linkHash: 'link-1',
     })
-    const existing = [makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })]
+    const existing = [makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })]
     const expected = [existing[0]]
 
     expect(findMatchCandidates(value, existing)).toEqual(expected)
@@ -473,7 +474,7 @@ describe('findMatchCandidates', () => {
 
   it('should return empty array when no matches', () => {
     const value = makeHashes({ guidHash: 'guid-x' })
-    const existing = [makeItem({ id: 'a', guidHash: 'guid-1' })]
+    const existing = [makeExistingItem({ id: 'a', guidHash: 'guid-1' })]
 
     expect(findMatchCandidates(value, existing)).toEqual([])
   })
@@ -487,8 +488,8 @@ describe('findMatchCandidates', () => {
   it('should not match on summaryHash', () => {
     const value = makeHashes({ summaryHash: 'sum-1' })
     const existing = [
-      makeItem({ id: 'a', summaryHash: 'sum-1' }),
-      makeItem({ id: 'b', summaryHash: 'sum-2' }),
+      makeExistingItem({ id: 'a', summaryHash: 'sum-1' }),
+      makeExistingItem({ id: 'b', summaryHash: 'sum-2' }),
     ]
 
     expect(findMatchCandidates(value, existing)).toEqual([])
@@ -497,8 +498,8 @@ describe('findMatchCandidates', () => {
   it('should not match on contentHash', () => {
     const value = makeHashes({ contentHash: 'cnt-1' })
     const existing = [
-      makeItem({ id: 'a', contentHash: 'cnt-1' }),
-      makeItem({ id: 'b', contentHash: 'cnt-2' }),
+      makeExistingItem({ id: 'a', contentHash: 'cnt-1' }),
+      makeExistingItem({ id: 'b', contentHash: 'cnt-2' }),
     ]
 
     expect(findMatchCandidates(value, existing)).toEqual([])
@@ -509,14 +510,14 @@ describe('findMatchCandidates', () => {
       guidHash: 'guid-1',
       titleHash: 'title-1',
     })
-    const existing = [makeItem({ id: 'a', titleHash: 'title-1' })]
+    const existing = [makeExistingItem({ id: 'a', titleHash: 'title-1' })]
 
     expect(findMatchCandidates(value, existing)).toEqual([])
   })
 
   it('should not match on null hash values', () => {
     const value = makeHashes()
-    const existing = [makeItem({ id: 'a', guidHash: null, linkHash: null })]
+    const existing = [makeExistingItem({ id: 'a', guidHash: null, linkHash: null })]
 
     expect(findMatchCandidates(value, existing)).toEqual([])
   })
@@ -525,20 +526,20 @@ describe('findMatchCandidates', () => {
 describe('selectMatchingItem', () => {
   it('should return null for empty candidates', () => {
     const value = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on guid with single candidate', () => {
-    const candidate = makeItem({ guidHash: 'guid-1' })
+    const candidate = makeExistingItem({ guidHash: 'guid-1' })
     const value = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -551,12 +552,12 @@ describe('selectMatchingItem', () => {
 
   it('should return null for ambiguous guid matches with no narrowing hashes', () => {
     const value = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [
-        makeItem({ id: 'a', guidHash: 'guid-1' }),
-        makeItem({ id: 'b', guidHash: 'guid-1' }),
+        makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
+        makeExistingItem({ id: 'b', guidHash: 'guid-1' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -564,14 +565,17 @@ describe('selectMatchingItem', () => {
   })
 
   it('should disambiguate guid matches by enclosure', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-1',
       }),
-      candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
+      ],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -580,14 +584,14 @@ describe('selectMatchingItem', () => {
   })
 
   it('should disambiguate guid matches by link when enclosure does not narrow', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         linkHash: 'link-1',
       }),
-      candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [target, makeExistingItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -596,14 +600,17 @@ describe('selectMatchingItem', () => {
   })
 
   it('should disambiguate guid matches by guidFragmentHash', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         guidFragmentHash: 'gf-1',
       }),
-      candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' }),
+      ],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -613,15 +620,15 @@ describe('selectMatchingItem', () => {
 
   it('should return null when guidFragmentHash is also ambiguous', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         guidFragmentHash: 'gf-shared',
       }),
       candidates: [
-        makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
-        makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
+        makeExistingItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -630,15 +637,15 @@ describe('selectMatchingItem', () => {
 
   it('should return null when guid disambiguation still ambiguous', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         linkHash: 'link-shared',
       }),
       candidates: [
-        makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-shared' }),
-        makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-shared' }),
+        makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-shared' }),
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-shared' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -647,26 +654,26 @@ describe('selectMatchingItem', () => {
 
   it('should reject guid match when enclosures conflict', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-new',
       }),
-      candidates: [makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [makeExistingItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should allow guid match when enclosures are same', () => {
-    const candidate = makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-same' })
+    const candidate = makeExistingItem({ guidHash: 'guid-1', enclosureHash: 'enc-same' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-same',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -678,14 +685,14 @@ describe('selectMatchingItem', () => {
   })
 
   it('should allow guid match when candidate has no enclosure', () => {
-    const candidate = makeItem({ guidHash: 'guid-1', enclosureHash: null })
+    const candidate = makeExistingItem({ guidHash: 'guid-1', enclosureHash: null })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -697,11 +704,11 @@ describe('selectMatchingItem', () => {
   })
 
   it('should allow guid match when incoming has no enclosure', () => {
-    const candidate = makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-existing' })
+    const candidate = makeExistingItem({ guidHash: 'guid-1', enclosureHash: 'enc-existing' })
     const value = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -713,11 +720,11 @@ describe('selectMatchingItem', () => {
   })
 
   it('should match on link when high uniqueness', () => {
-    const candidate = makeItem({ linkHash: 'link-1' })
+    const candidate = makeExistingItem({ linkHash: 'link-1' })
     const value = {
-      incoming: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -730,26 +737,26 @@ describe('selectMatchingItem', () => {
 
   it('should filter out link matches with enclosure conflict', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         enclosureHash: 'enc-new',
       }),
-      candidates: [makeItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [makeExistingItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should allow link match when enclosures are same', () => {
-    const candidate = makeItem({ linkHash: 'link-1', enclosureHash: 'enc-same' })
+    const candidate = makeExistingItem({ linkHash: 'link-1', enclosureHash: 'enc-same' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         enclosureHash: 'enc-same',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -761,14 +768,14 @@ describe('selectMatchingItem', () => {
   })
 
   it('should allow link match when candidate has no enclosure', () => {
-    const candidate = makeItem({ linkHash: 'link-1', enclosureHash: null })
+    const candidate = makeExistingItem({ linkHash: 'link-1', enclosureHash: null })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -780,14 +787,17 @@ describe('selectMatchingItem', () => {
   })
 
   it('should disambiguate link matches by fragment on high-uniqueness channel', () => {
-    const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
+    const target = makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-1',
       }),
-      candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
+      ],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
@@ -797,15 +807,15 @@ describe('selectMatchingItem', () => {
 
   it('should return null when fragment is also ambiguous on high-uniqueness channel', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-shared',
       }),
       candidates: [
-        makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-        makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
+        makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -814,12 +824,12 @@ describe('selectMatchingItem', () => {
 
   it('should return null when incoming has no fragment and link is ambiguous', () => {
     const value = {
-      incoming: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [
-        makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' }),
-        makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
+        makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' }),
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -827,11 +837,11 @@ describe('selectMatchingItem', () => {
   })
 
   it('should match on enclosure when high uniqueness and no link match', () => {
-    const candidate = makeItem({ enclosureHash: 'enc-1' })
+    const candidate = makeExistingItem({ enclosureHash: 'enc-1' })
     const value = {
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -844,16 +854,16 @@ describe('selectMatchingItem', () => {
 
   it('should prioritize enclosure over link on low-uniqueness channel', () => {
     const candidates = [
-      makeItem({ id: 'a', linkHash: 'link-shared', enclosureHash: 'enc-1' }),
-      makeItem({ id: 'b', linkHash: 'link-shared', enclosureHash: 'enc-2' }),
+      makeExistingItem({ id: 'a', linkHash: 'link-shared', enclosureHash: 'enc-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'link-shared', enclosureHash: 'enc-2' }),
     ]
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-shared',
         enclosureHash: 'enc-1',
       }),
       candidates,
-      matchPolicy: { linkReliable: false },
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -866,23 +876,23 @@ describe('selectMatchingItem', () => {
 
   it('should not match on link for non-link-only item on low-uniqueness channel', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         guidHash: 'guid-x',
       }),
-      candidates: [makeItem({ linkHash: 'link-1' })],
-      matchPolicy: { linkReliable: false },
+      candidates: [makeExistingItem({ linkHash: 'link-1' })],
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
   it('should match on link for link-only item on low-uniqueness channel', () => {
-    const candidate = makeItem({ linkHash: 'link-1' })
+    const candidate = makeExistingItem({ linkHash: 'link-1' })
     const value = {
-      incoming: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: false },
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -894,14 +904,17 @@ describe('selectMatchingItem', () => {
   })
 
   it('should disambiguate link matches by fragment on low-uniqueness channel for link-only item', () => {
-    const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
+    const target = makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-1',
       }),
-      candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
-      matchPolicy: { linkReliable: false },
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
+      ],
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
@@ -911,15 +924,15 @@ describe('selectMatchingItem', () => {
 
   it('should return null when fragment is also ambiguous on low-uniqueness channel', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-shared',
       }),
       candidates: [
-        makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-        makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
+        makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
-      matchPolicy: { linkReliable: false },
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -927,11 +940,11 @@ describe('selectMatchingItem', () => {
   })
 
   it('should match on title as last resort', () => {
-    const candidate = makeItem({ titleHash: 'title-1' })
+    const candidate = makeExistingItem({ titleHash: 'title-1' })
     const value = {
-      incoming: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -944,12 +957,12 @@ describe('selectMatchingItem', () => {
 
   it('should return null for ambiguous title matches', () => {
     const value = {
-      incoming: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1' }),
       candidates: [
-        makeItem({ id: 'a', titleHash: 'title-1' }),
-        makeItem({ id: 'b', titleHash: 'title-1' }),
+        makeExistingItem({ id: 'a', titleHash: 'title-1' }),
+        makeExistingItem({ id: 'b', titleHash: 'title-1' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -957,12 +970,12 @@ describe('selectMatchingItem', () => {
 
   it('should not match on title when strong hashes present', () => {
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-x',
         titleHash: 'title-1',
       }),
-      candidates: [makeItem({ titleHash: 'title-1' })],
-      matchPolicy: { linkReliable: true },
+      candidates: [makeExistingItem({ titleHash: 'title-1' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -971,9 +984,9 @@ describe('selectMatchingItem', () => {
 
   it('should not match on summary-only candidates', () => {
     const value = {
-      incoming: makeHashes({ summaryHash: 'sum-1' }),
-      candidates: [makeItem({ summaryHash: 'sum-1' })],
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ summaryHash: 'sum-1' }),
+      candidates: [makeExistingItem({ summaryHash: 'sum-1' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -982,9 +995,9 @@ describe('selectMatchingItem', () => {
 
   it('should not match on content-only candidates', () => {
     const value = {
-      incoming: makeHashes({ contentHash: 'cnt-1' }),
-      candidates: [makeItem({ contentHash: 'cnt-1' })],
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ contentHash: 'cnt-1' }),
+      candidates: [makeExistingItem({ contentHash: 'cnt-1' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -992,15 +1005,15 @@ describe('selectMatchingItem', () => {
   })
 
   it('should prefer guid over link', () => {
-    const guidCandidate = makeItem({ id: 'guid-match', guidHash: 'guid-1' })
-    const linkCandidate = makeItem({ id: 'link-match', linkHash: 'link-1' })
+    const guidCandidate = makeExistingItem({ id: 'guid-match', guidHash: 'guid-1' })
+    const linkCandidate = makeExistingItem({ id: 'link-match', linkHash: 'link-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         linkHash: 'link-1',
       }),
       candidates: [guidCandidate, linkCandidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -1012,15 +1025,15 @@ describe('selectMatchingItem', () => {
   })
 
   it('should prefer link over enclosure on high-uniqueness channel', () => {
-    const linkCandidate = makeItem({ id: 'link-match', linkHash: 'link-1' })
-    const encCandidate = makeItem({ id: 'enc-match', enclosureHash: 'enc-1' })
+    const linkCandidate = makeExistingItem({ id: 'link-match', linkHash: 'link-1' })
+    const encCandidate = makeExistingItem({ id: 'enc-match', enclosureHash: 'enc-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         enclosureHash: 'enc-1',
       }),
       candidates: [linkCandidate, encCandidate],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -1032,18 +1045,18 @@ describe('selectMatchingItem', () => {
   })
 
   it('should disambiguate multiple guid matches by enclosure when no conflict', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
     const value = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-1',
       }),
       candidates: [
         target,
-        makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
-        makeItem({ id: 'c', guidHash: 'guid-1', enclosureHash: null }),
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
+        makeExistingItem({ id: 'c', guidHash: 'guid-1', enclosureHash: null }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -1053,12 +1066,12 @@ describe('selectMatchingItem', () => {
 
   it('should return undefined for ambiguous enclosure matches on high-uniqueness channel', () => {
     const value = {
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [
-        makeItem({ id: 'a', enclosureHash: 'enc-1' }),
-        makeItem({ id: 'b', enclosureHash: 'enc-1' }),
+        makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
+        makeExistingItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      matchPolicy: { linkReliable: true },
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1066,11 +1079,11 @@ describe('selectMatchingItem', () => {
   })
 
   it('should match on enclosure on low-uniqueness channel', () => {
-    const candidate = makeItem({ enclosureHash: 'enc-1' })
+    const candidate = makeExistingItem({ enclosureHash: 'enc-1' })
     const value = {
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: false },
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: candidate, matchedBy: 'enclosure' }
@@ -1080,12 +1093,12 @@ describe('selectMatchingItem', () => {
 
   it('should return undefined for ambiguous enclosure matches on low-uniqueness channel', () => {
     const value = {
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [
-        makeItem({ id: 'a', enclosureHash: 'enc-1' }),
-        makeItem({ id: 'b', enclosureHash: 'enc-1' }),
+        makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
+        makeExistingItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      matchPolicy: { linkReliable: false },
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1094,12 +1107,12 @@ describe('selectMatchingItem', () => {
 
   it('should return undefined for ambiguous link-only matches on low-uniqueness channel', () => {
     const value = {
-      incoming: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [
-        makeItem({ id: 'a', linkHash: 'link-1' }),
-        makeItem({ id: 'b', linkHash: 'link-1' }),
+        makeExistingItem({ id: 'a', linkHash: 'link-1' }),
+        makeExistingItem({ id: 'b', linkHash: 'link-1' }),
       ],
-      matchPolicy: { linkReliable: false },
+      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1108,9 +1121,9 @@ describe('selectMatchingItem', () => {
 
   it('should return null when no hashes match any priority', () => {
     const value = {
-      incoming: makeHashes({ guidHash: 'guid-x' }),
-      candidates: [makeItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ guidHash: 'guid-x' }),
+      candidates: [makeExistingItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -1121,37 +1134,37 @@ describe('computeMatchPolicy', () => {
   it('should set linkReliable to true when rate is 1.0', () => {
     const value = makeFeedProfile(1.0)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true })
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true, dateProximityDays: 7 })
   })
 
   it('should set linkReliable to true when rate is exactly 0.95', () => {
     const value = makeFeedProfile(0.95)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true })
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true, dateProximityDays: 7 })
   })
 
   it('should set linkReliable to false when rate is below 0.95', () => {
     const value = makeFeedProfile(0.94)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false })
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false, dateProximityDays: 7 })
   })
 
   it('should set linkReliable to false when rate is 0', () => {
     const value = makeFeedProfile(0)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false })
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false, dateProximityDays: 7 })
   })
 })
 
 describe('resolveStrategies', () => {
   it('should return high uniqueness strategies when link is reliable', () => {
-    const value: MatchPolicy = { linkReliable: true }
+    const value: MatchPolicy = { linkReliable: true, dateProximityDays: 7 }
 
     expect(resolveStrategies(value)).toBe(highUniquenessStrategies)
   })
 
   it('should return low uniqueness strategies when link is not reliable', () => {
-    const value: MatchPolicy = { linkReliable: false }
+    const value: MatchPolicy = { linkReliable: false, dateProximityDays: 7 }
 
     expect(resolveStrategies(value)).toBe(lowUniquenessStrategies)
   })
@@ -1163,9 +1176,9 @@ const identity = (_matchedBy: string, filtered: Array<ExistingItem>): Array<Exis
 
 describe('matchByGuid', () => {
   it('should match single guid candidate', () => {
-    const candidate = makeItem({ guidHash: 'guid-1' })
+    const candidate = makeExistingItem({ guidHash: 'guid-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -1177,13 +1190,16 @@ describe('matchByGuid', () => {
   })
 
   it('should disambiguate by enclosure when multiple guid matches', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-1',
       }),
-      candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
+      ],
       filtered: identity,
     }
 
@@ -1194,13 +1210,16 @@ describe('matchByGuid', () => {
   })
 
   it('should disambiguate by guid fragment when enclosure fails', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         guidFragmentHash: 'gf-1',
       }),
-      candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' }),
+      ],
       filtered: identity,
     }
 
@@ -1211,13 +1230,13 @@ describe('matchByGuid', () => {
   })
 
   it('should disambiguate by link when guid fragment fails', () => {
-    const target = makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
+    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         guidHash: 'guid-1',
         linkHash: 'link-1',
       }),
-      candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
+      candidates: [target, makeExistingItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
       filtered: identity,
     }
 
@@ -1229,10 +1248,10 @@ describe('matchByGuid', () => {
 
   it('should return ambiguous when all disambiguation fails', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [
-        makeItem({ id: 'a', guidHash: 'guid-1' }),
-        makeItem({ id: 'b', guidHash: 'guid-1' }),
+        makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
+        makeExistingItem({ id: 'b', guidHash: 'guid-1' }),
       ],
       filtered: identity,
     }
@@ -1246,8 +1265,8 @@ describe('matchByGuid', () => {
 
   it('should pass when no guidHash', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ linkHash: 'link-1' }),
-      candidates: [makeItem({ guidHash: 'guid-1' })],
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
+      candidates: [makeExistingItem({ guidHash: 'guid-1' })],
       filtered: identity,
     }
 
@@ -1257,9 +1276,9 @@ describe('matchByGuid', () => {
 
 describe('matchByLink', () => {
   it('should match single link candidate', () => {
-    const candidate = makeItem({ linkHash: 'link-1' })
+    const candidate = makeExistingItem({ linkHash: 'link-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -1271,13 +1290,16 @@ describe('matchByLink', () => {
   })
 
   it('should disambiguate by link fragment when multiple matches', () => {
-    const target = makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
+    const target = makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-1',
       }),
-      candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
+      candidates: [
+        target,
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
+      ],
       filtered: identity,
     }
 
@@ -1289,13 +1311,13 @@ describe('matchByLink', () => {
 
   it('should return ambiguous when fragment fails', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         linkHash: 'link-1',
         linkFragmentHash: 'frag-shared',
       }),
       candidates: [
-        makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-        makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
+        makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
+        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
       filtered: identity,
     }
@@ -1309,8 +1331,8 @@ describe('matchByLink', () => {
 
   it('should pass when no linkHash', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
-      candidates: [makeItem({ linkHash: 'link-1' })],
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
+      candidates: [makeExistingItem({ linkHash: 'link-1' })],
       filtered: identity,
     }
 
@@ -1320,9 +1342,9 @@ describe('matchByLink', () => {
 
 describe('matchByEnclosure', () => {
   it('should match single enclosure candidate', () => {
-    const candidate = makeItem({ enclosureHash: 'enc-1' })
+    const candidate = makeExistingItem({ enclosureHash: 'enc-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -1335,10 +1357,10 @@ describe('matchByEnclosure', () => {
 
   it('should return ambiguous when multiple matches', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [
-        makeItem({ id: 'a', enclosureHash: 'enc-1' }),
-        makeItem({ id: 'b', enclosureHash: 'enc-1' }),
+        makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
+        makeExistingItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
       filtered: identity,
     }
@@ -1352,8 +1374,8 @@ describe('matchByEnclosure', () => {
 
   it('should pass when no enclosureHash', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
-      candidates: [makeItem({ enclosureHash: 'enc-1' })],
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
+      candidates: [makeExistingItem({ enclosureHash: 'enc-1' })],
       filtered: identity,
     }
 
@@ -1363,9 +1385,9 @@ describe('matchByEnclosure', () => {
 
 describe('matchByTitle', () => {
   it('should match single title candidate', () => {
-    const candidate = makeItem({ titleHash: 'title-1' })
+    const candidate = makeExistingItem({ titleHash: 'title-1' })
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1' }),
       candidates: [candidate],
       filtered: identity,
     }
@@ -1378,10 +1400,10 @@ describe('matchByTitle', () => {
 
   it('should return ambiguous when multiple matches', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ titleHash: 'title-1' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1' }),
       candidates: [
-        makeItem({ id: 'a', titleHash: 'title-1' }),
-        makeItem({ id: 'b', titleHash: 'title-1' }),
+        makeExistingItem({ id: 'a', titleHash: 'title-1' }),
+        makeExistingItem({ id: 'b', titleHash: 'title-1' }),
       ],
       filtered: identity,
     }
@@ -1395,8 +1417,8 @@ describe('matchByTitle', () => {
 
   it('should pass when no titleHash', () => {
     const context: MatchStrategyContext = {
-      incoming: makeHashes({ guidHash: 'guid-1' }),
-      candidates: [makeItem({ titleHash: 'title-1' })],
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
+      candidates: [makeExistingItem({ titleHash: 'title-1' })],
       filtered: identity,
     }
 
@@ -1408,9 +1430,9 @@ describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on guid source', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: makeHashes({ enclosureHash: 'enc-new' }),
-      candidate: makeItem({ enclosureHash: 'enc-old' }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ enclosureHash: 'enc-new' }),
+      candidate: makeExistingItem({ enclosureHash: 'enc-old' }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({
@@ -1422,9 +1444,9 @@ describe('enclosureConflictFilter', () => {
   it('should reject when both sides have different enclosures on link source', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'link',
-      incoming: makeHashes({ enclosureHash: 'enc-new' }),
-      candidate: makeItem({ enclosureHash: 'enc-old' }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ enclosureHash: 'enc-new' }),
+      candidate: makeExistingItem({ enclosureHash: 'enc-old' }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({
@@ -1436,9 +1458,9 @@ describe('enclosureConflictFilter', () => {
   it('should allow when enclosures match', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: makeHashes({ enclosureHash: 'enc-same' }),
-      candidate: makeItem({ enclosureHash: 'enc-same' }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ enclosureHash: 'enc-same' }),
+      candidate: makeExistingItem({ enclosureHash: 'enc-same' }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1447,9 +1469,9 @@ describe('enclosureConflictFilter', () => {
   it('should allow when candidate has no enclosure', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: makeHashes({ enclosureHash: 'enc-new' }),
-      candidate: makeItem({ enclosureHash: null }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ enclosureHash: 'enc-new' }),
+      candidate: makeExistingItem({ enclosureHash: null }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1458,9 +1480,9 @@ describe('enclosureConflictFilter', () => {
   it('should allow when incoming has no enclosure', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: makeHashes(),
-      candidate: makeItem({ enclosureHash: 'enc-existing' }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem(),
+      candidate: makeExistingItem({ enclosureHash: 'enc-existing' }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1469,9 +1491,9 @@ describe('enclosureConflictFilter', () => {
   it('should allow when neither side has enclosure', () => {
     const value: CandidateFilterContext = {
       matchedBy: 'guid',
-      incoming: makeHashes(),
-      candidate: makeItem({ enclosureHash: null }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem(),
+      candidate: makeExistingItem({ enclosureHash: null }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1482,11 +1504,90 @@ describe('enclosureConflictFilter', () => {
   })
 })
 
+describe('dateProximityFilter', () => {
+  it('should allow match when dates are within threshold', () => {
+    const now = new Date()
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: threeDaysAgo }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should reject match when dates exceed threshold', () => {
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: thirtyDaysAgo }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+    const result = dateProximityFilter.evaluate(value)
+
+    expect(result.allow).toBe(false)
+  })
+
+  it('should allow match when incoming has no publishedAt', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem(),
+      candidate: makeExistingItem({ publishedAt: new Date() }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should allow match when candidate has no publishedAt', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: new Date() }),
+      candidate: makeExistingItem(),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should allow match when neither has publishedAt', () => {
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem(),
+      candidate: makeExistingItem(),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should respect custom dateProximityDays threshold', () => {
+    const now = new Date()
+    const twentyDaysAgo = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000)
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: twentyDaysAgo }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 30 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should only apply to guid matches', () => {
+    expect(dateProximityFilter.appliesTo).toEqual(['guid'])
+  })
+})
+
 describe('contentChangeFilter', () => {
   it('should update when title changes', () => {
     const value = {
-      existing: makeItem({ titleHash: 'title-1' }),
-      incoming: makeHashes({ titleHash: 'title-2' }),
+      existing: makeExistingItem({ titleHash: 'title-1' }),
+      incoming: makeIncomingItem({ titleHash: 'title-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1495,8 +1596,8 @@ describe('contentChangeFilter', () => {
 
   it('should update when summary changes', () => {
     const value = {
-      existing: makeItem({ summaryHash: 'sum-1' }),
-      incoming: makeHashes({ summaryHash: 'sum-2' }),
+      existing: makeExistingItem({ summaryHash: 'sum-1' }),
+      incoming: makeIncomingItem({ summaryHash: 'sum-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1505,8 +1606,8 @@ describe('contentChangeFilter', () => {
 
   it('should update when content changes', () => {
     const value = {
-      existing: makeItem({ contentHash: 'cnt-1' }),
-      incoming: makeHashes({ contentHash: 'cnt-2' }),
+      existing: makeExistingItem({ contentHash: 'cnt-1' }),
+      incoming: makeIncomingItem({ contentHash: 'cnt-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1515,8 +1616,8 @@ describe('contentChangeFilter', () => {
 
   it('should update when enclosure changes', () => {
     const value = {
-      existing: makeItem({ enclosureHash: 'enc-1' }),
-      incoming: makeHashes({ enclosureHash: 'enc-2' }),
+      existing: makeExistingItem({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: 'enc-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1525,13 +1626,13 @@ describe('contentChangeFilter', () => {
 
   it('should not update when all content hashes match', () => {
     const value = {
-      existing: makeItem({
+      existing: makeExistingItem({
         titleHash: 'title-1',
         summaryHash: 'sum-1',
         contentHash: 'cnt-1',
         enclosureHash: 'enc-1',
       }),
-      incoming: makeHashes({
+      incoming: makeIncomingItem({
         titleHash: 'title-1',
         summaryHash: 'sum-1',
         contentHash: 'cnt-1',
@@ -1545,8 +1646,8 @@ describe('contentChangeFilter', () => {
 
   it('should not update when null and undefined are compared', () => {
     const value = {
-      existing: makeItem({ titleHash: null, contentHash: null }),
-      incoming: makeHashes(),
+      existing: makeExistingItem({ titleHash: null, contentHash: null }),
+      incoming: makeIncomingItem(),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1555,8 +1656,8 @@ describe('contentChangeFilter', () => {
 
   it('should ignore non-content hashes', () => {
     const value = {
-      existing: makeItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
-      incoming: makeHashes({ guidHash: 'guid-2', linkHash: 'link-2' }),
+      existing: makeExistingItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-2', linkHash: 'link-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
@@ -1566,7 +1667,7 @@ describe('contentChangeFilter', () => {
 
 describe('applyCandidateFilters', () => {
   it('should return all candidates when no filters apply', () => {
-    const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
+    const candidates = [makeExistingItem({ id: 'a' }), makeExistingItem({ id: 'b' })]
     const filter: CandidateFilter = {
       name: 'irrelevant',
       appliesTo: ['enclosure'],
@@ -1578,8 +1679,8 @@ describe('applyCandidateFilters', () => {
       candidates,
       matchedBy: 'guid',
       filters: [filter],
-      incoming: makeHashes(),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem(),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
 
     expect(value).toEqual(candidates)
@@ -1587,15 +1688,15 @@ describe('applyCandidateFilters', () => {
 
   it('should filter candidates using applicable filter', () => {
     const candidates = [
-      makeItem({ id: 'a', enclosureHash: 'enc-1' }),
-      makeItem({ id: 'b', enclosureHash: 'enc-2' }),
+      makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
+      makeExistingItem({ id: 'b', enclosureHash: 'enc-2' }),
     ]
     const value = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [enclosureConflictFilter],
-      incoming: makeHashes({ enclosureHash: 'enc-1' }),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
     const expected = [candidates[0]]
 
@@ -1610,13 +1711,13 @@ describe('applyCandidateFilters', () => {
         return { allow: false, reason: 'blocked' }
       },
     }
-    const candidates = [makeItem({ id: 'a' })]
+    const candidates = [makeExistingItem({ id: 'a' })]
     const value = applyCandidateFilters({
       candidates,
       matchedBy: 'title',
       filters: [filter],
-      incoming: makeHashes(),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem(),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
 
     expect(value).toEqual([])
@@ -1641,13 +1742,17 @@ describe('applyCandidateFilters', () => {
           : { allow: true }
       },
     }
-    const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })]
+    const candidates = [
+      makeExistingItem({ id: 'a' }),
+      makeExistingItem({ id: 'b' }),
+      makeExistingItem({ id: 'c' }),
+    ]
     const value = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [filterA, filterB],
-      incoming: makeHashes(),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem(),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
     const expected = [candidates[0]]
 
@@ -1662,13 +1767,13 @@ describe('applyCandidateFilters', () => {
         return { allow: false, reason: 'blocked' }
       },
     }
-    const candidates = [makeItem({ id: 'a' }), makeItem({ id: 'b' })]
+    const candidates = [makeExistingItem({ id: 'a' }), makeExistingItem({ id: 'b' })]
     const value = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [filter],
-      incoming: makeHashes(),
-      matchPolicy: { linkReliable: true },
+      incoming: makeIncomingItem(),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
 
     expect(value).toEqual([])
@@ -1684,9 +1789,9 @@ describe('applyCandidateFilters', () => {
         return { allow: true }
       },
     }
-    const candidate = makeItem({ id: 'a' })
-    const incoming = makeHashes({ guidHash: 'guid-1' })
-    const matchPolicy: MatchPolicy = { linkReliable: false }
+    const candidate = makeExistingItem({ id: 'a' })
+    const incoming = makeIncomingItem({ guidHash: 'guid-1' })
+    const matchPolicy: MatchPolicy = { linkReliable: false, dateProximityDays: 7 }
     applyCandidateFilters({
       candidates: [candidate],
       matchedBy: 'link',

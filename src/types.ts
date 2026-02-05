@@ -9,6 +9,7 @@ export type NewItem = {
   summary?: string
   content?: string
   enclosures?: Array<{ url?: string; isDefault?: boolean }>
+  publishedAt?: Date
 }
 
 export type ItemHashes = {
@@ -26,6 +27,7 @@ export type IncomingItem = NewItem & ItemHashes
 
 export type ExistingItem = ItemHashes & {
   id: string
+  publishedAt?: Date
 }
 
 export type FingerprintedItem = IncomingItem & {
@@ -104,6 +106,7 @@ export type MatchStrategy = {
 
 export type MatchPolicy = {
   linkReliable: boolean
+  dateProximityDays: number
 }
 
 export type InsertAction = {

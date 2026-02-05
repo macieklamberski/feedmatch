@@ -19,7 +19,7 @@ import type {
 
 // Compute stats for a single signal from a set of hash values.
 export const computeSignalStats = (values: Array<string | null>): FeedProfileStats => {
-  const present = values.filter((v): v is string => v != null)
+  const present = values.filter((value): value is string => value != null)
   const distinct = new Set(present).size
 
   return {
@@ -78,6 +78,34 @@ export const enclosureConflictFilter: CandidateFilter = {
   },
 }
 
+// Rejects GUID matches when dates are too far apart. Fixes the GUID reuse
+// blind spot where feeds reuse a GUID months later for different content.
+// Allows match if either side lacks publishedAt (backward compatible).
+export const dateProximityFilter: CandidateFilter = {
+  name: 'dateProximity',
+  appliesTo: ['guid'],
+  evaluate: (context) => {
+    const incomingDate = context.incoming.publishedAt
+    const candidateDate = context.candidate.publishedAt
+
+    if (!incomingDate || !candidateDate) {
+      return { allow: true }
+    }
+
+    const msDiff = Math.abs(incomingDate.getTime() - candidateDate.getTime())
+    const daysDiff = msDiff / (1000 * 60 * 60 * 24)
+
+    if (daysDiff > context.matchPolicy.dateProximityDays) {
+      return {
+        allow: false,
+        reason: `Date difference ${Math.round(daysDiff)}d exceeds ${context.matchPolicy.dateProximityDays}d`,
+      }
+    }
+
+    return { allow: true }
+  },
+}
+
 // Updates only when content hashes differ between existing and incoming.
 // Compares all isContent hashes (title, summary, content, enclosure).
 export const contentChangeFilter: UpdateFilter = {
@@ -93,7 +121,10 @@ export const contentChangeFilter: UpdateFilter = {
 }
 
 export const prematchCandidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
-export const classifyCandidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
+export const classifyCandidateFilters: Array<CandidateFilter> = [
+  enclosureConflictFilter,
+  dateProximityFilter,
+]
 export const updateFilters: Array<UpdateFilter> = [contentChangeFilter]
 
 // Apply all applicable candidate filters to a candidate list for a given source.
@@ -127,11 +158,14 @@ export const applyCandidateFilters = ({
   return result
 }
 
-// Returns true when link is the item's only strong identifier
-// (no guid, no enclosure). Link-only items always get link matching
-// even on low-uniqueness channels.
-export const isLinkOnly = (hashes: ItemHashes): boolean => {
-  return !!hashes.linkHash && !hashes.guidHash && !hashes.enclosureHash
+// Returns true when link is the item's only strong identifier.
+// Link-only items always get link matching even on low-uniqueness channels.
+export const hasLinkOnly = (item: IncomingItem | ExistingItem): boolean => {
+  if (!item.linkHash) {
+    return false
+  }
+
+  return !hashMeta.some((meta) => meta.isStrongHash && meta.key !== 'linkHash' && item[meta.key])
 }
 
 // In-memory filter: returns all existing items where any matchable hash matches.
@@ -325,13 +359,17 @@ export const highUniquenessStrategies: Array<MatchStrategy> = [
 export const lowUniquenessStrategies: Array<MatchStrategy> = [
   { execute: matchByGuid },
   { execute: matchByEnclosure },
-  { execute: matchByLink, gate: ({ incoming }) => isLinkOnly(incoming) },
+  { execute: matchByLink, gate: ({ incoming }) => hasLinkOnly(incoming) },
   { execute: matchByTitle, gate: ({ incoming }) => !hasStrongHash(incoming) },
 ]
 
-export const computeMatchPolicy = (feedProfile: FeedProfile): MatchPolicy => {
+export const computeMatchPolicy = (
+  feedProfile: FeedProfile,
+  options?: { dateProximityDays?: number },
+): MatchPolicy => {
   return {
     linkReliable: feedProfile.link.effective.uniquenessRate >= 0.95,
+    dateProximityDays: options?.dateProximityDays ?? 7,
   }
 }
 
