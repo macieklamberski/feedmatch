@@ -7,6 +7,7 @@ import {
 } from './hashes.js'
 import {
   classifyCandidateFilters,
+  computeMatchPolicy,
   findMatchCandidates,
   prematchCandidateFilters,
   selectMatchingItem,
@@ -88,6 +89,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   // classification. Uses raw (not deduped) incoming hashes; duplicates
   // lower uniqueness slightly, which is conservative (fewer link matches).
   const feedProfile = computeFeedProfile(existingItems, incomingItems)
+  const matchPolicy = computeMatchPolicy(feedProfile)
 
   // Pre-match: find existing items that are true updates and exclude them
   // from the level collision set. A match is "strong enough" when it's by
@@ -102,7 +104,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
     const result = selectMatchingItem({
       incoming: incomingItem,
       candidates,
-      feedProfile,
+      matchPolicy,
       candidateFilters: prematchCandidateFilters,
     })
 
@@ -173,7 +175,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
     const result = selectMatchingItem({
       incoming: item,
       candidates: levelFilteredCandidates,
-      feedProfile,
+      matchPolicy,
       candidateFilters: classifyCandidateFilters,
     })
 

@@ -8,6 +8,7 @@ import type {
   IncomingItem,
   ItemHashes,
   MatchedBy,
+  MatchPolicy,
   MatchResult,
   MatchStrategy,
   MatchStrategyContext,
@@ -58,13 +59,13 @@ export const applyCandidateFilters = ({
   matchedBy,
   filters,
   incoming,
-  channel,
+  matchPolicy,
 }: {
   candidates: Array<ExistingItem>
   matchedBy: MatchedBy
   filters: Array<CandidateFilter>
   incoming: IncomingItem
-  channel: { linkUniquenessRate: number }
+  matchPolicy: MatchPolicy
 }): Array<ExistingItem> => {
   let result = candidates
 
@@ -74,7 +75,7 @@ export const applyCandidateFilters = ({
     }
 
     result = result.filter((candidate) => {
-      const context: CandidateFilterContext = { matchedBy, incoming, candidate, channel }
+      const context: CandidateFilterContext = { matchedBy, incoming, candidate, matchPolicy }
       return filter.evaluate(context).allow
     })
   }
@@ -284,10 +285,14 @@ export const lowUniquenessStrategies: Array<MatchStrategy> = [
   { execute: matchByTitle, gate: ({ incoming }) => !hasStrongHash(incoming) },
 ]
 
-export const resolveStrategies = (feedProfile: FeedProfile): Array<MatchStrategy> => {
-  return feedProfile.link.effective.uniquenessRate >= 0.95
-    ? highUniquenessStrategies
-    : lowUniquenessStrategies
+export const computeMatchPolicy = (feedProfile: FeedProfile): MatchPolicy => {
+  return {
+    linkReliable: feedProfile.link.effective.uniquenessRate >= 0.95,
+  }
+}
+
+export const resolveStrategies = (policy: MatchPolicy): Array<MatchStrategy> => {
+  return policy.linkReliable ? highUniquenessStrategies : lowUniquenessStrategies
 }
 
 // Priority-based match selection with configurable strategy ordering.
@@ -296,26 +301,21 @@ export const resolveStrategies = (feedProfile: FeedProfile): Array<MatchStrategy
 export const selectMatchingItem = ({
   incoming,
   candidates,
-  feedProfile,
+  matchPolicy,
   candidateFilters,
-  strategies = resolveStrategies(feedProfile),
 }: {
   incoming: IncomingItem
   candidates: Array<ExistingItem>
-  feedProfile: FeedProfile
+  matchPolicy: MatchPolicy
   candidateFilters: Array<CandidateFilter>
-  strategies?: Array<MatchStrategy>
 }): MatchResult | undefined => {
-  const linkUniquenessRate = feedProfile.link.effective.uniquenessRate
-  const channel = { linkUniquenessRate }
-
   const filtered = (matchedBy: MatchedBy, candidates: Array<ExistingItem>): Array<ExistingItem> => {
     return applyCandidateFilters({
       candidates,
       matchedBy,
       filters: candidateFilters,
       incoming,
-      channel,
+      matchPolicy,
     })
   }
 
@@ -323,6 +323,7 @@ export const selectMatchingItem = ({
     return
   }
 
+  const strategies = resolveStrategies(matchPolicy)
   const context: MatchStrategyContext = { incoming, candidates, filtered }
 
   for (const strategy of strategies) {

@@ -78,6 +78,10 @@ export type MatchStrategy = {
   gate?: (context: MatchStrategyGateContext) => boolean
 }
 
+export type MatchPolicy = {
+  linkReliable: boolean
+}
+
 export type InsertAction = {
   item: IncomingItem
   fingerprintHash: string
@@ -94,7 +98,7 @@ export type CandidateFilterContext = {
   matchedBy: MatchedBy
   incoming: IncomingItem
   candidate: ExistingItem
-  channel: { linkUniquenessRate: number }
+  matchPolicy: MatchPolicy
 }
 
 export type CandidateFilterResult = { allow: true } | { allow: false; reason: string }

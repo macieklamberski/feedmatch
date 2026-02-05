@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   applyCandidateFilters,
   classifyCandidateFilters,
+  computeMatchPolicy,
   contentChangeFilter,
   enclosureConflictFilter,
   findMatchCandidates,
@@ -22,6 +23,7 @@ import type {
   ExistingItem,
   ItemHashes,
   MatchedBy,
+  MatchPolicy,
   MatchResult,
   MatchStrategyContext,
 } from './types.js'
@@ -245,7 +247,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -256,7 +258,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -274,7 +276,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', guidHash: 'guid-1' }),
         makeItem({ id: 'b', guidHash: 'guid-1' }),
       ],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -289,7 +291,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-1',
       }),
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -305,7 +307,7 @@ describe('selectMatchingItem', () => {
         linkHash: 'link-1',
       }),
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -321,7 +323,7 @@ describe('selectMatchingItem', () => {
         guidFragmentHash: 'gf-1',
       }),
       candidates: [target, makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -339,7 +341,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
         makeItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
       ],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -356,7 +358,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-shared' }),
         makeItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-shared' }),
       ],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -370,7 +372,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [makeItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -384,7 +386,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-same',
       }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -403,7 +405,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -419,7 +421,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ guidHash: 'guid-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -435,7 +437,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -453,7 +455,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [makeItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -467,7 +469,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-same',
       }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -486,7 +488,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -505,7 +507,7 @@ describe('selectMatchingItem', () => {
         linkFragmentHash: 'frag-1',
       }),
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
@@ -523,7 +525,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -537,7 +539,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' }),
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
       ],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -549,7 +551,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -571,7 +573,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-1',
       }),
       candidates,
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -589,7 +591,7 @@ describe('selectMatchingItem', () => {
         guidHash: 'guid-x',
       }),
       candidates: [makeItem({ linkHash: 'link-1' })],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -600,7 +602,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ linkHash: 'link-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -619,7 +621,7 @@ describe('selectMatchingItem', () => {
         linkFragmentHash: 'frag-1',
       }),
       candidates: [target, makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' })],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
@@ -637,7 +639,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
         makeItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -649,7 +651,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ titleHash: 'title-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -667,7 +669,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', titleHash: 'title-1' }),
         makeItem({ id: 'b', titleHash: 'title-1' }),
       ],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
@@ -680,7 +682,7 @@ describe('selectMatchingItem', () => {
         titleHash: 'title-1',
       }),
       candidates: [makeItem({ titleHash: 'title-1' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -691,7 +693,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ summaryHash: 'sum-1' }),
       candidates: [makeItem({ summaryHash: 'sum-1' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -702,7 +704,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ contentHash: 'cnt-1' }),
       candidates: [makeItem({ contentHash: 'cnt-1' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -718,7 +720,7 @@ describe('selectMatchingItem', () => {
         linkHash: 'link-1',
       }),
       candidates: [guidCandidate, linkCandidate],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -738,7 +740,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-1',
       }),
       candidates: [linkCandidate, encCandidate],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -761,7 +763,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
         makeItem({ id: 'c', guidHash: 'guid-1', enclosureHash: null }),
       ],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -776,7 +778,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      feedProfile: makeFeedProfile(0.98),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -788,7 +790,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: candidate, matchedBy: 'enclosure' }
@@ -803,7 +805,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -817,7 +819,7 @@ describe('selectMatchingItem', () => {
         makeItem({ id: 'a', linkHash: 'link-1' }),
         makeItem({ id: 'b', linkHash: 'link-1' }),
       ],
-      feedProfile: makeFeedProfile(0.3),
+      matchPolicy: { linkReliable: false },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -828,34 +830,48 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeHashes({ guidHash: 'guid-x' }),
       candidates: [makeItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
-      feedProfile: makeFeedProfile(1.0),
+      matchPolicy: { linkReliable: true },
       candidateFilters: classifyCandidateFilters,
     }
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 })
 
-describe('resolveStrategies', () => {
-  it('should return high uniqueness strategies when rate is 1.0', () => {
+describe('computeMatchPolicy', () => {
+  it('should set linkReliable to true when rate is 1.0', () => {
     const value = makeFeedProfile(1.0)
 
-    expect(resolveStrategies(value)).toBe(highUniquenessStrategies)
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true })
   })
 
-  it('should return high uniqueness strategies when rate is exactly 0.95', () => {
+  it('should set linkReliable to true when rate is exactly 0.95', () => {
     const value = makeFeedProfile(0.95)
 
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true })
+  })
+
+  it('should set linkReliable to false when rate is below 0.95', () => {
+    const value = makeFeedProfile(0.94)
+
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false })
+  })
+
+  it('should set linkReliable to false when rate is 0', () => {
+    const value = makeFeedProfile(0)
+
+    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false })
+  })
+})
+
+describe('resolveStrategies', () => {
+  it('should return high uniqueness strategies when link is reliable', () => {
+    const value: MatchPolicy = { linkReliable: true }
+
     expect(resolveStrategies(value)).toBe(highUniquenessStrategies)
   })
 
-  it('should return low uniqueness strategies when rate is below 0.95', () => {
-    const value = makeFeedProfile(0.94)
-
-    expect(resolveStrategies(value)).toBe(lowUniquenessStrategies)
-  })
-
-  it('should return low uniqueness strategies when rate is 0', () => {
-    const value = makeFeedProfile(0)
+  it('should return low uniqueness strategies when link is not reliable', () => {
+    const value: MatchPolicy = { linkReliable: false }
 
     expect(resolveStrategies(value)).toBe(lowUniquenessStrategies)
   })
@@ -1114,7 +1130,7 @@ describe('enclosureConflictFilter', () => {
       matchedBy: 'guid',
       incoming: makeHashes({ enclosureHash: 'enc-new' }),
       candidate: makeItem({ enclosureHash: 'enc-old' }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({
@@ -1128,7 +1144,7 @@ describe('enclosureConflictFilter', () => {
       matchedBy: 'link',
       incoming: makeHashes({ enclosureHash: 'enc-new' }),
       candidate: makeItem({ enclosureHash: 'enc-old' }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({
@@ -1142,7 +1158,7 @@ describe('enclosureConflictFilter', () => {
       matchedBy: 'guid',
       incoming: makeHashes({ enclosureHash: 'enc-same' }),
       candidate: makeItem({ enclosureHash: 'enc-same' }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1153,7 +1169,7 @@ describe('enclosureConflictFilter', () => {
       matchedBy: 'guid',
       incoming: makeHashes({ enclosureHash: 'enc-new' }),
       candidate: makeItem({ enclosureHash: null }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1164,7 +1180,7 @@ describe('enclosureConflictFilter', () => {
       matchedBy: 'guid',
       incoming: makeHashes(),
       candidate: makeItem({ enclosureHash: 'enc-existing' }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1175,7 +1191,7 @@ describe('enclosureConflictFilter', () => {
       matchedBy: 'guid',
       incoming: makeHashes(),
       candidate: makeItem({ enclosureHash: null }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     }
 
     expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
@@ -1283,7 +1299,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filter],
       incoming: makeHashes(),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     })
 
     expect(value).toEqual(candidates)
@@ -1299,7 +1315,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [enclosureConflictFilter],
       incoming: makeHashes({ enclosureHash: 'enc-1' }),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     })
     const expected = [candidates[0]]
 
@@ -1320,7 +1336,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'title',
       filters: [filter],
       incoming: makeHashes(),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     })
 
     expect(value).toEqual([])
@@ -1351,7 +1367,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filterA, filterB],
       incoming: makeHashes(),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     })
     const expected = [candidates[0]]
 
@@ -1372,7 +1388,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filter],
       incoming: makeHashes(),
-      channel: { linkUniquenessRate: 1.0 },
+      matchPolicy: { linkReliable: true },
     })
 
     expect(value).toEqual([])
@@ -1389,19 +1405,23 @@ describe('applyCandidateFilters', () => {
       },
     }
     const candidate = makeItem({ id: 'a' })
-    const hashes = makeHashes({ guidHash: 'guid-1' })
+    const incoming = makeHashes({ guidHash: 'guid-1' })
+    const matchPolicy: MatchPolicy = { linkReliable: false }
     applyCandidateFilters({
       candidates: [candidate],
       matchedBy: 'link',
       filters: [filter],
-      incoming: hashes,
-      channel: { linkUniquenessRate: 0.5 },
+      incoming,
+      matchPolicy,
     })
+    const expected: CandidateFilterContext = {
+      matchedBy: 'link',
+      incoming,
+      candidate,
+      matchPolicy,
+    }
 
     expect(contexts).toHaveLength(1)
-    expect(contexts[0].matchedBy).toBe('link')
-    expect(contexts[0].incoming).toBe(hashes)
-    expect(contexts[0].candidate).toBe(candidate)
-    expect(contexts[0].channel.linkUniquenessRate).toBe(0.5)
+    expect(contexts[0]).toEqual(expected)
   })
 })
