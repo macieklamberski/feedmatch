@@ -1,5 +1,4 @@
 import { signalHashKeys } from './constants.js'
-import { isDefined } from './hashes.js'
 import type { ExistingItem, IncomingItem } from './types.js'
 
 export type SignalStats = {
@@ -28,7 +27,7 @@ export type FeedProfile = {
 
 // Compute stats for a single signal from a set of hash values.
 export const computeSignalStats = (values: Array<string | null>): SignalStats => {
-  const present = values.filter(isDefined)
+  const present = values.filter((value): value is string => value != null)
   const distinct = new Set(present).size
 
   return {

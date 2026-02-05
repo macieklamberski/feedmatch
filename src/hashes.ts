@@ -17,10 +17,6 @@ export const generateHash = (...values: Array<string | null | undefined>) => {
   return createHash('sha256').update(values.join('\0')).digest('hex').slice(0, 32)
 }
 
-export const isDefined = <T>(value: T | null | undefined): value is T => {
-  return value != null
-}
-
 export const hasStrongHash = (hashes: ItemHashes): boolean => {
   return hashMeta.some((meta) => meta.isStrongHash && hashes[meta.key])
 }
