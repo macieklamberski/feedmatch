@@ -51,6 +51,30 @@ export type FingerprintLevelMeta = {
   tag: string
 }
 
+export type FeedProfileStats = {
+  present: number
+  total: number
+  presenceRate: number
+  distinct: number
+  uniquenessRate: number
+}
+
+export type FeedProfileSignal = {
+  existing: FeedProfileStats
+  incoming: FeedProfileStats
+  effective: {
+    presenceRate: number
+    uniquenessRate: number
+  }
+}
+
+export type FeedProfile = {
+  guid: FeedProfileSignal
+  link: FeedProfileSignal
+  enclosure: FeedProfileSignal
+  title: FeedProfileSignal
+}
+
 export type MatchedBy = 'guid' | 'link' | 'enclosure' | 'title'
 
 export type MatchResult = {

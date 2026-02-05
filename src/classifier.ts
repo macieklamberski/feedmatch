@@ -7,13 +7,13 @@ import {
 } from './hashes.js'
 import {
   classifyCandidateFilters,
+  computeFeedProfile,
   computeMatchPolicy,
   findMatchCandidates,
   prematchCandidateFilters,
   selectMatchingItem,
   updateFilters,
 } from './matching.js'
-import { computeFeedProfile } from './profile.js'
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
