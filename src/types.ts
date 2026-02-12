@@ -25,14 +25,14 @@ export type ItemHashes = {
   enclosureHash: string | null
 }
 
-export type IncomingItem = NewItem & ItemHashes
+export type IncomingItem<T extends NewItem = NewItem> = T & ItemHashes
 
 export type ExistingItem = ItemHashes & {
   id: ItemIdLike
   publishedAt?: Date
 }
 
-export type FingerprintedItem = IncomingItem & {
+export type FingerprintedItem<T extends NewItem = NewItem> = IncomingItem<T> & {
   fingerprint: string
 }
 
@@ -111,13 +111,13 @@ export type MatchPolicy = {
   dateProximityDays: number
 }
 
-export type InsertAction = {
-  item: IncomingItem
+export type InsertAction<T extends NewItem = NewItem> = {
+  item: IncomingItem<T>
   fingerprintHash: string
 }
 
-export type UpdateAction = {
-  item: IncomingItem
+export type UpdateAction<T extends NewItem = NewItem> = {
+  item: IncomingItem<T>
   fingerprintHash: string
   existingItemId: ItemIdLike
   matchedBy: MatchedBy
@@ -149,14 +149,14 @@ export type UpdateFilter = {
   shouldUpdate: (context: UpdateFilterContext) => boolean
 }
 
-export type ClassifyItemsInput = {
-  newItems: Array<NewItem>
+export type ClassifyItemsInput<T extends NewItem = NewItem> = {
+  newItems: Array<T>
   existingItems: Array<ExistingItem>
   fingerprintLevel?: FingerprintLevel
 }
 
-export type ClassifyItemsResult = {
-  inserts: Array<InsertAction>
-  updates: Array<UpdateAction>
+export type ClassifyItemsResult<T extends NewItem = NewItem> = {
+  inserts: Array<InsertAction<T>>
+  updates: Array<UpdateAction<T>>
   fingerprintLevel: FingerprintLevel
 }

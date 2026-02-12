@@ -40,17 +40,19 @@ export const scoreItem = (hashes: ItemHashes): number => {
   return score
 }
 
-export const composeIncomingItems = (items: Array<NewItem>): Array<IncomingItem> => {
+export const composeIncomingItems = <T extends NewItem>(
+  items: Array<T>,
+): Array<IncomingItem<T>> => {
   return items.map((item) => ({ ...item, ...computeItemHashes(item) }))
 }
 
 // Build fingerprints for all hashed items at a given level.
 // Items that produce no fingerprint (no hashes in prefix) are dropped.
-export const buildFingerprints = (
-  items: Array<IncomingItem>,
+export const buildFingerprints = <T extends NewItem>(
+  items: Array<IncomingItem<T>>,
   level: FingerprintLevel,
-): Array<FingerprintedItem> => {
-  const result: Array<FingerprintedItem> = []
+): Array<FingerprintedItem<T>> => {
+  const result: Array<FingerprintedItem<T>> = []
 
   for (const item of items) {
     const fingerprint = buildFingerprint(item, level)
@@ -63,10 +65,10 @@ export const buildFingerprints = (
   return result
 }
 
-export const deduplicateItemsByFingerprint = (
-  items: Array<FingerprintedItem>,
-): Array<FingerprintedItem> => {
-  const bestByFingerprint = new Map<string, FingerprintedItem>()
+export const deduplicateItemsByFingerprint = <T extends NewItem>(
+  items: Array<FingerprintedItem<T>>,
+): Array<FingerprintedItem<T>> => {
+  const bestByFingerprint = new Map<string, FingerprintedItem<T>>()
 
   for (const item of items) {
     const existing = bestByFingerprint.get(item.fingerprint)
@@ -81,7 +83,9 @@ export const deduplicateItemsByFingerprint = (
 
 // Classify new items against existing items into inserts/updates.
 // Uses level-based fingerprinting with auto-computed level when not provided.
-export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult => {
+export const classifyItems = <T extends NewItem>(
+  input: ClassifyItemsInput<T>,
+): ClassifyItemsResult<T> => {
   const { newItems, existingItems, fingerprintLevel: inputLevel } = input
 
   const incomingItems = composeIncomingItems(newItems)
@@ -159,11 +163,12 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   const deduplicatedItems = deduplicateItemsByFingerprint(fingerprintedItems)
 
   // Classify against existing items.
-  const inserts: Array<InsertAction> = []
-  const updates: Array<UpdateAction> = []
+  const inserts: Array<InsertAction<T>> = []
+  const updates: Array<UpdateAction<T>> = []
 
   for (const fingerprintedItem of deduplicatedItems) {
-    const { fingerprint, ...item } = fingerprintedItem
+    const { fingerprint, ...rest } = fingerprintedItem
+    const item = rest as IncomingItem<T>
     const fingerprintHash = generateHash(fingerprint)
     const candidates = findMatchCandidates(item, existingItems)
 
