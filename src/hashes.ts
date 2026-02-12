@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { fingerprintLevelMeta, hashMeta } from './constants.js'
+import { fingerprintMeta, hashMeta } from './constants.js'
 import type { FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
@@ -27,8 +27,8 @@ export const buildFingerprint = (
   hashes: ItemHashes,
   level: FingerprintLevel,
 ): string | undefined => {
-  const levelIndex = fingerprintLevelMeta.findIndex((entry) => entry.level === level)
-  const prefix = fingerprintLevelMeta.slice(0, levelIndex + 1)
+  const levelIndex = fingerprintMeta.findIndex((entry) => entry.level === level)
+  const prefix = fingerprintMeta.slice(0, levelIndex + 1)
 
   const hasAny = prefix.some((entry) => hashes[entry.key])
 
@@ -51,7 +51,7 @@ export const resolveFingerprintLevel = (
 ): FingerprintLevel => {
   // Count items identifiable at max level (title). A valid level must identify
   // the same number — otherwise some items become unidentifiable.
-  const maxLevel = fingerprintLevelMeta[fingerprintLevelMeta.length - 1].level
+  const maxLevel = fingerprintMeta[fingerprintMeta.length - 1].level
   const maxIdentifiable = allItemHashes.filter(
     (hashes) => buildFingerprint(hashes, maxLevel) !== undefined,
   ).length
@@ -61,11 +61,11 @@ export const resolveFingerprintLevel = (
   }
 
   const startIndex = currentLevel
-    ? fingerprintLevelMeta.findIndex((entry) => entry.level === currentLevel)
+    ? fingerprintMeta.findIndex((entry) => entry.level === currentLevel)
     : 0
 
-  for (let index = startIndex; index < fingerprintLevelMeta.length; index++) {
-    const level = fingerprintLevelMeta[index].level
+  for (let index = startIndex; index < fingerprintMeta.length; index++) {
+    const level = fingerprintMeta[index].level
     const keys = new Set<string>()
     let hasCollision = false
 

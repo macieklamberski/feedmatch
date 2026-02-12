@@ -9,7 +9,7 @@ import {
 } from './normalize.js'
 import type {
   FingerprintLevel,
-  FingerprintLevelMeta,
+  FingerprintMeta,
   HashKey,
   HashMeta,
   ItemHashes,
@@ -26,7 +26,7 @@ export const fingerprintLevels = [
 ] as const
 
 // Single source of truth for hash key metadata.
-// Order determines fingerprintLevelMeta derivation order.
+// Order determines fingerprintMeta derivation order.
 export const hashMeta: Array<HashMeta> = [
   {
     key: 'guidHash',
@@ -109,7 +109,7 @@ export const hashMeta: Array<HashMeta> = [
 ]
 
 // Derived from hashMeta — entries with level form the fingerprint level metadata.
-export const fingerprintLevelMeta: Array<FingerprintLevelMeta> = hashMeta
+export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
   .filter((meta): meta is HashMeta & { level: FingerprintLevel } => {
     return meta.level !== undefined
   })

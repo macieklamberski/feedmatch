@@ -49,7 +49,7 @@ export type HashMeta = {
   level?: FingerprintLevel
 }
 
-export type FingerprintLevelMeta = {
+export type FingerprintMeta = {
   level: FingerprintLevel
   key: HashKey
   tag: string
@@ -139,8 +139,8 @@ export type CandidateFilter = {
 }
 
 export type UpdateFilterContext = {
-  existing: ExistingItem
   incoming: IncomingItem
+  existing: ExistingItem
   matchedBy: MatchedBy
 }
 

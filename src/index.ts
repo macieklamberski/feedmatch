@@ -4,7 +4,7 @@ export {
   composeIncomingItems as computeAllHashes,
   deduplicateItemsByFingerprint,
 } from './classifier.js'
-export { fingerprintLevelMeta, fingerprintLevels } from './constants.js'
+export { fingerprintLevels, fingerprintMeta } from './constants.js'
 export {
   buildFingerprint,
   computeItemHashes,
