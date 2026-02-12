@@ -158,7 +158,7 @@ export const applyCandidateFilters = ({
   return result
 }
 
-// Returns true when link is the item's only strong identifier.
+// Returns true when link is the item's only strong fingerprint.
 // Link-only items always get link matching even on low-uniqueness channels.
 export const hasLinkOnly = (item: IncomingItem | ExistingItem): boolean => {
   if (!item.linkHash) {

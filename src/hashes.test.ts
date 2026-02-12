@@ -78,14 +78,14 @@ describe('buildFingerprint', () => {
     expect(buildFingerprint(value, 'title')).toBe(expected)
   })
 
-  it('should produce different identifiers for items with same link but different titles at depth=title', () => {
+  it('should produce different fingerprints for items with same link but different titles at depth=title', () => {
     const value1 = makeHashes({ linkHash: 'l1', titleHash: 't1' })
     const value2 = makeHashes({ linkHash: 'l1', titleHash: 't2' })
 
     expect(buildFingerprint(value1, 'title')).not.toBe(buildFingerprint(value2, 'title'))
   })
 
-  it('should produce same identifiers for items with same link but different titles at depth=link', () => {
+  it('should produce same fingerprints for items with same link but different titles at depth=link', () => {
     const value1 = makeHashes({ linkHash: 'l1', titleHash: 't1' })
     const value2 = makeHashes({ linkHash: 'l1', titleHash: 't2' })
 
@@ -193,7 +193,7 @@ describe('resolveFingerprintLevel', () => {
   })
 
   it('should skip rungs that identify no items', () => {
-    // Link-only items — guid produces no identifiers, should skip to link.
+    // Link-only items — guid produces no fingerprints, should skip to link.
     const values = [
       makeHashes({ linkHash: 'l1', titleHash: 't1' }),
       makeHashes({ linkHash: 'l2', titleHash: 't2' }),
