@@ -26,6 +26,7 @@ export type {
   IncomingItem,
   InsertAction,
   ItemHashes,
+  ItemIdLike,
   MatchedBy,
   NewItem,
   UpdateAction,

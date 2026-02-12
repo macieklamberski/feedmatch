@@ -22,6 +22,7 @@ import type {
   IncomingItem,
   InsertAction,
   ItemHashes,
+  ItemIdLike,
   NewItem,
   UpdateAction,
 } from './types.js'
@@ -97,7 +98,7 @@ export const classifyItems = (input: ClassifyItemsInput): ClassifyItemsResult =>
   // link match is only trusted when the max-level fingerprints agree (true
   // duplicate); a bare link match with different titles could be hub onset
   // and must stay in the collision set so the level can detect it.
-  const matchedExistingIds = new Set<string>()
+  const matchedExistingIds = new Set<ItemIdLike>()
 
   for (const incomingItem of incomingItems) {
     const candidates = findMatchCandidates(incomingItem, existingItems)

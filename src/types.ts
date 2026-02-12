@@ -2,6 +2,8 @@ import type { fingerprintLevels } from './constants.js'
 
 export type FingerprintLevel = (typeof fingerprintLevels)[number]
 
+export type ItemIdLike = string | number
+
 export type NewItem = {
   guid?: string
   link?: string
@@ -26,7 +28,7 @@ export type ItemHashes = {
 export type IncomingItem = NewItem & ItemHashes
 
 export type ExistingItem = ItemHashes & {
-  id: string
+  id: ItemIdLike
   publishedAt?: Date
 }
 
@@ -117,7 +119,7 @@ export type InsertAction = {
 export type UpdateAction = {
   item: IncomingItem
   fingerprintHash: string
-  existingItemId: string
+  existingItemId: ItemIdLike
   matchedBy: MatchedBy
 }
 
