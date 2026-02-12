@@ -22,42 +22,42 @@ const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
 }
 
 describe('buildFingerprint', () => {
-  it('should include only guid slot at depth=guid', () => {
+  it('should include only guid slot at level=guid', () => {
     const value = makeHashes({ guidHash: 'g1', linkHash: 'l1', titleHash: 't1' })
     const expected = 'g:g1'
 
     expect(buildFingerprint(value, 'guid')).toBe(expected)
   })
 
-  it('should include guid and guidFragment at depth=guidFragment', () => {
+  it('should include guid and guidFragment at level=guidFragment', () => {
     const value = makeHashes({ guidHash: 'g1', guidFragmentHash: 'gf1', linkHash: 'l1' })
     const expected = 'g:g1|gf:gf1'
 
     expect(buildFingerprint(value, 'guidFragment')).toBe(expected)
   })
 
-  it('should include up to link at depth=link', () => {
+  it('should include up to link at level=link', () => {
     const value = makeHashes({ guidHash: 'g1', linkHash: 'l1', titleHash: 't1' })
     const expected = 'g:g1|gf:|l:l1'
 
     expect(buildFingerprint(value, 'link')).toBe(expected)
   })
 
-  it('should include up to linkFragment at depth=linkFragment', () => {
+  it('should include up to linkFragment at level=linkFragment', () => {
     const value = makeHashes({ guidHash: 'g1', linkHash: 'l1', linkFragmentHash: 'lf1' })
     const expected = 'g:g1|gf:|l:l1|lf:lf1'
 
     expect(buildFingerprint(value, 'linkFragment')).toBe(expected)
   })
 
-  it('should include up to enclosure at depth=enclosure', () => {
+  it('should include up to enclosure at level=enclosure', () => {
     const value = makeHashes({ guidHash: 'g1', linkHash: 'l1', enclosureHash: 'e1' })
     const expected = 'g:g1|gf:|l:l1|lf:|e:e1'
 
     expect(buildFingerprint(value, 'enclosure')).toBe(expected)
   })
 
-  it('should include all six slots at depth=title', () => {
+  it('should include all six slots at level=title', () => {
     const value = makeHashes({
       guidHash: 'g1',
       guidFragmentHash: 'gf1',
@@ -78,28 +78,28 @@ describe('buildFingerprint', () => {
     expect(buildFingerprint(value, 'title')).toBe(expected)
   })
 
-  it('should produce different fingerprints for items with same link but different titles at depth=title', () => {
+  it('should produce different fingerprints for items with same link but different titles at level=title', () => {
     const value1 = makeHashes({ linkHash: 'l1', titleHash: 't1' })
     const value2 = makeHashes({ linkHash: 'l1', titleHash: 't2' })
 
     expect(buildFingerprint(value1, 'title')).not.toBe(buildFingerprint(value2, 'title'))
   })
 
-  it('should produce same fingerprints for items with same link but different titles at depth=link', () => {
+  it('should produce same fingerprints for items with same link but different titles at level=link', () => {
     const value1 = makeHashes({ linkHash: 'l1', titleHash: 't1' })
     const value2 = makeHashes({ linkHash: 'l1', titleHash: 't2' })
 
     expect(buildFingerprint(value1, 'link')).toBe(buildFingerprint(value2, 'link'))
   })
 
-  it('should ignore fragments at depth=link', () => {
+  it('should ignore fragments at level=link', () => {
     const value1 = makeHashes({ linkHash: 'l1', linkFragmentHash: 'lf1' })
     const value2 = makeHashes({ linkHash: 'l1', linkFragmentHash: 'lf2' })
 
     expect(buildFingerprint(value1, 'link')).toBe(buildFingerprint(value2, 'link'))
   })
 
-  it('should include fragments at depth=linkFragment', () => {
+  it('should include fragments at level=linkFragment', () => {
     const value1 = makeHashes({ linkHash: 'l1', linkFragmentHash: 'lf1' })
     const value2 = makeHashes({ linkHash: 'l1', linkFragmentHash: 'lf2' })
 
@@ -114,7 +114,7 @@ describe('buildFingerprint', () => {
     expect(buildFingerprint(value, 'title')).toBeUndefined()
   })
 
-  it('should return undefined when only hashes below the min rung exist', () => {
+  it('should return undefined when only hashes below the min level exist', () => {
     const value = makeHashes({ titleHash: 't1' })
 
     expect(buildFingerprint(value, 'link')).toBeUndefined()
@@ -122,7 +122,7 @@ describe('buildFingerprint', () => {
 })
 
 describe('resolveFingerprintLevel', () => {
-  it('should pick strongest collision-free rung for new channel', () => {
+  it('should pick strongest collision-free level for new channel', () => {
     const values = [
       makeHashes({ guidHash: 'g1', linkHash: 'l1', titleHash: 't1' }),
       makeHashes({ guidHash: 'g2', linkHash: 'l2', titleHash: 't2' }),
@@ -131,7 +131,7 @@ describe('resolveFingerprintLevel', () => {
     expect(resolveFingerprintLevel(values)).toBe('guid')
   })
 
-  it('should return current min rung unchanged when no collisions', () => {
+  it('should return current min level unchanged when no collisions', () => {
     const values = [
       makeHashes({ guidHash: 'g1', linkHash: 'l1' }),
       makeHashes({ guidHash: 'g2', linkHash: 'l2' }),
@@ -140,8 +140,8 @@ describe('resolveFingerprintLevel', () => {
     expect(resolveFingerprintLevel(values, 'link')).toBe('link')
   })
 
-  it('should downgrade when current min rung has collisions', () => {
-    // Same link → link collides → should move to a weaker rung.
+  it('should downgrade when current min level has collisions', () => {
+    // Same link → link collides → should move to a weaker level.
     const values = [
       makeHashes({ linkHash: 'l1', titleHash: 't1' }),
       makeHashes({ linkHash: 'l1', titleHash: 't2' }),
@@ -160,7 +160,7 @@ describe('resolveFingerprintLevel', () => {
   })
 
   it('should return title when collisions exist at all levels', () => {
-    // All rungs collide — identical hashes everywhere.
+    // All levels collide — identical hashes everywhere.
     const values = [
       makeHashes({ guidHash: 'g1', linkHash: 'l1', enclosureHash: 'e1', titleHash: 't1' }),
       makeHashes({ guidHash: 'g1', linkHash: 'l1', enclosureHash: 'e1', titleHash: 't1' }),
@@ -188,11 +188,11 @@ describe('resolveFingerprintLevel', () => {
     expect(resolveFingerprintLevel([])).toBe('title')
   })
 
-  it('should preserve current min rung on empty batch', () => {
+  it('should preserve current min level on empty batch', () => {
     expect(resolveFingerprintLevel([], 'guid')).toBe('guid')
   })
 
-  it('should skip rungs that identify no items', () => {
+  it('should skip levels that identify no items', () => {
     // Link-only items — guid produces no fingerprints, should skip to link.
     const values = [
       makeHashes({ linkHash: 'l1', titleHash: 't1' }),
@@ -202,8 +202,8 @@ describe('resolveFingerprintLevel', () => {
     expect(resolveFingerprintLevel(values)).toBe('link')
   })
 
-  it('should never upgrade above current min rung', () => {
-    // No collisions at guid, but current min rung is title — should stay at title.
+  it('should never upgrade above current min level', () => {
+    // No collisions at guid, but current min level is title — should stay at title.
     const values = [
       makeHashes({ guidHash: 'g1', linkHash: 'l1', titleHash: 't1' }),
       makeHashes({ guidHash: 'g2', linkHash: 'l2', titleHash: 't2' }),

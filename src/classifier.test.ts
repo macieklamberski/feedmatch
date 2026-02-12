@@ -466,7 +466,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should filter unidentifiable items without affecting floor', () => {
+    it('should filter unidentifiable items without affecting level', () => {
       const feedItem1 = { guid: 'guid-1', title: 'Post 1' }
       const feedItem2 = { content: 'Only content' }
       const feedItem3 = { guid: 'guid-2', title: 'Post 2' }
@@ -497,7 +497,7 @@ describe('classifyItems', () => {
         newItems: [{ guid: 'guid-1', title: 'Post' }],
         existingItems: [],
         // @ts-expect-error: This is for testing purposes.
-        fingerprintLevel: 'not-a-rung',
+        fingerprintLevel: 'not-a-level',
       }
       const throwing = () => classifyItems(value)
 
@@ -532,7 +532,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should not downgrade floor due to duplicate new items', () => {
+    it('should not downgrade level due to duplicate new items', () => {
       const feedItem = { guid: 'guid-1', title: 'Post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem, feedItem],
@@ -763,8 +763,8 @@ describe('classifyItems', () => {
     })
   })
 
-  describe('floor computation', () => {
-    it('should downgrade fingerprintLevel when collisions exist at input depth', () => {
+  describe('level computation', () => {
+    it('should downgrade fingerprintLevel when collisions exist at input level', () => {
       const feedItemA = { link: 'https://example.com/shared', title: 'Post A' }
       const feedItemB = { link: 'https://example.com/shared', title: 'Post B' }
       const value: ClassifyItemsInput = {
@@ -790,7 +790,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should preserve fingerprintLevel when floor is stable', () => {
+    it('should preserve fingerprintLevel when level is stable', () => {
       const feedItem1 = { guid: 'guid-1', title: 'Post 1' }
       const feedItem2 = { guid: 'guid-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -816,7 +816,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should produce distinct fingerprintHashes for hub new items with shared link and floor=title', () => {
+    it('should produce distinct fingerprintHashes for hub new items with shared link and level=title', () => {
       const feedItemA = { link: 'https://example.com/hub', title: 'Article A' }
       const feedItemB = { link: 'https://example.com/hub', title: 'Article B' }
       const value: ClassifyItemsInput = {
@@ -845,7 +845,7 @@ describe('classifyItems', () => {
       expect(result.inserts[0].fingerprintHash).not.toBe(result.inserts[1].fingerprintHash)
     })
 
-    it('should downgrade floor when new item collides with existing item', () => {
+    it('should downgrade level when new item collides with existing item', () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -877,7 +877,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade floor on hub onset with single existing item', () => {
+    it('should downgrade level on hub onset with single existing item', () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1049,7 +1049,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should not upgrade floor when fingerprintLevel is already deeper', () => {
+    it('should not upgrade level when fingerprintLevel is already deeper', () => {
       const feedItem1 = { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' }
       const feedItem2 = { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -1163,7 +1163,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should produce collision-free fingerprintHashes after floor downgrade', () => {
+    it('should produce collision-free fingerprintHashes after level downgrade', () => {
       const feedItem1 = { link: 'https://example.com/page#s1', title: 'Section 1' }
       const feedItem2 = { link: 'https://example.com/page#s2', title: 'Section 2' }
       const feedItem3 = { link: 'https://example.com/page#s3', title: 'Section 3' }
@@ -1359,7 +1359,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should cascade from guid past multiple rungs to linkFragment', () => {
+    it('should cascade from guid past multiple levels to linkFragment', () => {
       const feedItemA = {
         guid: 'shared-guid',
         link: 'https://example.com/page#section-a',
@@ -1427,7 +1427,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should auto-compute floor from existing items when feed is empty and no fingerprintLevel provided', () => {
+    it('should auto-compute level from existing items when feed is empty and no fingerprintLevel provided', () => {
       const value: ClassifyItemsInput = {
         newItems: [],
         existingItems: [
@@ -1581,7 +1581,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert hub feed item instead of merging when floor prevents it', () => {
+    it('should insert hub feed item instead of merging when level prevents it', () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1613,7 +1613,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when floor active and ladder key matches', () => {
+    it('should update when level active and fingerprint matches', () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post Title',
@@ -1647,7 +1647,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via enclosure when floor is enclosure', () => {
+    it('should update via enclosure when level is enclosure', () => {
       const feedItem = {
         link: 'https://example.com/shared',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -1687,7 +1687,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert link-only item with changed title when floor active', () => {
+    it('should insert link-only item with changed title when level active', () => {
       const feedItem = { link: 'https://example.com/post', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1714,7 +1714,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when fragment added and floor active', () => {
+    it('should insert when fragment added and level active', () => {
       const feedItem = { link: 'https://example.com/post#comments', title: 'Post Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1741,7 +1741,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when fragment differs and floor is linkFragment', () => {
+    it('should insert when fragment differs and level is linkFragment', () => {
       const feedItem = { link: 'https://example.com/post#comments', title: 'Post Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1768,7 +1768,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should not merge hub items even without floor', () => {
+    it('should not merge hub items even without level', () => {
       const feedItem = { link: 'https://example.com/shared', title: 'Article C' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1799,7 +1799,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid update changes title and floor is title', () => {
+    it('should insert when guid update changes title and level is title', () => {
       const feedItem = { guid: 'guid-1', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1858,7 +1858,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when floor is title and title matches', () => {
+    it('should update via guid when level is title and title matches', () => {
       const feedItem = { guid: 'guid-1', title: 'Same Title', content: 'New content' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1951,7 +1951,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should update only the floor-matching existing item on hub channel', () => {
+    it('should update only the level-matching existing item on hub channel', () => {
       const feedItem = {
         link: 'https://example.com/shared',
         title: 'Article C',
@@ -2019,7 +2019,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid appears on existing item under floor', () => {
+    it('should insert when guid appears on existing item under level', () => {
       const feedItem = {
         guid: 'guid-1',
         link: 'https://example.com/post',
@@ -2052,7 +2052,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid disappears from existing item under floor', () => {
+    it('should insert when guid disappears from existing item under level', () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post Title',
@@ -2302,7 +2302,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert link-only item with missing title due to floor collision', () => {
+    it('should insert link-only item with missing title due to level collision', () => {
       const feedItem = { link: 'https://example.com/post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -2538,7 +2538,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid and link signals point to different existing items under link floor', () => {
+    it('should insert when guid and link signals point to different existing items under link level', () => {
       const feedItem = {
         guid: 'g1',
         link: 'https://example.com/b',
@@ -2766,7 +2766,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should auto-compute title floor and update correct hub item without explicit fingerprintLevel', () => {
+    it('should auto-compute title level and update correct hub item without explicit fingerprintLevel', () => {
       const feedItem = {
         link: 'https://example.com/hub',
         title: 'Article B',
@@ -3010,8 +3010,8 @@ describe('classifyItems', () => {
     })
   })
 
-  describe('floor and pre-match interactions', () => {
-    it('should prevent floor downgrade when pre-match excludes enclosure-matched existing item', () => {
+  describe('level and pre-match interactions', () => {
+    it('should prevent level downgrade when pre-match excludes enclosure-matched existing item', () => {
       const feedItem = {
         link: 'https://example.com/show',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -3111,7 +3111,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should not downgrade floor when existing item matches incoming exactly', () => {
+    it('should not downgrade level when existing item matches incoming exactly', () => {
       const feedItem = { link: 'https://example.com/post', title: 'Same Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3133,7 +3133,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should not downgrade floor when guid match resolves the collision', () => {
+    it('should not downgrade level when guid match resolves the collision', () => {
       const feedItem = { guid: 'guid-1', link: 'https://example.com/post', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3163,7 +3163,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade floor on hub onset but still update the matching item', () => {
+    it('should downgrade level on hub onset but still update the matching item', () => {
       const feedItemUpdate = {
         link: 'https://example.com/shared',
         title: 'Article A',
@@ -3583,7 +3583,7 @@ describe('classifyItems', () => {
   })
 
   describe('multi-scan replay', () => {
-    it('should downgrade floor on hub onset across scans', () => {
+    it('should downgrade level on hub onset across scans', () => {
       const scan1 = classifyItems({
         newItems: [{ link: 'https://example.com/hub', title: 'Article A' }],
         existingItems: [],
@@ -3612,7 +3612,7 @@ describe('classifyItems', () => {
       expect(scan2.updates).toHaveLength(1)
     })
 
-    it('should not upgrade floor when collisions disappear in subsequent scan', () => {
+    it('should not upgrade level when collisions disappear in subsequent scan', () => {
       const scan3 = classifyItems({
         newItems: [{ link: 'https://example.com/unique-new', title: 'New Post' }],
         existingItems: [
@@ -3633,7 +3633,7 @@ describe('classifyItems', () => {
       expect(scan3.fingerprintLevel).toBe('title')
     })
 
-    it('should downgrade floor when guid is recycled in later scan', () => {
+    it('should downgrade level when guid is recycled in later scan', () => {
       const scan1 = classifyItems({
         newItems: [
           { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' },
@@ -3751,7 +3751,7 @@ describe('classifyItems', () => {
     })
 
     it('should never resolve fingerprintLevel stronger than input', () => {
-      const depths: Array<FingerprintLevel> = [
+      const levels: Array<FingerprintLevel> = [
         'guid',
         'guidFragment',
         'link',
@@ -3764,14 +3764,14 @@ describe('classifyItems', () => {
         { guid: 'guid-2', link: 'https://example.com/p2', title: 'Post 2' },
       ]
 
-      for (const depth of depths) {
+      for (const level of levels) {
         const result = classifyItems({
           newItems: feedItems,
           existingItems: [],
-          fingerprintLevel: depth,
+          fingerprintLevel: level,
         })
-        const inputIndex = depths.indexOf(depth)
-        const outputIndex = depths.indexOf(result.fingerprintLevel)
+        const inputIndex = levels.indexOf(level)
+        const outputIndex = levels.indexOf(result.fingerprintLevel)
 
         expect(outputIndex).toBeGreaterThanOrEqual(inputIndex)
       }
