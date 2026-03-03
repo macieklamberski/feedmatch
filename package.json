@@ -1,12 +1,12 @@
 {
-  "name": "feedsieve",
+  "name": "feedmatch",
   "description": "Classify and deduplicate feed items into inserts and updates.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/macieklamberski/feedsieve.git"
+    "url": "https://github.com/macieklamberski/feedmatch.git"
   },
   "bugs": {
-    "url": "https://github.com/macieklamberski/feedsieve/issues"
+    "url": "https://github.com/macieklamberski/feedmatch/issues"
   },
   "license": "MIT",
   "author": "Maciej Lamberski",
