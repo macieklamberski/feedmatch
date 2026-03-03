@@ -55,9 +55,11 @@ const { inserts, updates } = classifyItems({
 
 ## How It Works
 
-1. **Hash** - each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed.
-2. **Fingerprint** - hashes are combined into a single fingerprint at the appropriate level for the feed.
-3. **Deduplicate** - incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts.
-4. **Profile** - the feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching.
-5. **Match** - each incoming item is run through a strategy chain (guid → link → enclosure → title) against existing items, with candidate filters to reject false positives.
-6. **Classify** - matched items become updates, unmatched items become inserts.
+| Step | Name | Description |
+| --- | --- | --- |
+| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. |
+| 2 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. |
+| 3 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
+| 4 | Profile | The feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching. |
+| 5 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against existing items, with candidate filters to reject false positives. |
+| 6 | Classify | Matched items become updates, unmatched items become inserts. |
