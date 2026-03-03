@@ -35,7 +35,7 @@ const safeNormalizeUrl = (value: string): string | undefined => {
 
 // Normalize link for hashing to prevent duplicates from URL variations like
 // http vs https, trailing slashes, www prefix, UTM params, etc.
-export const normalizeLinkForHashing = (link: string | undefined): string | undefined => {
+export const normalizeLinkForHashing = (link: string | null | undefined): string | undefined => {
   if (!link) {
     return
   }
@@ -46,7 +46,7 @@ export const normalizeLinkForHashing = (link: string | undefined): string | unde
 // Normalize link preserving fragment for disambiguation. Applies same
 // normalization as normalizeLinkForHashing but keeps the fragment intact.
 export const normalizeLinkWithFragmentForHashing = (
-  link: string | undefined,
+  link: string | null | undefined,
 ): string | undefined => {
   if (!link) {
     return
@@ -64,7 +64,9 @@ export const normalizeLinkWithFragmentForHashing = (
 // Normalize link fragment for hashing. Only returns a value when link
 // contains '#' — without a fragment, normalization produces the same
 // string as linkHash, making a separate hash wasteful.
-export const normalizeLinkFragmentForHashing = (link: string | undefined): string | undefined => {
+export const normalizeLinkFragmentForHashing = (
+  link: string | null | undefined,
+): string | undefined => {
   if (!link?.includes('#')) {
     return
   }
@@ -74,7 +76,7 @@ export const normalizeLinkFragmentForHashing = (link: string | undefined): strin
 
 // Normalize GUID for hashing. 70% of GUIDs are URLs — normalize those
 // the same way as links. Non-URL GUIDs are opaque strings, just trimmed.
-export const normalizeGuidForHashing = (guid: string | undefined): string | undefined => {
+export const normalizeGuidForHashing = (guid: string | null | undefined): string | undefined => {
   if (!guid) {
     return
   }
@@ -95,7 +97,9 @@ export const normalizeGuidForHashing = (guid: string | undefined): string | unde
 // Normalize GUID fragment for hashing. Only returns a value when GUID is
 // a URL containing '#'. Non-URL GUIDs don't strip fragments during
 // normalization, so the fragment is already part of guidHash.
-export const normalizeGuidFragmentForHashing = (guid: string | undefined): string | undefined => {
+export const normalizeGuidFragmentForHashing = (
+  guid: string | null | undefined,
+): string | undefined => {
   if (!guid) {
     return
   }
@@ -119,7 +123,7 @@ export const normalizeGuidFragmentForHashing = (guid: string | undefined): strin
 // picking one. Current approach changes hash if feed reorders enclosures or
 // toggles isDefault between scans, causing false duplicates over time.
 export const normalizeEnclosureForHashing = (
-  enclosures: Array<{ url?: string; isDefault?: boolean }> | undefined,
+  enclosures: Array<{ url?: string; isDefault?: boolean }> | null | undefined,
 ): string | undefined => {
   if (!enclosures?.length) {
     return
@@ -137,7 +141,7 @@ export const normalizeEnclosureForHashing = (
 }
 
 // Collapse whitespace and lowercase for text-based hashing (title).
-export const normalizeTextForHashing = (text: string | undefined): string | undefined => {
+export const normalizeTextForHashing = (text: string | null | undefined): string | undefined => {
   if (!text) {
     return
   }
@@ -156,6 +160,6 @@ export const normalizeTextForHashing = (text: string | undefined): string | unde
 // to normalizeTextForHashing which only handles whitespace/case. A proper
 // implementation would strip tags so that markup-only changes (different
 // wrapper elements, whitespace in tags, ad markup) don't affect the hash.
-export const normalizeHtmlForHashing = (html: string | undefined): string | undefined => {
+export const normalizeHtmlForHashing = (html: string | null | undefined): string | undefined => {
   return normalizeTextForHashing(html)
 }

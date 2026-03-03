@@ -357,6 +357,19 @@ describe('computeItemHashes', () => {
     expect(computeItemHashes(value).enclosureHash).toBeNull()
   })
 
+  it('should treat null fields same as undefined', () => {
+    const value: NewItem = {
+      guid: null,
+      link: null,
+      title: null,
+      summary: null,
+      content: null,
+      enclosures: null,
+    }
+
+    expect(computeItemHashes(value)).toEqual(makeHashes())
+  })
+
   it('should compute linkFragmentHash when link contains fragment', () => {
     const value: NewItem = { link: 'https://example.com/post#section' }
 

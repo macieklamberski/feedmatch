@@ -5,13 +5,13 @@ export type FingerprintLevel = (typeof fingerprintLevels)[number]
 export type ItemIdLike = string | number
 
 export type NewItem = {
-  guid?: string
-  link?: string
-  title?: string
-  summary?: string
-  content?: string
-  enclosures?: Array<{ url?: string; isDefault?: boolean }>
-  publishedAt?: Date
+  guid?: string | null
+  link?: string | null
+  title?: string | null
+  summary?: string | null
+  content?: string | null
+  enclosures?: Array<{ url?: string; isDefault?: boolean }> | null
+  publishedAt?: Date | null
 }
 
 export type ItemHashes = {

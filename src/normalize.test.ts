@@ -70,6 +70,10 @@ describe('normalizeLinkForHashing', () => {
   it('should return undefined for undefined input', () => {
     expect(normalizeLinkForHashing(undefined)).toBeUndefined()
   })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeLinkForHashing(null)).toBeUndefined()
+  })
 })
 
 describe('normalizeLinkWithFragmentForHashing', () => {
@@ -121,6 +125,10 @@ describe('normalizeLinkWithFragmentForHashing', () => {
   it('should return undefined for undefined input', () => {
     expect(normalizeLinkWithFragmentForHashing(undefined)).toBeUndefined()
   })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeLinkWithFragmentForHashing(null)).toBeUndefined()
+  })
 })
 
 describe('normalizeLinkFragmentForHashing', () => {
@@ -147,6 +155,10 @@ describe('normalizeLinkFragmentForHashing', () => {
 
   it('should return undefined for empty string', () => {
     expect(normalizeLinkFragmentForHashing('')).toBeUndefined()
+  })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeLinkFragmentForHashing(null)).toBeUndefined()
   })
 })
 
@@ -182,6 +194,10 @@ describe('normalizeGuidForHashing', () => {
   it('should return undefined for whitespace-only string', () => {
     expect(normalizeGuidForHashing('   ')).toBeUndefined()
   })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeGuidForHashing(null)).toBeUndefined()
+  })
 })
 
 describe('normalizeGuidFragmentForHashing', () => {
@@ -216,6 +232,10 @@ describe('normalizeGuidFragmentForHashing', () => {
 
   it('should return undefined for whitespace-only string', () => {
     expect(normalizeGuidFragmentForHashing('   ')).toBeUndefined()
+  })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeGuidFragmentForHashing(null)).toBeUndefined()
   })
 })
 
@@ -319,6 +339,10 @@ describe('normalizeEnclosureForHashing', () => {
 
     expect(normalizeEnclosureForHashing(value)).toBeUndefined()
   })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeEnclosureForHashing(null)).toBeUndefined()
+  })
 })
 
 describe('normalizeTextForHashing', () => {
@@ -345,6 +369,10 @@ describe('normalizeTextForHashing', () => {
   it('should return undefined for whitespace-only string', () => {
     expect(normalizeTextForHashing('   ')).toBeUndefined()
   })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeTextForHashing(null)).toBeUndefined()
+  })
 })
 
 describe('normalizeHtmlForHashing', () => {
@@ -358,5 +386,9 @@ describe('normalizeHtmlForHashing', () => {
 
   it('should return undefined for empty string', () => {
     expect(normalizeHtmlForHashing('')).toBeUndefined()
+  })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeHtmlForHashing(null)).toBeUndefined()
   })
 })
