@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { fingerprintMeta, hashMeta } from './constants.js'
+import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants.js'
 import type { FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
@@ -27,12 +27,13 @@ export const buildFingerprint = (
   hashes: ItemHashes,
   level: FingerprintLevel,
 ): string | undefined => {
-  const levelIndex = fingerprintMeta.findIndex((entry) => entry.level === level)
-  const prefix = fingerprintMeta.slice(0, levelIndex + 1)
+  const prefix = fingerprintPrefixByLevel.get(level)
 
-  const hasAny = prefix.some((entry) => hashes[entry.key])
+  if (!prefix) {
+    return
+  }
 
-  if (!hasAny) {
+  if (!prefix.some((entry) => hashes[entry.key])) {
     return
   }
 
