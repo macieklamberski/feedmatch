@@ -200,12 +200,13 @@ const matchableHashMeta = hashMeta
   .filter((meta) => meta.isMatchable)
   .map((meta) => ({ key: meta.key, isStrongHash: meta.isStrongHash }))
 
-export type MatchIndex = Map<string, Array<ExistingItem>>
-
-// Build a flat hash index: hashValue → ExistingItem[]. All matchable keys
-// share one map — hash collisions across fields are impossible in practice.
-export const buildMatchIndex = (items: Array<ExistingItem>): MatchIndex => {
-  const index: MatchIndex = new Map()
+// Build an index over existing items for O(1) candidate lookups. Returns a
+// function with the same semantics as findMatchCandidates but backed by a
+// hash map instead of a linear scan.
+export const buildMatchIndex = (
+  items: Array<ExistingItem>,
+): ((hashes: ItemHashes) => Array<ExistingItem>) => {
+  const index = new Map<string, Array<ExistingItem>>()
 
   for (const item of items) {
     for (const { key } of matchableHashMeta) {
@@ -225,40 +226,34 @@ export const buildMatchIndex = (items: Array<ExistingItem>): MatchIndex => {
     }
   }
 
-  return index
-}
+  return (hashes) => {
+    const hasStrong = hasStrongHash(hashes)
+    const seen = new Set<ItemIdLike>()
+    const result: Array<ExistingItem> = []
 
-// O(1) lookup version of findMatchCandidates using a pre-built index.
-export const findMatchCandidatesFromIndex = (
-  hashes: ItemHashes,
-  index: MatchIndex,
-): Array<ExistingItem> => {
-  const hasStrong = hasStrongHash(hashes)
-  const seen = new Set<ItemIdLike>()
-  const result: Array<ExistingItem> = []
+    for (const { key, isStrongHash } of matchableHashMeta) {
+      const hash = hashes[key]
 
-  for (const { key, isStrongHash } of matchableHashMeta) {
-    const hash = hashes[key]
+      if (!hash || (!isStrongHash && hasStrong)) {
+        continue
+      }
 
-    if (!hash || (!isStrongHash && hasStrong)) {
-      continue
-    }
+      const bucket = index.get(hash)
 
-    const bucket = index.get(hash)
+      if (!bucket) {
+        continue
+      }
 
-    if (!bucket) {
-      continue
-    }
-
-    for (const item of bucket) {
-      if (!seen.has(item.id)) {
-        seen.add(item.id)
-        result.push(item)
+      for (const item of bucket) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id)
+          result.push(item)
+        }
       }
     }
-  }
 
-  return result
+    return result
+  }
 }
 
 // Match strategy: GUID with enclosure/guidFragment/link disambiguation.
