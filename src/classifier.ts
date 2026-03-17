@@ -10,7 +10,6 @@ import {
   classifyCandidateFilters,
   computeFeedProfile,
   computeMatchPolicy,
-  findMatchCandidatesFromIndex,
   prematchCandidateFilters,
   selectMatchingItem,
   updateFilters,
@@ -103,11 +102,11 @@ export const classifyItems = <T extends NewItem>(
   // link match is only trusted when the max-level fingerprints agree (true
   // duplicate); a bare link match with different titles could be hub onset
   // and must stay in the collision set so the level can detect it.
-  const matchIndex = buildMatchIndex(existingItems)
+  const findCandidates = buildMatchIndex(existingItems)
   const matchedExistingIds = new Set<ItemIdLike>()
 
   for (const incomingItem of incomingItems) {
-    const candidates = findMatchCandidatesFromIndex(incomingItem, matchIndex)
+    const candidates = findCandidates(incomingItem)
     const result = selectMatchingItem({
       incoming: incomingItem,
       candidates,
@@ -172,7 +171,7 @@ export const classifyItems = <T extends NewItem>(
     const { fingerprint, ...rest } = fingerprintedItem
     const item = rest as IncomingItem<T>
     const fingerprintHash = generateHash(fingerprint)
-    const candidates = findMatchCandidatesFromIndex(item, matchIndex)
+    const candidates = findCandidates(item)
 
     // Reject candidates whose fingerprint differs from the incoming item.
     // This prevents matching (and merging) items that the levels consider distinct.
