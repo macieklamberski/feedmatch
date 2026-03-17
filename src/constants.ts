@@ -124,3 +124,8 @@ export const hashKeys: Array<HashKey> = hashMeta.map((meta) => meta.key)
 export const signalHashKeys: Array<[MatchedBy, keyof ItemHashes]> = hashMeta
   .filter((meta) => meta.isMatchable)
   .map((meta) => [meta.level as MatchedBy, meta.key])
+
+// Pre-computed fingerprint prefix arrays per level (avoids findIndex + slice per call).
+export const fingerprintPrefixByLevel = new Map<FingerprintLevel, Array<FingerprintMeta>>(
+  fingerprintMeta.map((entry, index) => [entry.level, fingerprintMeta.slice(0, index + 1)]),
+)
