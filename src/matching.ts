@@ -8,6 +8,7 @@ import type {
   FeedProfileStats,
   IncomingItem,
   ItemHashes,
+  ItemIdLike,
   MatchedBy,
   MatchPolicy,
   MatchResult,
@@ -192,6 +193,72 @@ export const findMatchCandidates = (
       return existing[meta.key] === hashes[meta.key]
     }),
   )
+}
+
+// Pre-computed matchable key metadata for index operations.
+const matchableHashMeta = hashMeta
+  .filter((meta) => meta.isMatchable)
+  .map((meta) => ({ key: meta.key, isStrongHash: meta.isStrongHash }))
+
+export type MatchIndex = Map<string, Array<ExistingItem>>
+
+// Build a flat hash index: hashValue → ExistingItem[]. All matchable keys
+// share one map — hash collisions across fields are impossible in practice.
+export const buildMatchIndex = (items: Array<ExistingItem>): MatchIndex => {
+  const index: MatchIndex = new Map()
+
+  for (const item of items) {
+    for (const { key } of matchableHashMeta) {
+      const hash = item[key]
+
+      if (!hash) {
+        continue
+      }
+
+      const bucket = index.get(hash)
+
+      if (bucket) {
+        bucket.push(item)
+      } else {
+        index.set(hash, [item])
+      }
+    }
+  }
+
+  return index
+}
+
+// O(1) lookup version of findMatchCandidates using a pre-built index.
+export const findMatchCandidatesFromIndex = (
+  hashes: ItemHashes,
+  index: MatchIndex,
+): Array<ExistingItem> => {
+  const hasStrong = hasStrongHash(hashes)
+  const seen = new Set<ItemIdLike>()
+  const result: Array<ExistingItem> = []
+
+  for (const { key, isStrongHash } of matchableHashMeta) {
+    const hash = hashes[key]
+
+    if (!hash || (!isStrongHash && hasStrong)) {
+      continue
+    }
+
+    const bucket = index.get(hash)
+
+    if (!bucket) {
+      continue
+    }
+
+    for (const item of bucket) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id)
+        result.push(item)
+      }
+    }
+  }
+
+  return result
 }
 
 // Match strategy: GUID with enclosure/guidFragment/link disambiguation.
