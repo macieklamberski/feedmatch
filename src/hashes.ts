@@ -27,11 +27,7 @@ export const buildFingerprint = (
   hashes: ItemHashes,
   level: FingerprintLevel,
 ): string | undefined => {
-  const prefix = fingerprintPrefixByLevel.get(level)
-
-  if (!prefix) {
-    return
-  }
+  const prefix = fingerprintPrefixByLevel.get(level) ?? []
 
   if (!prefix.some((entry) => hashes[entry.key])) {
     return
