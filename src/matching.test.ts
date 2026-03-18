@@ -515,6 +515,20 @@ describe('findMatchCandidates', () => {
     expect(findMatchCandidates(value, existing)).toEqual([])
   })
 
+  it('should not match on guidFragmentHash', () => {
+    const value = makeHashes({ guidFragmentHash: 'gf-1' })
+    const existing = [makeExistingItem({ id: 'a', guidFragmentHash: 'gf-1' })]
+
+    expect(findMatchCandidates(value, existing)).toEqual([])
+  })
+
+  it('should not match on linkFragmentHash', () => {
+    const value = makeHashes({ linkFragmentHash: 'lf-1' })
+    const existing = [makeExistingItem({ id: 'a', linkFragmentHash: 'lf-1' })]
+
+    expect(findMatchCandidates(value, existing)).toEqual([])
+  })
+
   it('should not match on null hash values', () => {
     const value = makeHashes()
     const existing = [makeExistingItem({ id: 'a', guidHash: null, linkHash: null })]
@@ -1154,6 +1168,15 @@ describe('computeMatchPolicy', () => {
 
     expect(computeMatchPolicy(value)).toEqual({ linkReliable: false, dateProximityDays: 7 })
   })
+
+  it('should use custom dateProximityDays when provided', () => {
+    const value = makeFeedProfile(1.0)
+
+    expect(computeMatchPolicy(value, { dateProximityDays: 30 })).toEqual({
+      linkReliable: true,
+      dateProximityDays: 30,
+    })
+  })
 })
 
 describe('resolveStrategies', () => {
@@ -1263,6 +1286,16 @@ describe('matchByGuid', () => {
     })
   })
 
+  it('should pass when no candidate has matching guid', () => {
+    const context: MatchStrategyContext = {
+      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
+      candidates: [makeExistingItem({ guidHash: 'guid-other' })],
+      filtered: identity,
+    }
+
+    expect(matchByGuid(context)).toEqual({ outcome: 'pass' })
+  })
+
   it('should pass when no guidHash', () => {
     const context: MatchStrategyContext = {
       incoming: makeIncomingItem({ linkHash: 'link-1' }),
@@ -1329,6 +1362,16 @@ describe('matchByLink', () => {
     })
   })
 
+  it('should pass when no candidate has matching link', () => {
+    const context: MatchStrategyContext = {
+      incoming: makeIncomingItem({ linkHash: 'link-1' }),
+      candidates: [makeExistingItem({ linkHash: 'link-other' })],
+      filtered: identity,
+    }
+
+    expect(matchByLink(context)).toEqual({ outcome: 'pass' })
+  })
+
   it('should pass when no linkHash', () => {
     const context: MatchStrategyContext = {
       incoming: makeIncomingItem({ guidHash: 'guid-1' }),
@@ -1372,6 +1415,16 @@ describe('matchByEnclosure', () => {
     })
   })
 
+  it('should pass when no candidate has matching enclosure', () => {
+    const context: MatchStrategyContext = {
+      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
+      candidates: [makeExistingItem({ enclosureHash: 'enc-other' })],
+      filtered: identity,
+    }
+
+    expect(matchByEnclosure(context)).toEqual({ outcome: 'pass' })
+  })
+
   it('should pass when no enclosureHash', () => {
     const context: MatchStrategyContext = {
       incoming: makeIncomingItem({ guidHash: 'guid-1' }),
@@ -1413,6 +1466,16 @@ describe('matchByTitle', () => {
       source: 'title',
       count: 2,
     })
+  })
+
+  it('should pass when no candidate has matching title', () => {
+    const context: MatchStrategyContext = {
+      incoming: makeIncomingItem({ titleHash: 'title-1' }),
+      candidates: [makeExistingItem({ titleHash: 'title-other' })],
+      filtered: identity,
+    }
+
+    expect(matchByTitle(context)).toEqual({ outcome: 'pass' })
   })
 
   it('should pass when no titleHash', () => {
@@ -1565,6 +1628,33 @@ describe('dateProximityFilter', () => {
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
   })
 
+  it('should allow match when dates are exactly at threshold', () => {
+    const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: sevenDaysAgo }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should reject match when dates are just beyond threshold', () => {
+    const now = new Date()
+    const justBeyond = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000 + 1000))
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: justBeyond }),
+      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+    }
+    const result = dateProximityFilter.evaluate(value)
+
+    expect(result.allow).toBe(false)
+  })
+
   it('should respect custom dateProximityDays threshold', () => {
     const now = new Date()
     const twentyDaysAgo = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000)
@@ -1652,6 +1742,16 @@ describe('contentChangeFilter', () => {
     }
 
     expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should update when content appears for the first time', () => {
+    const value = {
+      existing: makeExistingItem({ contentHash: null }),
+      incoming: makeIncomingItem({ contentHash: 'cnt-new' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should ignore non-content hashes', () => {

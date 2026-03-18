@@ -64,6 +64,12 @@ describe('scoreItem', () => {
   it('should return 0 for empty hashes', () => {
     expect(scoreItem(makeHashes())).toBe(0)
   })
+
+  it('should return 0 when only fragment hashes are present', () => {
+    const value = makeHashes({ guidFragmentHash: 'gf1', linkFragmentHash: 'lf1' })
+
+    expect(scoreItem(value)).toBe(0)
+  })
 })
 
 describe('composeIncomingItems', () => {
@@ -3383,6 +3389,51 @@ describe('classifyItems', () => {
       }
 
       expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should insert when guid reused with far-apart dates', () => {
+      const now = new Date()
+      const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'New Episode',
+        content: 'New content',
+        publishedAt: now,
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          {
+            ...makeMatchable({
+              id: 'existing-1',
+              guid: 'guid-1',
+              title: 'Old Episode',
+              content: 'Old content',
+            }),
+            publishedAt: sixtyDaysAgo,
+          },
+        ],
+      }
+      const result = classifyItems(value)
+
+      expect(result.inserts).toHaveLength(1)
+      expect(result.updates).toHaveLength(0)
+    })
+
+    it('should work with numeric existing item IDs', () => {
+      const feedItem = { guid: 'guid-1', title: 'Updated', content: 'New content' }
+      const existingItem: ExistingItem = {
+        id: 42,
+        ...computeItemHashes({ guid: 'guid-1', title: 'Old', content: 'Old content' }),
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [existingItem],
+      }
+      const result = classifyItems(value)
+
+      expect(result.updates).toHaveLength(1)
+      expect(result.updates[0].existingItemId).toBe(42)
     })
 
     it('should insert when guid changes but title stays the same', () => {
