@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   buildFingerprint,
   computeItemHashes,
+  generateHash,
   hasStrongHash,
   resolveFingerprintLevel,
 } from './hashes.js'
@@ -20,6 +21,15 @@ const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
     ...overrides,
   }
 }
+
+describe('generateHash', () => {
+  it('should produce deterministic 32-char hex and distinguish multi-value from single-value', () => {
+    expect(generateHash('hello')).toMatch(/^[a-f0-9]{32}$/)
+    expect(generateHash('hello')).toBe(generateHash('hello'))
+    expect(generateHash('hello')).not.toBe(generateHash('world'))
+    expect(generateHash('ab', 'cd')).not.toBe(generateHash('abcd'))
+  })
+})
 
 describe('buildFingerprint', () => {
   it('should include only guid slot at level=guid', () => {
