@@ -50,12 +50,47 @@ export const resolveFingerprintLevel = (
   allItemHashes: Array<ItemHashes>,
   currentLevel?: FingerprintLevel,
 ): FingerprintLevel => {
+  const maxLevelIndex = fingerprintMeta.length - 1
+
+  // Precompute fingerprints for every item at every level in one pass.
+  // Each entry is built incrementally by extending the prefix string,
+  // producing the same output as buildFingerprint but without repeated
+  // Map lookups, .some() checks, or .map().join() per level.
+  const allFingerprints: Array<Array<string | undefined>> = []
+
+  for (const hashes of allItemHashes) {
+    const perLevel: Array<string | undefined> = []
+    let prefix = ''
+    let hasAny = false
+
+    for (let i = 0; i < fingerprintMeta.length; i++) {
+      const entry = fingerprintMeta[i]
+      const value = hashes[entry.key]
+
+      if (value) {
+        hasAny = true
+      }
+
+      if (i > 0) {
+        prefix += '|'
+      }
+
+      prefix += `${entry.tag}:${value ?? ''}`
+      perLevel.push(hasAny ? prefix : undefined)
+    }
+
+    allFingerprints.push(perLevel)
+  }
+
   // Count items identifiable at max level (title). A valid level must identify
   // the same number — otherwise some items become unidentifiable.
-  const maxLevel = fingerprintMeta[fingerprintMeta.length - 1].level
-  const maxIdentifiable = allItemHashes.filter(
-    (hashes) => buildFingerprint(hashes, maxLevel) !== undefined,
-  ).length
+  let maxIdentifiable = 0
+
+  for (const fingerprints of allFingerprints) {
+    if (fingerprints[maxLevelIndex] !== undefined) {
+      maxIdentifiable++
+    }
+  }
 
   if (maxIdentifiable === 0) {
     return currentLevel ?? 'title'
@@ -65,13 +100,16 @@ export const resolveFingerprintLevel = (
     ? fingerprintMeta.findIndex((entry) => entry.level === currentLevel)
     : 0
 
+  if (startIndex === -1) {
+    throw new Error(`Invalid fingerprint level: ${currentLevel}`)
+  }
+
   for (let index = startIndex; index < fingerprintMeta.length; index++) {
-    const level = fingerprintMeta[index].level
     const keys = new Set<string>()
     let hasCollision = false
 
-    for (const hashes of allItemHashes) {
-      const key = buildFingerprint(hashes, level)
+    for (const fingerprints of allFingerprints) {
+      const key = fingerprints[index]
 
       if (!key) {
         continue
@@ -87,7 +125,7 @@ export const resolveFingerprintLevel = (
 
     // Valid level: no collisions AND full coverage of identifiable items.
     if (!hasCollision && keys.size >= maxIdentifiable) {
-      return level
+      return fingerprintMeta[index].level
     }
   }
 
