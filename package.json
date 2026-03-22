@@ -45,7 +45,7 @@
     "feedcanon": "^1.4.2"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.10",
+    "@types/bun": "^1.3.11",
     "kvalita": "1.11.0",
     "tsdown": "^0.21.4"
   }
