@@ -17,15 +17,137 @@ import {
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
+  ExistingItem,
   FingerprintedItem,
   FingerprintLevel,
   IncomingItem,
   InsertAction,
   ItemHashes,
   ItemIdLike,
+  MatchResult,
   NewItem,
   UpdateAction,
 } from './types.js'
+
+const contentHashKeys = hashMeta.filter((meta) => meta.isContent).map((meta) => meta.key)
+
+// Find an existing item where guid or link differs but all content fields
+// match (title, content, summary, enclosure, and publishedAt).
+//
+// Two cases:
+// 1. GUID changed, link matches (non-null) → merge, update the guid.
+// 2. Both GUIDs null, link differs → merge, update the link.
+export const findReconciliationCandidate = (
+  incoming: IncomingItem,
+  existing: ExistingItem,
+): MatchResult | undefined => {
+  for (const key of contentHashKeys) {
+    if (incoming[key] !== existing[key]) {
+      return
+    }
+  }
+
+  const incomingDate = incoming.publishedAt?.getTime()
+  const existingDate = existing.publishedAt?.getTime()
+
+  if (incomingDate !== existingDate) {
+    return
+  }
+
+  const isGuidMatch = incoming.guidHash === existing.guidHash
+  const isLinkMatch = incoming.linkHash === existing.linkHash
+
+  // Case 1: GUID differs, link is the same.
+  if (!isGuidMatch && isLinkMatch && incoming.linkHash != null) {
+    return { match: existing, matchedBy: 'link' }
+  }
+
+  // Case 2: No GUID on either side, link differs but all content fields
+  // and publishedAt are the same.
+  if (incoming.guidHash == null && existing.guidHash == null && !isLinkMatch) {
+    return { match: existing, matchedBy: 'title' }
+  }
+
+  return
+}
+
+// Check if any changed identity field (guid or link) already belongs to a
+// different existing item. For example, the guid points to item A but the
+// link points to item B, so it's unclear which item this really is.
+export const hasAmbiguousIdentity = (
+  incoming: IncomingItem,
+  candidate: ExistingItem,
+  existingItems: Array<ExistingItem>,
+): boolean => {
+  const identityKeys: Array<keyof ItemHashes> = ['guidHash', 'linkHash']
+
+  for (const key of identityKeys) {
+    const value = incoming[key]
+
+    if (value == null || value === candidate[key]) {
+      continue
+    }
+
+    const isConflicting = existingItems.some((other) => {
+      return other.id !== candidate.id && other[key] === value
+    })
+
+    if (isConflicting) {
+      return true
+    }
+  }
+
+  return false
+}
+
+// Reclassify inserts that are identical to an existing item except for guid
+// or link. Handles feeds with unstable identifiers that the fingerprint
+// system cannot match.
+export const reconcileInserts = <T extends NewItem>(
+  inserts: Array<InsertAction<T>>,
+  existingItems: Array<ExistingItem>,
+  updateTargetIds: Set<ItemIdLike>,
+): { reconciledInserts: Array<InsertAction<T>>; reconciledUpdates: Array<UpdateAction<T>> } => {
+  const reconciledInserts: Array<InsertAction<T>> = []
+  const reconciledUpdates: Array<UpdateAction<T>> = []
+  const targetIds = new Set(updateTargetIds)
+
+  for (const insert of inserts) {
+    let isReconciled = false
+
+    for (const existing of existingItems) {
+      if (targetIds.has(existing.id)) {
+        continue
+      }
+
+      const result = findReconciliationCandidate(insert.item, existing)
+
+      if (!result) {
+        continue
+      }
+
+      if (hasAmbiguousIdentity(insert.item, existing, existingItems)) {
+        continue
+      }
+
+      reconciledUpdates.push({
+        item: insert.item,
+        fingerprintHash: insert.fingerprintHash,
+        existingItemId: result.match.id,
+        matchedBy: result.matchedBy,
+      })
+      targetIds.add(existing.id)
+      isReconciled = true
+      break
+    }
+
+    if (!isReconciled) {
+      reconciledInserts.push(insert)
+    }
+  }
+
+  return { reconciledInserts, reconciledUpdates }
+}
 
 // Score an item by how many hash slots are populated, weighted by signal strength.
 export const scoreItem = (hashes: ItemHashes): number => {
@@ -213,5 +335,17 @@ export const classifyItems = <T extends NewItem>(
     }
   }
 
-  return { inserts, updates, fingerprintLevel: resolvedLevel }
+  // Reconciliation: reclassify inserts that match existing items by content.
+  const updateTargetIds = new Set(updates.map((update) => update.existingItemId))
+  const { reconciledInserts, reconciledUpdates } = reconcileInserts(
+    inserts,
+    existingItems,
+    updateTargetIds,
+  )
+
+  return {
+    inserts: reconciledInserts,
+    updates: [...updates, ...reconciledUpdates],
+    fingerprintLevel: resolvedLevel,
+  }
 }
