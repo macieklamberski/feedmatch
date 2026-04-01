@@ -61,6 +61,6 @@ const { inserts, updates } = classifyItems({
 | 2 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. |
 | 3 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
 | 4 | Profile | The feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching. |
-| 5 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against existing items, with candidate filters to reject false positives. |
-| 6 | Classify | Matched items become updates, unmatched items become inserts. |
-| 7 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. |
+| 5 | Match | Each incoming item is run through a strategy chain against existing items, with candidate filters to reject false positives. The chain order depends on feed profile: guid → link → enclosure → title for high-uniqueness feeds, guid → enclosure → link → title for low-uniqueness feeds. Ambiguous matches (multiple candidates) prefer insert over wrong merge. |
+| 6 | Classify | Matched items become updates if any hash field changed, unmatched items become inserts. Matched items with no changes are silently skipped. |
+| 7 | Reconcile | Inserts where all content fields (title, content, summary, enclosure, publishedAt) match an existing item but the guid or link differs are reclassified as updates. Handles feeds with unstable identifiers. |
