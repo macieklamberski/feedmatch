@@ -269,7 +269,7 @@ describe('findReconciliationCandidate', () => {
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
 
-    it('should return link match with minimal fields (only title, no content/summary/enclosure)', () => {
+    it('should not match when only one content field matches (below minReconciliationFields)', () => {
       const incoming = makeIncoming({
         guidHash: 'new-guid',
         linkHash: 'same-link',
@@ -282,9 +282,8 @@ describe('findReconciliationCandidate', () => {
         titleHash: 'same-title',
         publishedAt: new Date('2024-01-01T00:00:00Z'),
       })
-      const expected: MatchResult = { match: existing, matchedBy: 'link' }
 
-      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
+      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
     })
   })
 
@@ -420,7 +419,7 @@ describe('findReconciliationCandidate', () => {
   })
 
   describe('edge cases', () => {
-    it('should match when all content hashes are null on both sides', () => {
+    it('should not match when all content hashes are null on both sides (below minReconciliationFields)', () => {
       const incoming = makeIncoming({
         guidHash: 'new-guid',
         linkHash: 'same-link',
@@ -431,9 +430,8 @@ describe('findReconciliationCandidate', () => {
         linkHash: 'same-link',
         publishedAt: new Date('2024-01-01T00:00:00Z'),
       })
-      const expected: MatchResult = { match: existing, matchedBy: 'link' }
 
-      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
+      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
     })
 
     it('should match when both publishedAt are undefined', () => {
@@ -441,11 +439,13 @@ describe('findReconciliationCandidate', () => {
         guidHash: 'new-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const existing = makeExistingItem({
         guidHash: 'old-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const expected: MatchResult = { match: existing, matchedBy: 'link' }
 
@@ -501,10 +501,12 @@ describe('findReconciliationCandidate', () => {
         guidHash: 'new-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const existing = makeExistingItem({
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const expected: MatchResult = { match: existing, matchedBy: 'link' }
 
@@ -515,10 +517,12 @@ describe('findReconciliationCandidate', () => {
       const incoming = makeIncoming({
         linkHash: 'new-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const existing = makeExistingItem({
         linkHash: 'old-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const expected: MatchResult = { match: existing, matchedBy: 'title' }
 
@@ -529,10 +533,12 @@ describe('findReconciliationCandidate', () => {
       const incoming = makeIncoming({
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const existing = makeExistingItem({
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
 
       expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
@@ -543,12 +549,14 @@ describe('findReconciliationCandidate', () => {
         guidHash: 'new-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
         publishedAt: null,
       })
       const existing = makeExistingItem({
         guidHash: 'old-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
       })
       const expected: MatchResult = { match: existing, matchedBy: 'link' }
 
@@ -803,6 +811,7 @@ describe('reconcileInserts', () => {
         guidHash: 'new-1',
         linkHash: 'link-1',
         titleHash: 'title-1',
+        contentHash: 'content-1',
         publishedAt,
       }),
       fingerprintHash: 'fp-1',
@@ -812,6 +821,7 @@ describe('reconcileInserts', () => {
         guidHash: 'new-2',
         linkHash: 'link-2',
         titleHash: 'title-2',
+        contentHash: 'content-2',
         publishedAt,
       }),
       fingerprintHash: 'fp-2',
@@ -821,6 +831,7 @@ describe('reconcileInserts', () => {
       guidHash: 'old-1',
       linkHash: 'link-1',
       titleHash: 'title-1',
+      contentHash: 'content-1',
       publishedAt,
     })
     const existing2 = makeExistingItem({
@@ -828,6 +839,7 @@ describe('reconcileInserts', () => {
       guidHash: 'old-2',
       linkHash: 'link-2',
       titleHash: 'title-2',
+      contentHash: 'content-2',
       publishedAt,
     })
 
@@ -4964,12 +4976,14 @@ describe('classifyItems', () => {
           guid: 'new-guid-1',
           link: 'https://example.com/post-1',
           title: 'Post 1',
+          content: '<p>Content 1</p>',
           publishedAt,
         }
         const feedItem2 = {
           guid: 'new-guid-2',
           link: 'https://example.com/post-2',
           title: 'Post 2',
+          content: '<p>Content 2</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -4980,6 +4994,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-1',
               link: 'https://example.com/post-1',
               title: 'Post 1',
+              content: '<p>Content 1</p>',
               publishedAt,
             }),
             makeExisting({
@@ -4987,6 +5002,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-2',
               link: 'https://example.com/post-2',
               title: 'Post 2',
+              content: '<p>Content 2</p>',
               publishedAt,
             }),
           ],
@@ -5330,7 +5346,7 @@ describe('classifyItems', () => {
     })
 
     describe('edge cases', () => {
-      it('should match when both sides have null content hashes', () => {
+      it('should not reconcile when all content hashes are null (below minReconciliationFields)', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'new-guid',
@@ -5351,15 +5367,13 @@ describe('classifyItems', () => {
           ],
         }
         const expected: ClassifyItemsResult = {
-          inserts: [],
-          updates: [
+          inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
               fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
-              existingItemId: 'existing-1',
-              matchedBy: 'link',
             },
           ],
+          updates: [],
           fingerprintLevel: 'guid',
         }
 
@@ -5406,6 +5420,7 @@ describe('classifyItems', () => {
           guid: 'new-guid',
           link: 'https://example.com/post',
           title: 'Post Title',
+          content: '<p>Content</p>',
         }
         const value: ClassifyItemsInput = {
           newItems: [feedItem],
@@ -5415,6 +5430,7 @@ describe('classifyItems', () => {
               guid: 'old-guid',
               link: 'https://example.com/post',
               title: 'Post Title',
+              content: '<p>Content</p>',
             }),
           ],
         }
@@ -5504,6 +5520,7 @@ describe('classifyItems', () => {
           guid: 'new-guid',
           link: 'https://example.com/post',
           title: 'Post Title',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -5514,6 +5531,7 @@ describe('classifyItems', () => {
               ...computeItemHashes({
                 link: 'https://example.com/post',
                 title: 'Post Title',
+                content: '<p>Content</p>',
                 publishedAt,
               }),
               publishedAt,
@@ -5580,6 +5598,7 @@ describe('classifyItems', () => {
           guid: 'new-guid',
           link: 'https://example.com/post',
           title: 'Post Title',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -5590,6 +5609,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-1',
               link: 'https://example.com/post',
               title: 'Post Title',
+              content: '<p>Content</p>',
               publishedAt,
             }),
             makeExisting({
@@ -5597,6 +5617,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-2',
               link: 'https://example.com/post',
               title: 'Post Title',
+              content: '<p>Content</p>',
               publishedAt,
             }),
           ],
@@ -5625,12 +5646,14 @@ describe('classifyItems', () => {
           guid: 'guid-a',
           link: 'https://example.com/post',
           title: 'Post',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const feedItemB: NewItem = {
           guid: 'guid-b',
           link: 'https://example.com/post',
           title: 'Post',
+          content: '<p>Content</p>',
           publishedAt,
         }
 
@@ -5716,6 +5739,7 @@ describe('classifyItems', () => {
           guid: 'new-random-guid',
           link: 'https://example.com/unstable',
           title: 'Unstable Post',
+          content: '<p>Unstable content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -5734,6 +5758,7 @@ describe('classifyItems', () => {
               guid: 'old-random-guid',
               link: 'https://example.com/unstable',
               title: 'Unstable Post',
+              content: '<p>Unstable content</p>',
               publishedAt,
             }),
           ],
@@ -5808,12 +5833,14 @@ describe('classifyItems', () => {
           guid: 'new-guid-1',
           link: 'https://example.com/post-1',
           title: 'Post 1',
+          content: '<p>Content 1</p>',
           publishedAt,
         }
         const feedItem2 = {
           guid: 'new-guid-2',
           link: 'https://example.com/post-2',
           title: 'Post 2',
+          content: '<p>Content 2</p>',
           publishedAt,
         }
         // Item 3 has same link as existing but different content.
@@ -5821,6 +5848,7 @@ describe('classifyItems', () => {
           guid: 'new-guid-3',
           link: 'https://example.com/post-3',
           title: 'Changed Title',
+          content: '<p>Changed Content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -5831,6 +5859,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-1',
               link: 'https://example.com/post-1',
               title: 'Post 1',
+              content: '<p>Content 1</p>',
               publishedAt,
             }),
             makeExisting({
@@ -5838,6 +5867,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-2',
               link: 'https://example.com/post-2',
               title: 'Post 2',
+              content: '<p>Content 2</p>',
               publishedAt,
             }),
             makeExisting({
@@ -5845,6 +5875,7 @@ describe('classifyItems', () => {
               guid: 'old-guid-3',
               link: 'https://example.com/post-3',
               title: 'Post 3',
+              content: '<p>Content 3</p>',
               publishedAt,
             }),
           ],
@@ -5883,9 +5914,24 @@ describe('classifyItems', () => {
       // All other fields stay stable across 3 consecutive scans.
       it('should handle random hex GUIDs across 3 consecutive scans', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
-        const post1 = { link: 'https://example.com/post-1', title: 'Post 1', publishedAt }
-        const post2 = { link: 'https://example.com/post-2', title: 'Post 2', publishedAt }
-        const post3 = { link: 'https://example.com/post-3', title: 'Post 3', publishedAt }
+        const post1 = {
+          link: 'https://example.com/post-1',
+          title: 'Post 1',
+          content: '<p>Content 1</p>',
+          publishedAt,
+        }
+        const post2 = {
+          link: 'https://example.com/post-2',
+          title: 'Post 2',
+          content: '<p>Content 2</p>',
+          publishedAt,
+        }
+        const post3 = {
+          link: 'https://example.com/post-3',
+          title: 'Post 3',
+          content: '<p>Content 3</p>',
+          publishedAt,
+        }
 
         // Scan 1: first fetch, all items inserted.
         const scan1 = classifyItems({
@@ -5951,12 +5997,14 @@ describe('classifyItems', () => {
           guid: 'new-guid-1',
           link: 'https://example.com/post',
           title: 'Post Title',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const feedItem2 = {
           guid: 'new-guid-2',
           link: 'https://example.com/post',
           title: 'Post Title',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -5967,6 +6015,7 @@ describe('classifyItems', () => {
               guid: 'old-guid',
               link: 'https://example.com/post',
               title: 'Post Title',
+              content: '<p>Content</p>',
               publishedAt,
             }),
           ],
@@ -5999,6 +6048,7 @@ describe('classifyItems', () => {
         const feedItem = {
           link: 'https://example.com/post-2',
           title: 'Same Title',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -6008,12 +6058,14 @@ describe('classifyItems', () => {
               id: 'existing-1',
               link: 'https://example.com/post-1',
               title: 'Same Title',
+              content: '<p>Content</p>',
               publishedAt,
             }),
             makeExisting({
               id: 'existing-2',
               link: 'https://example.com/post-2',
               title: 'Different Title',
+              content: '<p>Other content</p>',
               publishedAt,
             }),
           ],
@@ -6041,6 +6093,7 @@ describe('classifyItems', () => {
           guid: 'has-guid',
           link: 'https://example.com/new-link',
           title: 'Post Title',
+          content: '<p>Content</p>',
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -6050,6 +6103,7 @@ describe('classifyItems', () => {
               id: 'existing-1',
               link: 'https://example.com/old-link',
               title: 'Post Title',
+              content: '<p>Content</p>',
               publishedAt,
             }),
           ],
@@ -6170,6 +6224,7 @@ describe('classifyItems', () => {
           guid: 'original-guid',
           link: 'https://example.com/post',
           title: 'Post',
+          content: '<p>Content</p>',
           publishedAt,
         }
 
@@ -6211,8 +6266,18 @@ describe('classifyItems', () => {
         // Scan 1: no GUIDs, link-only items.
         const scan1 = classifyItems({
           newItems: [
-            { link: 'https://example.com/post-1', title: 'Post 1', publishedAt },
-            { link: 'https://example.com/post-2', title: 'Post 2', publishedAt },
+            {
+              link: 'https://example.com/post-1',
+              title: 'Post 1',
+              content: '<p>Content 1</p>',
+              publishedAt,
+            },
+            {
+              link: 'https://example.com/post-2',
+              title: 'Post 2',
+              content: '<p>Content 2</p>',
+              publishedAt,
+            },
           ],
           existingItems: [],
         })
@@ -6227,8 +6292,20 @@ describe('classifyItems', () => {
         // Scan 2: GUIDs appear. Link still matches, reconciliation catches it.
         const scan2 = classifyItems({
           newItems: [
-            { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1', publishedAt },
-            { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2', publishedAt },
+            {
+              guid: 'guid-1',
+              link: 'https://example.com/post-1',
+              title: 'Post 1',
+              content: '<p>Content 1</p>',
+              publishedAt,
+            },
+            {
+              guid: 'guid-2',
+              link: 'https://example.com/post-2',
+              title: 'Post 2',
+              content: '<p>Content 2</p>',
+              publishedAt,
+            },
           ],
           existingItems: afterScan1,
           fingerprintLevel: scan1.fingerprintLevel,
@@ -6240,13 +6317,43 @@ describe('classifyItems', () => {
 
       it('should handle growing feed with changing GUIDs on existing items', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const post1 = {
+          link: 'https://example.com/post-1',
+          title: 'Post 1',
+          content: '<p>Content 1</p>',
+          publishedAt,
+        }
+        const post2 = {
+          link: 'https://example.com/post-2',
+          title: 'Post 2',
+          content: '<p>Content 2</p>',
+          publishedAt,
+        }
+        const post3 = {
+          link: 'https://example.com/post-3',
+          title: 'Post 3',
+          content: '<p>Content 3</p>',
+          publishedAt,
+        }
+        const post4 = {
+          link: 'https://example.com/post-4',
+          title: 'Post 4',
+          content: '<p>Content 4</p>',
+          publishedAt,
+        }
+        const post5 = {
+          link: 'https://example.com/post-5',
+          title: 'Post 5',
+          content: '<p>Content 5</p>',
+          publishedAt,
+        }
 
         // Scan 1: 3 items inserted.
         const scan1 = classifyItems({
           newItems: [
-            { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1', publishedAt },
-            { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2', publishedAt },
-            { guid: 'guid-3', link: 'https://example.com/post-3', title: 'Post 3', publishedAt },
+            { guid: 'guid-1', ...post1 },
+            { guid: 'guid-2', ...post2 },
+            { guid: 'guid-3', ...post3 },
           ],
           existingItems: [],
         })
@@ -6261,26 +6368,11 @@ describe('classifyItems', () => {
         // Scan 2: 3 old items with new GUIDs + 2 genuinely new items.
         const scan2 = classifyItems({
           newItems: [
-            {
-              guid: 'new-guid-1',
-              link: 'https://example.com/post-1',
-              title: 'Post 1',
-              publishedAt,
-            },
-            {
-              guid: 'new-guid-2',
-              link: 'https://example.com/post-2',
-              title: 'Post 2',
-              publishedAt,
-            },
-            {
-              guid: 'new-guid-3',
-              link: 'https://example.com/post-3',
-              title: 'Post 3',
-              publishedAt,
-            },
-            { guid: 'guid-4', link: 'https://example.com/post-4', title: 'Post 4', publishedAt },
-            { guid: 'guid-5', link: 'https://example.com/post-5', title: 'Post 5', publishedAt },
+            { guid: 'new-guid-1', ...post1 },
+            { guid: 'new-guid-2', ...post2 },
+            { guid: 'new-guid-3', ...post3 },
+            { guid: 'guid-4', ...post4 },
+            { guid: 'guid-5', ...post5 },
           ],
           existingItems: afterScan1,
           fingerprintLevel: scan1.fingerprintLevel,
@@ -6293,15 +6385,45 @@ describe('classifyItems', () => {
 
       it('should handle shrinking feed with changing GUIDs on remaining items', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const post1 = {
+          link: 'https://example.com/post-1',
+          title: 'Post 1',
+          content: '<p>Content 1</p>',
+          publishedAt,
+        }
+        const post2 = {
+          link: 'https://example.com/post-2',
+          title: 'Post 2',
+          content: '<p>Content 2</p>',
+          publishedAt,
+        }
+        const post3 = {
+          link: 'https://example.com/post-3',
+          title: 'Post 3',
+          content: '<p>Content 3</p>',
+          publishedAt,
+        }
+        const post4 = {
+          link: 'https://example.com/post-4',
+          title: 'Post 4',
+          content: '<p>Content 4</p>',
+          publishedAt,
+        }
+        const post5 = {
+          link: 'https://example.com/post-5',
+          title: 'Post 5',
+          content: '<p>Content 5</p>',
+          publishedAt,
+        }
 
         // Scan 1: 5 items inserted.
         const scan1 = classifyItems({
           newItems: [
-            { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1', publishedAt },
-            { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2', publishedAt },
-            { guid: 'guid-3', link: 'https://example.com/post-3', title: 'Post 3', publishedAt },
-            { guid: 'guid-4', link: 'https://example.com/post-4', title: 'Post 4', publishedAt },
-            { guid: 'guid-5', link: 'https://example.com/post-5', title: 'Post 5', publishedAt },
+            { guid: 'guid-1', ...post1 },
+            { guid: 'guid-2', ...post2 },
+            { guid: 'guid-3', ...post3 },
+            { guid: 'guid-4', ...post4 },
+            { guid: 'guid-5', ...post5 },
           ],
           existingItems: [],
         })
@@ -6317,24 +6439,9 @@ describe('classifyItems', () => {
         // The 2 removed items stay in existingItems but have no match.
         const scan2 = classifyItems({
           newItems: [
-            {
-              guid: 'new-guid-1',
-              link: 'https://example.com/post-1',
-              title: 'Post 1',
-              publishedAt,
-            },
-            {
-              guid: 'new-guid-3',
-              link: 'https://example.com/post-3',
-              title: 'Post 3',
-              publishedAt,
-            },
-            {
-              guid: 'new-guid-5',
-              link: 'https://example.com/post-5',
-              title: 'Post 5',
-              publishedAt,
-            },
+            { guid: 'new-guid-1', ...post1 },
+            { guid: 'new-guid-3', ...post3 },
+            { guid: 'new-guid-5', ...post5 },
           ],
           existingItems: afterScan1,
           fingerprintLevel: scan1.fingerprintLevel,

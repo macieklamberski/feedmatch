@@ -1,4 +1,4 @@
-import { hashMeta } from './constants.js'
+import { hashMeta, minReconciliationFields } from './constants.js'
 import {
   buildFingerprint,
   computeItemHashes,
@@ -41,10 +41,20 @@ export const findReconciliationCandidate = (
   incoming: IncomingItem,
   existing: ExistingItem,
 ): MatchResult | undefined => {
+  let matchingFields = 0
+
   for (const key of contentHashKeys) {
     if (incoming[key] !== existing[key]) {
       return
     }
+
+    if (incoming[key] != null) {
+      matchingFields++
+    }
+  }
+
+  if (matchingFields < minReconciliationFields) {
+    return
   }
 
   const incomingDate = incoming.publishedAt?.getTime()
