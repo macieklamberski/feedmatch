@@ -16,6 +16,12 @@ import type {
   MatchedBy,
 } from './types.js'
 
+// Minimum number of content hash fields (title, content, summary, enclosure)
+// that must be non-null on both sides and match for reconciliation to accept
+// a merge. Items with fewer matching fields are too sparse to safely merge
+// (e.g. two items with only the same generic title like "Newsletter").
+export const minReconciliationFields = 2
+
 export const fingerprintLevels = [
   'guid',
   'guidFragment',
