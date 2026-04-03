@@ -42,7 +42,7 @@
     "build": "tsdown src/index.ts --format cjs,esm --dts --clean --unbundle --no-fixed-extension"
   },
   "dependencies": {
-    "feedcanon": "^1.4.2",
+    "feedcanon": "^1.5.0",
     "typescript": "^6.0.2"
   },
   "devDependencies": {
