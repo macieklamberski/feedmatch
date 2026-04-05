@@ -1834,7 +1834,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid match is rejected by enclosure conflict', () => {
+    it('should update when guid matches despite different enclosures', () => {
       const feedItem = {
         guid: 'guid-1',
         enclosures: [{ url: 'https://example.com/new.mp3' }],
@@ -1853,14 +1853,16 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
       const expected: ClassifyItemsResult = {
-        inserts: [
+        inserts: [],
+        updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
           },
         ],
-        updates: [],
-        fingerprintLevel: 'enclosure',
+        fingerprintLevel: 'guid',
       }
 
       expect(classifyItems(value)).toEqual(expected)
@@ -1928,7 +1930,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid match has enclosure conflict even without fingerprintLevel', () => {
+    it('should update when guid matches despite different enclosures without fingerprintLevel', () => {
       const feedItem = {
         guid: 'guid-1',
         enclosures: [{ url: 'https://example.com/new.mp3' }],
@@ -1946,14 +1948,16 @@ describe('classifyItems', () => {
         ],
       }
       const expected: ClassifyItemsResult = {
-        inserts: [
+        inserts: [],
+        updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
           },
         ],
-        updates: [],
-        fingerprintLevel: 'enclosure',
+        fingerprintLevel: 'guid',
       }
 
       expect(classifyItems(value)).toEqual(expected)
@@ -3294,7 +3298,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid is recycled with different enclosure and original still exists', () => {
+    it('should update when guid is reused with different enclosure (trusts GUID per RSS spec)', () => {
       const feedItem = {
         guid: 'shared-guid',
         enclosures: [{ url: 'https://example.com/new-episode.mp3' }],
@@ -3312,14 +3316,16 @@ describe('classifyItems', () => {
         ],
       }
       const expected: ClassifyItemsResult = {
-        inserts: [
+        inserts: [],
+        updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
           },
         ],
-        updates: [],
-        fingerprintLevel: 'enclosure',
+        fingerprintLevel: 'guid',
       }
 
       expect(classifyItems(value)).toEqual(expected)
@@ -3562,7 +3568,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when isDefault enclosure toggle changes selected enclosure', () => {
+    it('should update when isDefault enclosure toggle changes selected enclosure (trusts GUID)', () => {
       const feedItem = {
         guid: 'G',
         enclosures: [
@@ -3588,14 +3594,16 @@ describe('classifyItems', () => {
         ],
       }
       const expected: ClassifyItemsResult = {
-        inserts: [
+        inserts: [],
+        updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
           },
         ],
-        updates: [],
-        fingerprintLevel: 'enclosure',
+        fingerprintLevel: 'guid',
       }
 
       expect(classifyItems(value)).toEqual(expected)

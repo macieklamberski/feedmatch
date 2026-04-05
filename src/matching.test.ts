@@ -7,7 +7,6 @@ import {
   computeSignalStats,
   contentChangeFilter,
   dateProximityFilter,
-  enclosureConflictFilter,
   findMatchCandidates,
   hasLinkOnly,
   highUniquenessStrategies,
@@ -666,17 +665,20 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
-  it('should reject guid match when enclosures conflict', () => {
+  it('should allow guid match when enclosures differ', () => {
+    const candidate = makeExistingItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })
     const value = {
       incoming: makeIncomingItem({
         guidHash: 'guid-1',
         enclosureHash: 'enc-new',
       }),
-      candidates: [makeExistingItem({ guidHash: 'guid-1', enclosureHash: 'enc-old' })],
+      candidates: [candidate],
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
-    expect(selectMatchingItem(value)).toBeUndefined()
+    const expected: MatchResult = { match: candidate, matchedBy: 'guid' }
+
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should allow guid match when enclosures are same', () => {
@@ -749,17 +751,20 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should filter out link matches with enclosure conflict', () => {
+  it('should allow link match when enclosures differ', () => {
+    const candidate = makeExistingItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })
     const value = {
       incoming: makeIncomingItem({
         linkHash: 'link-1',
         enclosureHash: 'enc-new',
       }),
-      candidates: [makeExistingItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })],
+      candidates: [candidate],
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
-    expect(selectMatchingItem(value)).toBeUndefined()
+    const expected: MatchResult = { match: candidate, matchedBy: 'link' }
+
+    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should allow link match when enclosures are same', () => {
@@ -1489,84 +1494,6 @@ describe('matchByTitle', () => {
   })
 })
 
-describe('enclosureConflictFilter', () => {
-  it('should reject when both sides have different enclosures on guid source', () => {
-    const value: CandidateFilterContext = {
-      matchedBy: 'guid',
-      incoming: makeIncomingItem({ enclosureHash: 'enc-new' }),
-      candidate: makeExistingItem({ enclosureHash: 'enc-old' }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-    }
-
-    expect(enclosureConflictFilter.evaluate(value)).toEqual({
-      allow: false,
-      reason: 'Enclosure hash mismatch',
-    })
-  })
-
-  it('should reject when both sides have different enclosures on link source', () => {
-    const value: CandidateFilterContext = {
-      matchedBy: 'link',
-      incoming: makeIncomingItem({ enclosureHash: 'enc-new' }),
-      candidate: makeExistingItem({ enclosureHash: 'enc-old' }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-    }
-
-    expect(enclosureConflictFilter.evaluate(value)).toEqual({
-      allow: false,
-      reason: 'Enclosure hash mismatch',
-    })
-  })
-
-  it('should allow when enclosures match', () => {
-    const value: CandidateFilterContext = {
-      matchedBy: 'guid',
-      incoming: makeIncomingItem({ enclosureHash: 'enc-same' }),
-      candidate: makeExistingItem({ enclosureHash: 'enc-same' }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-    }
-
-    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
-  })
-
-  it('should allow when candidate has no enclosure', () => {
-    const value: CandidateFilterContext = {
-      matchedBy: 'guid',
-      incoming: makeIncomingItem({ enclosureHash: 'enc-new' }),
-      candidate: makeExistingItem({ enclosureHash: null }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-    }
-
-    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
-  })
-
-  it('should allow when incoming has no enclosure', () => {
-    const value: CandidateFilterContext = {
-      matchedBy: 'guid',
-      incoming: makeIncomingItem(),
-      candidate: makeExistingItem({ enclosureHash: 'enc-existing' }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-    }
-
-    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
-  })
-
-  it('should allow when neither side has enclosure', () => {
-    const value: CandidateFilterContext = {
-      matchedBy: 'guid',
-      incoming: makeIncomingItem(),
-      candidate: makeExistingItem({ enclosureHash: null }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-    }
-
-    expect(enclosureConflictFilter.evaluate(value)).toEqual({ allow: true })
-  })
-
-  it('should only apply to guid and link sources', () => {
-    expect(enclosureConflictFilter.appliesTo).toEqual(['guid', 'link'])
-  })
-})
-
 describe('dateProximityFilter', () => {
   it('should allow match when dates are within threshold', () => {
     const now = new Date()
@@ -1668,8 +1595,8 @@ describe('dateProximityFilter', () => {
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
   })
 
-  it('should only apply to guid matches', () => {
-    expect(dateProximityFilter.appliesTo).toEqual(['guid'])
+  it('should apply to guid and link matches', () => {
+    expect(dateProximityFilter.appliesTo).toEqual(['guid', 'link'])
   })
 })
 
@@ -1788,14 +1715,25 @@ describe('applyCandidateFilters', () => {
 
   it('should filter candidates using applicable filter', () => {
     const candidates = [
-      makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
-      makeExistingItem({ id: 'b', enclosureHash: 'enc-2' }),
+      makeExistingItem({ id: 'a', titleHash: 'title-1' }),
+      makeExistingItem({ id: 'b', titleHash: 'title-2' }),
     ]
+    const filter: CandidateFilter = {
+      name: 'titleMatch',
+      appliesTo: ['guid'],
+      evaluate: (context) => {
+        if (context.candidate.titleHash !== context.incoming.titleHash) {
+          return { allow: false, reason: 'Title mismatch' }
+        }
+
+        return { allow: true }
+      },
+    }
     const value = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
-      filters: [enclosureConflictFilter],
-      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
+      filters: [filter],
+      incoming: makeIncomingItem({ titleHash: 'title-1' }),
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
     const expected = [candidates[0]]
