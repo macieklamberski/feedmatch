@@ -3643,6 +3643,172 @@ describe('classifyItems', () => {
     })
   })
 
+  it('should update when guid+link match but enclosure changed (CDN migration)', () => {
+    const feedItems = [
+      {
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
+        title: 'Post 1',
+        content: 'Content 1',
+      },
+      {
+        guid: 'guid-2',
+        link: 'https://example.com/post-2',
+        enclosures: [{ url: 'https://cdn.example.com/new-image-2.jpg' }],
+        title: 'Post 2',
+        content: 'Content 2',
+      },
+    ]
+    const value: ClassifyItemsInput = {
+      newItems: feedItems,
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          guid: 'guid-1',
+          link: 'https://example.com/post-1',
+          enclosures: [{ url: 'https://example.com/old-image.jpg' }],
+          title: 'Post 1',
+          content: 'Content 1',
+        }),
+        makeMatchable({
+          id: 'existing-2',
+          guid: 'guid-2',
+          link: 'https://example.com/post-2',
+          enclosures: [{ url: 'https://example.com/old-image-2.jpg' }],
+          title: 'Post 2',
+          content: 'Content 2',
+        }),
+      ],
+      fingerprintLevel: 'guid',
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItems[0], ...computeItemHashes(feedItems[0]) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-1',
+          matchedBy: 'guid',
+        },
+        {
+          item: { ...feedItems[1], ...computeItemHashes(feedItems[1]) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-2',
+          matchedBy: 'guid',
+        },
+      ],
+      fingerprintLevel: 'guid',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  it('should update when guid+link match but enclosure and title changed', () => {
+    const feedItem = {
+      guid: 'guid-1',
+      link: 'https://example.com/post-1',
+      enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
+      title: 'Updated Title',
+      content: 'New content',
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          guid: 'guid-1',
+          link: 'https://example.com/post-1',
+          enclosures: [{ url: 'https://example.com/old-image.jpg' }],
+          title: 'Original Title',
+          content: 'Old content',
+        }),
+      ],
+      fingerprintLevel: 'guid',
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItem, ...computeItemHashes(feedItem) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-1',
+          matchedBy: 'guid',
+        },
+      ],
+      fingerprintLevel: 'guid',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  it('should produce same result regardless of existing item order', () => {
+    const feedItem = {
+      guid: 'guid-2',
+      link: 'https://example.com/post-2',
+      enclosures: [{ url: 'https://cdn.example.com/image-2.jpg' }],
+      title: 'Post 2',
+      content: 'Updated content',
+    }
+    const existingA = makeMatchable({
+      id: 'existing-1',
+      guid: 'guid-1',
+      link: 'https://example.com/post-1',
+      title: 'Post 1',
+    })
+    const existingB = makeMatchable({
+      id: 'existing-2',
+      guid: 'guid-2',
+      link: 'https://example.com/post-2',
+      enclosures: [{ url: 'https://example.com/old-image-2.jpg' }],
+      title: 'Post 2',
+      content: 'Old content',
+    })
+    const base = {
+      newItems: [feedItem],
+      fingerprintLevel: 'guid' as const,
+    }
+    const resultForward = classifyItems({
+      ...base,
+      existingItems: [existingA, existingB],
+    })
+    const resultReversed = classifyItems({
+      ...base,
+      existingItems: [existingB, existingA],
+    })
+
+    expect(resultForward.inserts).toHaveLength(resultReversed.inserts.length)
+    expect(resultForward.updates).toHaveLength(resultReversed.updates.length)
+    expect(resultForward.fingerprintLevel).toBe(resultReversed.fingerprintLevel)
+  })
+
+  it('should insert when guid+link match but dates are far apart', () => {
+    const feedItem = {
+      guid: 'guid-1',
+      link: 'https://example.com/post-1',
+      enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
+      title: 'Reused Title',
+      publishedAt: new Date('2026-06-01T00:00:00Z'),
+    }
+    const existing = makeMatchable({
+      id: 'existing-1',
+      guid: 'guid-1',
+      link: 'https://example.com/post-1',
+      enclosures: [{ url: 'https://example.com/old-image.jpg' }],
+      title: 'Reused Title',
+      publishedAt: new Date('2026-01-01T00:00:00Z'),
+    })
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [{ ...existing, publishedAt: new Date('2026-01-01T00:00:00Z') }],
+      fingerprintLevel: 'guid',
+    }
+    const result = classifyItems(value)
+
+    expect(result.inserts).toHaveLength(1)
+    expect(result.updates).toHaveLength(0)
+  })
+
   describe('multi-scan replay', () => {
     it('should downgrade level on hub onset across scans', () => {
       const scan1 = classifyItems({
