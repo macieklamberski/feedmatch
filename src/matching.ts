@@ -47,7 +47,18 @@ export const computeFeedProfile = (
 
     // When one side has no present values, use the other side's rates.
     // Otherwise take the minimum (conservative).
-    const source = existing.present === 0 ? incoming : incoming.present === 0 ? existing : null
+    const source = (() => {
+      if (existing.present === 0) {
+        return incoming
+      }
+
+      if (incoming.present === 0) {
+        return existing
+      }
+
+      return null
+    })()
+
     const effective = source
       ? { presenceRate: source.presenceRate, uniquenessRate: source.uniquenessRate }
       : {
@@ -482,7 +493,7 @@ export const selectMatchingItem = ({
     }
 
     if (result.outcome === 'ambiguous') {
-      return undefined
+      return
     }
   }
 

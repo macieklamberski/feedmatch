@@ -8,6 +8,8 @@ import {
 } from './hashes.js'
 import type { ItemHashes, NewItem } from './types.js'
 
+const md5Regex = /^[a-f0-9]{32}$/
+
 const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
   return {
     guidHash: null,
@@ -24,7 +26,7 @@ const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
 
 describe('generateHash', () => {
   it('should produce deterministic 32-char hex and distinguish multi-value from single-value', () => {
-    expect(generateHash('hello')).toMatch(/^[a-f0-9]{32}$/)
+    expect(generateHash('hello')).toMatch(md5Regex)
     expect(generateHash('hello')).toBe(generateHash('hello'))
     expect(generateHash('hello')).not.toBe(generateHash('world'))
     expect(generateHash('ab', 'cd')).not.toBe(generateHash('abcd'))
@@ -234,14 +236,14 @@ describe('computeItemHashes', () => {
       enclosures: [{ url: 'https://example.com/audio.mp3' }],
     }
     const expected = {
-      guidHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+      guidHash: expect.stringMatching(md5Regex),
       guidFragmentHash: null,
-      linkHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+      linkHash: expect.stringMatching(md5Regex),
       linkFragmentHash: null,
-      enclosureHash: expect.stringMatching(/^[a-f0-9]{32}$/),
-      titleHash: expect.stringMatching(/^[a-f0-9]{32}$/),
-      summaryHash: expect.stringMatching(/^[a-f0-9]{32}$/),
-      contentHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+      enclosureHash: expect.stringMatching(md5Regex),
+      titleHash: expect.stringMatching(md5Regex),
+      summaryHash: expect.stringMatching(md5Regex),
+      contentHash: expect.stringMatching(md5Regex),
     }
 
     expect(computeItemHashes(value)).toEqual(expected)
@@ -250,7 +252,7 @@ describe('computeItemHashes', () => {
   it('should compute only guidHash when only guid present', () => {
     const value: NewItem = { guid: 'abc-123' }
     const expected = {
-      guidHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+      guidHash: expect.stringMatching(md5Regex),
       guidFragmentHash: null,
       linkHash: null,
       linkFragmentHash: null,
@@ -383,7 +385,7 @@ describe('computeItemHashes', () => {
   it('should compute linkFragmentHash when link contains fragment', () => {
     const value: NewItem = { link: 'https://example.com/post#section' }
 
-    expect(computeItemHashes(value).linkFragmentHash).toMatch(/^[a-f0-9]{32}$/)
+    expect(computeItemHashes(value).linkFragmentHash).toMatch(md5Regex)
   })
 
   it('should not compute linkFragmentHash when link has no fragment', () => {
@@ -417,7 +419,7 @@ describe('computeItemHashes', () => {
   it('should compute guidFragmentHash when guid is URL with fragment', () => {
     const value: NewItem = { guid: 'https://example.com/page#item1' }
 
-    expect(computeItemHashes(value).guidFragmentHash).toMatch(/^[a-f0-9]{32}$/)
+    expect(computeItemHashes(value).guidFragmentHash).toMatch(md5Regex)
   })
 
   it('should not compute guidFragmentHash when guid is URL without fragment', () => {
