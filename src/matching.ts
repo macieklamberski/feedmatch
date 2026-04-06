@@ -100,23 +100,20 @@ export const dateProximityFilter: CandidateFilter = {
   },
 }
 
-// Updates only when content hashes differ between existing and incoming.
-// Compares all isContent hashes (title, summary, content, enclosure).
-export const contentChangeFilter: UpdateFilter = {
-  name: 'contentChange',
+// Updates when any hash field differs between existing and incoming. The
+// matching field is always equal (by definition), so this only detects
+// changes in fields below the match level.
+export const changeFilter: UpdateFilter = {
+  name: 'change',
   shouldUpdate: (context) => {
-    return (
-      hashMeta
-        .filter((meta) => meta.isContent)
-        /* biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined. */
-        .some((meta) => context.existing[meta.key] != context.incoming[meta.key])
-    )
+    /* biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined. */
+    return hashMeta.some((meta) => context.existing[meta.key] != context.incoming[meta.key])
   },
 }
 
 export const prematchCandidateFilters: Array<CandidateFilter> = [dateProximityFilter]
 export const classifyCandidateFilters: Array<CandidateFilter> = [dateProximityFilter]
-export const updateFilters: Array<UpdateFilter> = [contentChangeFilter]
+export const updateFilters: Array<UpdateFilter> = [changeFilter]
 
 // Apply all applicable candidate filters to a candidate list for a given source.
 // Filters are applied sequentially — each filter narrows the output of the previous.

@@ -361,16 +361,17 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should skip update when only identity fields differ but content is identical', () => {
+    // When GUID is the identifier, fields below it (like link) are
+    // effectively content and should trigger an update when they change.
+    it('should update when only link differs but content is identical', () => {
+      const feedItem = {
+        guid: 'guid-1',
+        link: 'https://example.com/new',
+        title: 'Post Title',
+        content: 'Same content',
+      }
       const value: ClassifyItemsInput = {
-        newItems: [
-          {
-            guid: 'guid-1',
-            link: 'https://example.com/new',
-            title: 'Post Title',
-            content: 'Same content',
-          },
-        ],
+        newItems: [feedItem],
         existingItems: [
           makeMatchable({
             id: 'existing-1',
@@ -383,7 +384,14 @@ describe('classifyItems', () => {
       }
       const expected: ClassifyItemsResult = {
         inserts: [],
-        updates: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
         fingerprintLevel: 'guid',
       }
 
@@ -2590,6 +2598,78 @@ describe('classifyItems', () => {
   })
 
   describe('update scenarios', () => {
+    // When GUID is the identifier, fields below it (like link) are
+    // effectively content and should trigger an update when they change.
+    it('should update when GUID matches but link changes and content is the same', () => {
+      const feedItem = {
+        guid: 'same-guid',
+        link: 'https://new-domain.com/post',
+        title: 'Post Title',
+        content: '<p>Same content</p>',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'same-guid',
+            link: 'https://old-domain.com/post',
+            title: 'Post Title',
+            content: '<p>Same content</p>',
+          }),
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    // URL-type GUIDs share the same guidHash (fragment stripped) but
+    // differ in guidFragmentHash. The changeFilter should detect this.
+    it('should update when only GUID fragment changes', () => {
+      const feedItem = {
+        guid: 'https://example.com/post#v2',
+        link: 'https://example.com/post',
+        title: 'Post Title',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'https://example.com/post#v1',
+            link: 'https://example.com/post',
+            title: 'Post Title',
+          }),
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should update via link on high-uniqueness channel without explicit fingerprintLevel', () => {
       const feedItem = {
         link: 'https://example.com/post',

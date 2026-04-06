@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyCandidateFilters,
+  changeFilter,
   classifyCandidateFilters,
   computeFeedProfile,
   computeMatchPolicy,
   computeSignalStats,
-  contentChangeFilter,
   dateProximityFilter,
   findMatchCandidates,
   hasLinkOnly,
@@ -30,6 +30,7 @@ import type {
   MatchPolicy,
   MatchResult,
   MatchStrategyContext,
+  UpdateFilterContext,
 } from './types.js'
 
 const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
@@ -1600,7 +1601,7 @@ describe('dateProximityFilter', () => {
   })
 })
 
-describe('contentChangeFilter', () => {
+describe('changeFilter', () => {
   it('should update when title changes', () => {
     const value = {
       existing: makeExistingItem({ titleHash: 'title-1' }),
@@ -1608,7 +1609,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when summary changes', () => {
@@ -1618,7 +1619,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when content changes', () => {
@@ -1628,7 +1629,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when enclosure changes', () => {
@@ -1638,27 +1639,37 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should not update when all content hashes match', () => {
+  it('should update when linkHash changes', () => {
     const value = {
-      existing: makeExistingItem({
-        titleHash: 'title-1',
-        summaryHash: 'sum-1',
-        contentHash: 'cnt-1',
-        enclosureHash: 'enc-1',
-      }),
-      incoming: makeIncomingItem({
-        titleHash: 'title-1',
-        summaryHash: 'sum-1',
-        contentHash: 'cnt-1',
-        enclosureHash: 'enc-1',
-      }),
+      existing: makeExistingItem({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when guidFragmentHash changes', () => {
+    const value = {
+      existing: makeExistingItem({ guidFragmentHash: 'gf-1' }),
+      incoming: makeIncomingItem({ guidFragmentHash: 'gf-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when linkFragmentHash changes', () => {
+    const value = {
+      existing: makeExistingItem({ linkFragmentHash: 'lf-1' }),
+      incoming: makeIncomingItem({ linkFragmentHash: 'lf-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should not update when null and undefined are compared', () => {
@@ -1668,7 +1679,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
 
   it('should update when content appears for the first time', () => {
@@ -1678,17 +1689,68 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should ignore non-content hashes', () => {
-    const value = {
-      existing: makeExistingItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
-      incoming: makeIncomingItem({ guidHash: 'guid-2', linkHash: 'link-2' }),
-      matchedBy: 'guid' as MatchedBy,
+  it('should update when content disappears', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: null }),
+      matchedBy: 'guid',
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  // In practice, the matching field (e.g. guidHash) is always equal between
+  // incoming and existing. This test only verifies the filter's correctness
+  // in isolation - it will never happen in the real pipeline.
+  it('should update when guidHash differs', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-2' }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when multiple fields change at once', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({
+        titleHash: 'title-1',
+        linkHash: 'link-1',
+        contentHash: 'cnt-1',
+      }),
+      incoming: makeIncomingItem({
+        titleHash: 'title-2',
+        linkHash: 'link-2',
+        contentHash: 'cnt-2',
+      }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should not update when all 8 hash fields match', () => {
+    const hashes: ItemHashes = {
+      guidHash: 'guid-1',
+      guidFragmentHash: 'gf-1',
+      linkHash: 'link-1',
+      linkFragmentHash: 'lf-1',
+      enclosureHash: 'enc-1',
+      titleHash: 'title-1',
+      contentHash: 'cnt-1',
+      summaryHash: 'sum-1',
+    }
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem(hashes),
+      incoming: makeIncomingItem(hashes),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
 })
 
