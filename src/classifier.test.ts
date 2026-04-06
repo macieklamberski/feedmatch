@@ -1117,6 +1117,66 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    it('should downgrade guid to title when guid and link both collide', () => {
+      const feedItemA = {
+        guid: 'shared-guid',
+        link: 'https://example.com/shared-link',
+        title: 'Post 1',
+      }
+      const feedItemB = {
+        guid: 'shared-guid',
+        link: 'https://example.com/shared-link',
+        title: 'Post 2',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB],
+        existingItems: [],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [
+          {
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+          },
+          {
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+          },
+        ],
+        updates: [],
+        fingerprintLevel: 'title',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should downgrade guid to title when guid collides and no links exist', () => {
+      const feedItemA = { guid: 'shared-guid', title: 'Post 1' }
+      const feedItemB = { guid: 'shared-guid', title: 'Post 2' }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB],
+        existingItems: [],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [
+          {
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+          },
+          {
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+          },
+        ],
+        updates: [],
+        fingerprintLevel: 'title',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should not change fingerprintLevel when feed and existing are both empty', () => {
       const value: ClassifyItemsInput = {
         newItems: [],
@@ -2665,6 +2725,61 @@ describe('classifyItems', () => {
           },
         ],
         fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should match by link when all items share a guid across scans', () => {
+      const feedItemA = {
+        guid: 'shared-guid',
+        link: 'https://example.com/post-1',
+        title: 'Post 1',
+        content: 'New content A',
+      }
+      const feedItemB = {
+        guid: 'shared-guid',
+        link: 'https://example.com/post-2',
+        title: 'Post 2',
+        content: 'New content B',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'shared-guid',
+            link: 'https://example.com/post-1',
+            title: 'Post 1',
+            content: 'Old content A',
+          }),
+          makeMatchable({
+            id: 'existing-2',
+            guid: 'shared-guid',
+            link: 'https://example.com/post-2',
+            title: 'Post 2',
+            content: 'Old content B',
+          }),
+        ],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+          {
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-2',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'link',
       }
 
       expect(classifyItems(value)).toEqual(expected)

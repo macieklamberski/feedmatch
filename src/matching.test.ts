@@ -1258,6 +1258,37 @@ describe('matchByGuid', () => {
     })
   })
 
+  it('should fall through to guid fragment when enclosure does not narrow multiple matches', () => {
+    const target = makeExistingItem({
+      id: 'a',
+      guidHash: 'guid-1',
+      enclosureHash: 'enc-same',
+      guidFragmentHash: 'gf-1',
+    })
+    const context: MatchStrategyContext = {
+      incoming: makeIncomingItem({
+        guidHash: 'guid-1',
+        enclosureHash: 'enc-same',
+        guidFragmentHash: 'gf-1',
+      }),
+      candidates: [
+        target,
+        makeExistingItem({
+          id: 'b',
+          guidHash: 'guid-1',
+          enclosureHash: 'enc-same',
+          guidFragmentHash: 'gf-2',
+        }),
+      ],
+      filtered: identity,
+    }
+
+    expect(matchByGuid(context)).toEqual({
+      outcome: 'matched',
+      result: { match: target, matchedBy: 'guid' },
+    })
+  })
+
   it('should disambiguate by link when guid fragment fails', () => {
     const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
     const context: MatchStrategyContext = {
