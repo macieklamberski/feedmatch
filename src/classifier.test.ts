@@ -251,7 +251,7 @@ describe('findReconciliationCandidate', () => {
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
 
-    it('should return title match when both GUIDs are null and link differs but all content matches', () => {
+    it('should return reconciled match when both GUIDs are null and link differs but all content matches', () => {
       const incoming = makeIncoming({
         linkHash: 'new-link',
         titleHash: 'same-title',
@@ -264,7 +264,7 @@ describe('findReconciliationCandidate', () => {
         contentHash: 'same-content',
         publishedAt: new Date('2024-01-01T00:00:00Z'),
       })
-      const expected: MatchResult = { match: existing, matchedBy: 'title' }
+      const expected: MatchResult = { match: existing, matchedBy: 'reconciled' }
 
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
@@ -524,7 +524,7 @@ describe('findReconciliationCandidate', () => {
         titleHash: 'same-title',
         contentHash: 'same-content',
       })
-      const expected: MatchResult = { match: existing, matchedBy: 'title' }
+      const expected: MatchResult = { match: existing, matchedBy: 'reconciled' }
 
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
@@ -578,6 +578,55 @@ describe('findReconciliationCandidate', () => {
       })
 
       expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
+    })
+
+    it('should not match Case 2 when only titleHash and enclosureHash match (no body hash)', () => {
+      const incoming = makeIncoming({
+        linkHash: 'new-link',
+        titleHash: 'same-title',
+        enclosureHash: 'same-enc',
+      })
+      const existing = makeExistingItem({
+        linkHash: 'old-link',
+        titleHash: 'same-title',
+        enclosureHash: 'same-enc',
+      })
+
+      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
+    })
+
+    it('should match Case 2 when titleHash and summaryHash match', () => {
+      const incoming = makeIncoming({
+        linkHash: 'new-link',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+      })
+      const existing = makeExistingItem({
+        linkHash: 'old-link',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+      })
+      const expected: MatchResult = { match: existing, matchedBy: 'reconciled' }
+
+      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
+    })
+
+    it('should still match Case 1 when only titleHash and enclosureHash match', () => {
+      const incoming = makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        enclosureHash: 'same-enc',
+      })
+      const existing = makeExistingItem({
+        guidHash: 'old-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        enclosureHash: 'same-enc',
+      })
+      const expected: MatchResult = { match: existing, matchedBy: 'link' }
+
+      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
   })
 })
@@ -780,7 +829,7 @@ describe('reconcileInserts', () => {
     expect(result.reconciledUpdates).toHaveLength(0)
   })
 
-  it('should skip existing items already in updateTargetIds', () => {
+  it('should skip existing items already in claimedExistingIds', () => {
     const insert = {
       item: makeIncoming({
         guidHash: 'new-guid',
@@ -797,7 +846,7 @@ describe('reconcileInserts', () => {
       titleHash: 'same-title',
       publishedAt: new Date('2024-01-01T00:00:00Z'),
     })
-    // existing-1 is already targeted by a main pipeline update.
+    // existing-1 is already claimed by the main classification loop.
     const result = reconcileInserts([insert], [existing], new Set(['existing-1']))
 
     expect(result.reconciledInserts).toHaveLength(1)
@@ -880,6 +929,216 @@ describe('reconcileInserts', () => {
 
     expect(result.reconciledInserts).toHaveLength(1)
     expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should not reconcile when insert has multiple matching existing items (ambiguous)', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const insert = {
+      item: makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const existing1 = makeExistingItem({
+      id: 'existing-1',
+      guidHash: 'old-1',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt,
+    })
+    const existing2 = makeExistingItem({
+      id: 'existing-2',
+      guidHash: 'old-2',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt,
+    })
+
+    const result = reconcileInserts([insert], [existing1, existing2], new Set())
+
+    expect(result.reconciledInserts).toHaveLength(1)
+    expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should not reconcile when two inserts target the same existing item (ambiguous)', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const insert1 = {
+      item: makeIncoming({
+        guidHash: 'new-1',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const insert2 = {
+      item: makeIncoming({
+        guidHash: 'new-2',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-2',
+    }
+    const existing = makeExistingItem({
+      id: 'existing-1',
+      guidHash: 'old-guid',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt,
+    })
+
+    const result = reconcileInserts([insert1, insert2], [existing], new Set())
+
+    expect(result.reconciledInserts).toHaveLength(2)
+    expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should reconcile unique target and reject competing inserts for the same target', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    // Insert 1 and 2 both target existing-1 (ambiguous).
+    const insert1 = {
+      item: makeIncoming({
+        guidHash: 'new-1',
+        linkHash: 'link-shared',
+        titleHash: 'title-shared',
+        contentHash: 'content-shared',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const insert2 = {
+      item: makeIncoming({
+        guidHash: 'new-2',
+        linkHash: 'link-shared',
+        titleHash: 'title-shared',
+        contentHash: 'content-shared',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-2',
+    }
+    // Insert 3 uniquely targets existing-2.
+    const insert3 = {
+      item: makeIncoming({
+        guidHash: 'new-3',
+        linkHash: 'link-unique',
+        titleHash: 'title-unique',
+        contentHash: 'content-unique',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-3',
+    }
+    const existing1 = makeExistingItem({
+      id: 'existing-1',
+      guidHash: 'old-1',
+      linkHash: 'link-shared',
+      titleHash: 'title-shared',
+      contentHash: 'content-shared',
+      publishedAt,
+    })
+    const existing2 = makeExistingItem({
+      id: 'existing-2',
+      guidHash: 'old-2',
+      linkHash: 'link-unique',
+      titleHash: 'title-unique',
+      contentHash: 'content-unique',
+      publishedAt,
+    })
+
+    const result = reconcileInserts([insert1, insert2, insert3], [existing1, existing2], new Set())
+
+    expect(result.reconciledInserts).toHaveLength(2)
+    expect(result.reconciledInserts[0]).toBe(insert1)
+    expect(result.reconciledInserts[1]).toBe(insert2)
+    expect(result.reconciledUpdates).toHaveLength(1)
+    expect(result.reconciledUpdates[0].existingItemId).toBe('existing-2')
+  })
+
+  it('should produce same result regardless of existing item order', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const insert = {
+      item: makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const existing1 = makeExistingItem({
+      id: 'existing-1',
+      guidHash: 'old-1',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt,
+    })
+    const existing2 = makeExistingItem({
+      id: 'existing-2',
+      guidHash: 'old-2',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt,
+    })
+
+    const forward = reconcileInserts([insert], [existing1, existing2], new Set())
+    const reversed = reconcileInserts([insert], [existing2, existing1], new Set())
+
+    expect(forward.reconciledInserts).toHaveLength(1)
+    expect(forward.reconciledUpdates).toHaveLength(0)
+    expect(reversed.reconciledInserts).toHaveLength(1)
+    expect(reversed.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should produce same result regardless of insert order', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const insert1 = {
+      item: makeIncoming({
+        guidHash: 'new-1',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const insert2 = {
+      item: makeIncoming({
+        guidHash: 'new-2',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-2',
+    }
+    const existing = makeExistingItem({
+      id: 'existing-1',
+      guidHash: 'old-guid',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt,
+    })
+
+    const forward = reconcileInserts([insert1, insert2], [existing], new Set())
+    const reversed = reconcileInserts([insert2, insert1], [existing], new Set())
+
+    expect(forward.reconciledInserts).toHaveLength(2)
+    expect(forward.reconciledUpdates).toHaveLength(0)
+    expect(reversed.reconciledInserts).toHaveLength(2)
+    expect(reversed.reconciledUpdates).toHaveLength(0)
   })
 })
 
@@ -4961,7 +5220,7 @@ describe('classifyItems', () => {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
               fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
-              matchedBy: 'title',
+              matchedBy: 'reconciled',
             },
           ],
           fingerprintLevel: 'link',
@@ -5312,7 +5571,7 @@ describe('classifyItems', () => {
         expect(classifyItems(value)).toEqual(expected)
       })
 
-      it('should pick first matching existing item when multiple could match', () => {
+      it('should not reconcile when multiple existing items could match (ambiguous)', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'new-guid',
@@ -5343,15 +5602,13 @@ describe('classifyItems', () => {
           ],
         }
         const expected: ClassifyItemsResult = {
-          inserts: [],
-          updates: [
+          inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
               fingerprintHash: expect.stringMatching(md5Regex),
-              existingItemId: 'existing-1',
-              matchedBy: 'link',
             },
           ],
+          updates: [],
           fingerprintLevel: 'guid',
         }
 
@@ -5711,7 +5968,7 @@ describe('classifyItems', () => {
         expect(scan3.updates.every((u) => u.matchedBy === 'link')).toBe(true)
       })
 
-      it('should only reconcile first insert when two match the same existing item', () => {
+      it('should not reconcile when two inserts target the same existing item (ambiguous)', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'new-guid-1',
@@ -5741,22 +5998,19 @@ describe('classifyItems', () => {
           ],
         }
 
+        // Both inserts target the same existing item — ambiguous, neither reconciles.
         const expected: ClassifyItemsResult = {
-          // First insert reconciles, second stays as insert.
           inserts: [
+            {
+              item: { ...feedItem1, ...computeItemHashes(feedItem1) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+            },
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
               fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
-          updates: [
-            {
-              item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(md5Regex),
-              existingItemId: 'existing-1',
-              matchedBy: 'link',
-            },
-          ],
+          updates: [],
           fingerprintLevel: 'guid',
         }
 
@@ -5790,13 +6044,76 @@ describe('classifyItems', () => {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
               fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
-              matchedBy: 'title',
+              matchedBy: 'reconciled',
             },
           ],
           fingerprintLevel: 'link',
         }
 
         expect(classifyItems(value)).toEqual(expected)
+      })
+
+      it('should update stale publishedAt so later reconciliation succeeds', () => {
+        // Scan 1: item stored.
+        const scan1 = classifyItems({
+          newItems: [
+            {
+              guid: 'guid-1',
+              link: 'https://example.com/post',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt: new Date('2024-01-01T00:00:00Z'),
+            },
+          ],
+          existingItems: [],
+        })
+
+        const afterScan1: Array<ExistingItem> = scan1.inserts.map((insert) => {
+          return { ...insert.item, id: 'existing-1' }
+        })
+
+        // Scan 2: same hashes, only publishedAt changes → should update.
+        const scan2 = classifyItems({
+          newItems: [
+            {
+              guid: 'guid-1',
+              link: 'https://example.com/post',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt: new Date('2024-01-02T00:00:00Z'),
+            },
+          ],
+          existingItems: afterScan1,
+          fingerprintLevel: scan1.fingerprintLevel,
+        })
+
+        expect(scan2.inserts).toHaveLength(0)
+        expect(scan2.updates).toHaveLength(1)
+        expect(scan2.updates[0].existingItemId).toBe('existing-1')
+        expect(scan2.updates[0].matchedBy).toBe('guid')
+
+        const afterScan2: Array<ExistingItem> = [{ ...scan2.updates[0].item, id: 'existing-1' }]
+
+        // Scan 3: GUID becomes unstable, link/content same, publishedAt
+        // matches scan 2 → reconciliation should work.
+        const scan3 = classifyItems({
+          newItems: [
+            {
+              guid: 'guid-new',
+              link: 'https://example.com/post',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt: new Date('2024-01-02T00:00:00Z'),
+            },
+          ],
+          existingItems: afterScan2,
+          fingerprintLevel: scan2.fingerprintLevel,
+        })
+
+        expect(scan3.inserts).toHaveLength(0)
+        expect(scan3.updates).toHaveLength(1)
+        expect(scan3.updates[0].existingItemId).toBe('existing-1')
+        expect(scan3.updates[0].matchedBy).toBe('link')
       })
 
       it('should not reconcile when new guid conflicts with another existing item', () => {
@@ -5980,6 +6297,53 @@ describe('classifyItems', () => {
               matchedBy: 'guid',
             },
           ],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
+      it('should not reconcile insert when existing item is claimed by a no-op match', () => {
+        const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const feedItem1 = {
+          guid: 'same-guid',
+          link: 'https://example.com/post',
+          title: 'Post Title',
+          content: '<p>Content</p>',
+          publishedAt,
+        }
+        const feedItem2 = {
+          guid: 'different-guid',
+          link: 'https://example.com/post',
+          title: 'Post Title',
+          content: '<p>Content</p>',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem1, feedItem2],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'same-guid',
+              link: 'https://example.com/post',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt,
+            }),
+          ],
+        }
+
+        // Item 1 matches existing-1 by GUID with identical content (no-op, no
+        // update emitted). Item 2 has same content but different GUID and can't
+        // reconcile because existing-1 is already claimed by item 1's match.
+        const expected: ClassifyItemsResult = {
+          inserts: [
+            {
+              item: { ...feedItem2, ...computeItemHashes(feedItem2) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+            },
+          ],
+          updates: [],
           fingerprintLevel: 'guid',
         }
 

@@ -79,7 +79,9 @@ export type FeedProfile = {
   title: FeedProfileSignal
 }
 
-export type MatchedBy = 'guid' | 'link' | 'enclosure' | 'title'
+export type MatchSignal = 'guid' | 'link' | 'enclosure' | 'title'
+
+export type MatchedBy = MatchSignal | 'reconciled'
 
 export type MatchResult = {
   match: ExistingItem

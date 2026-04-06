@@ -42,6 +42,7 @@ export const findReconciliationCandidate = (
   existing: ExistingItem,
 ): MatchResult | undefined => {
   let matchingFields = 0
+  let hasBodyHash = false
 
   for (const key of contentHashKeys) {
     if (incoming[key] !== existing[key]) {
@@ -50,6 +51,10 @@ export const findReconciliationCandidate = (
 
     if (incoming[key] != null) {
       matchingFields++
+
+      if (key === 'contentHash' || key === 'summaryHash') {
+        hasBodyHash = true
+      }
     }
   }
 
@@ -73,9 +78,10 @@ export const findReconciliationCandidate = (
   }
 
   // Case 2: No GUID on either side, link differs but all content fields
-  // and publishedAt are the same.
-  if (incoming.guidHash == null && existing.guidHash == null && !isLinkMatch) {
-    return { match: existing, matchedBy: 'title' }
+  // and publishedAt are the same. Requires at least one body hash
+  // (contentHash or summaryHash) to prevent false merges on weak evidence.
+  if (incoming.guidHash == null && existing.guidHash == null && !isLinkMatch && hasBodyHash) {
+    return { match: existing, matchedBy: 'reconciled' }
   }
 }
 
@@ -110,48 +116,81 @@ export const hasAmbiguousIdentity = (
 
 // Reclassify inserts that are identical to an existing item except for guid
 // or link. Handles feeds with unstable identifiers that the fingerprint
-// system cannot match.
+// system cannot match. Treats ambiguous matches (multiple candidates for one
+// insert, or multiple inserts targeting the same existing item) as non-matches.
 export const reconcileInserts = <T extends NewItem>(
   inserts: Array<InsertAction<T>>,
   existingItems: Array<ExistingItem>,
-  updateTargetIds: Set<ItemIdLike>,
+  claimedExistingIds: Set<ItemIdLike>,
 ): { reconciledInserts: Array<InsertAction<T>>; reconciledUpdates: Array<UpdateAction<T>> } => {
-  const reconciledInserts: Array<InsertAction<T>> = []
-  const reconciledUpdates: Array<UpdateAction<T>> = []
-  const targetIds = new Set(updateTargetIds)
+  // Phase 1: collect all eligible candidates for each insert.
+  const candidatesByInsert = new Map<
+    number,
+    Array<{ existing: ExistingItem; result: MatchResult }>
+  >()
 
-  for (const insert of inserts) {
-    let isReconciled = false
+  for (let i = 0; i < inserts.length; i++) {
+    const candidates: Array<{ existing: ExistingItem; result: MatchResult }> = []
 
     for (const existing of existingItems) {
-      if (targetIds.has(existing.id)) {
+      if (claimedExistingIds.has(existing.id)) {
         continue
       }
 
-      const result = findReconciliationCandidate(insert.item, existing)
+      const result = findReconciliationCandidate(inserts[i].item, existing)
 
       if (!result) {
         continue
       }
 
-      if (hasAmbiguousIdentity(insert.item, existing, existingItems)) {
+      if (hasAmbiguousIdentity(inserts[i].item, existing, existingItems)) {
         continue
       }
 
-      reconciledUpdates.push({
-        item: insert.item,
-        fingerprintHash: insert.fingerprintHash,
-        existingItemId: result.match.id,
-        matchedBy: result.matchedBy,
-      })
-      targetIds.add(existing.id)
-      isReconciled = true
-      break
+      candidates.push({ existing, result })
     }
 
-    if (!isReconciled) {
-      reconciledInserts.push(insert)
+    candidatesByInsert.set(i, candidates)
+  }
+
+  // Phase 2: resolve — only reconcile when both insert and target are
+  // uniquely determined (exactly 1 candidate, no competing inserts).
+  const insertsByTarget = new Map<ItemIdLike, Array<number>>()
+
+  for (const [insertIndex, candidates] of candidatesByInsert) {
+    if (candidates.length === 1) {
+      const targetId = candidates[0].existing.id
+      const list = insertsByTarget.get(targetId) ?? []
+      list.push(insertIndex)
+      insertsByTarget.set(targetId, list)
     }
+  }
+
+  const reconciledInserts: Array<InsertAction<T>> = []
+  const reconciledUpdates: Array<UpdateAction<T>> = []
+
+  for (let i = 0; i < inserts.length; i++) {
+    const candidates = candidatesByInsert.get(i) ?? []
+
+    if (candidates.length !== 1) {
+      reconciledInserts.push(inserts[i])
+      continue
+    }
+
+    const { result } = candidates[0]
+    const competingInserts = insertsByTarget.get(result.match.id) ?? []
+
+    if (competingInserts.length > 1) {
+      reconciledInserts.push(inserts[i])
+      continue
+    }
+
+    reconciledUpdates.push({
+      item: inserts[i].item,
+      fingerprintHash: inserts[i].fingerprintHash,
+      existingItemId: result.match.id,
+      matchedBy: result.matchedBy,
+    })
   }
 
   return { reconciledInserts, reconciledUpdates }
@@ -296,6 +335,7 @@ export const classifyItems = <T extends NewItem>(
   // Classify against existing items.
   const inserts: Array<InsertAction<T>> = []
   const updates: Array<UpdateAction<T>> = []
+  const claimedExistingIds = new Set<ItemIdLike>()
 
   for (const fingerprintedItem of deduplicatedItems) {
     const { fingerprint, ...rest } = fingerprintedItem
@@ -325,6 +365,8 @@ export const classifyItems = <T extends NewItem>(
       continue
     }
 
+    claimedExistingIds.add(result.match.id)
+
     const shouldUpdate = updateFilters.every((filter) => {
       return filter.shouldUpdate({
         existing: result.match,
@@ -344,11 +386,10 @@ export const classifyItems = <T extends NewItem>(
   }
 
   // Reconciliation: reclassify inserts that match existing items by content.
-  const updateTargetIds = new Set(updates.map((update) => update.existingItemId))
   const { reconciledInserts, reconciledUpdates } = reconcileInserts(
     inserts,
     existingItems,
-    updateTargetIds,
+    claimedExistingIds,
   )
 
   return {
