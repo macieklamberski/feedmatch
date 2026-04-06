@@ -72,30 +72,12 @@ export const computeFeedProfile = (
   return profile
 }
 
-// Rejects candidates where both sides have an enclosureHash and they differ.
-// Prevents merging items that share a URL but have different enclosures
-// (e.g. podcast episodes on a show page with regenerated GUIDs).
-export const enclosureConflictFilter: CandidateFilter = {
-  name: 'enclosureConflict',
-  appliesTo: ['guid', 'link'],
-  evaluate: (context) => {
-    const candidateEnclosure = context.candidate.enclosureHash
-    const incomingEnclosure = context.incoming.enclosureHash
-
-    if (candidateEnclosure && incomingEnclosure && candidateEnclosure !== incomingEnclosure) {
-      return { allow: false, reason: 'Enclosure hash mismatch' }
-    }
-
-    return { allow: true }
-  },
-}
-
-// Rejects GUID matches when dates are too far apart. Fixes the GUID reuse
+// Rejects GUID/link matches when dates are too far apart. Fixes the GUID reuse
 // blind spot where feeds reuse a GUID months later for different content.
 // Allows match if either side lacks publishedAt (backward compatible).
 export const dateProximityFilter: CandidateFilter = {
   name: 'dateProximity',
-  appliesTo: ['guid'],
+  appliesTo: ['guid', 'link'],
   evaluate: (context) => {
     const incomingDate = context.incoming.publishedAt
     const candidateDate = context.candidate.publishedAt
@@ -132,11 +114,8 @@ export const contentChangeFilter: UpdateFilter = {
   },
 }
 
-export const prematchCandidateFilters: Array<CandidateFilter> = [enclosureConflictFilter]
-export const classifyCandidateFilters: Array<CandidateFilter> = [
-  enclosureConflictFilter,
-  dateProximityFilter,
-]
+export const prematchCandidateFilters: Array<CandidateFilter> = [dateProximityFilter]
+export const classifyCandidateFilters: Array<CandidateFilter> = [dateProximityFilter]
 export const updateFilters: Array<UpdateFilter> = [contentChangeFilter]
 
 // Apply all applicable candidate filters to a candidate list for a given source.
