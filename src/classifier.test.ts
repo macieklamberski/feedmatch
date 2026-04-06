@@ -1074,7 +1074,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -1824,11 +1824,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
           },
         ],
         updates: [],
@@ -1850,11 +1850,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
           },
         ],
         updates: [],
@@ -3371,7 +3371,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3406,7 +3406,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4080,13 +4080,13 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+            fingerprintHash: expect.stringMatching(md5Regex),
             existingItemId: 'existing-2',
             matchedBy: 'guid',
           },
@@ -4923,7 +4923,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -4959,7 +4959,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'title',
             },
@@ -5012,13 +5012,13 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-2',
               matchedBy: 'link',
             },
@@ -5055,7 +5055,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5091,7 +5091,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5127,7 +5127,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5163,7 +5163,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5196,7 +5196,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5228,7 +5228,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5262,7 +5262,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5302,13 +5302,13 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'guid',
             },
@@ -5334,7 +5334,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5370,7 +5370,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5405,7 +5405,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5439,7 +5439,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -5472,7 +5472,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5504,7 +5504,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5543,7 +5543,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -5581,7 +5581,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -5627,7 +5627,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -5666,7 +5666,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -5690,7 +5690,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'item-1',
               matchedBy: 'link',
             },
@@ -5715,7 +5715,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'item-1',
               matchedBy: 'link',
             },
@@ -5769,14 +5769,14 @@ describe('classifyItems', () => {
             {
               // Stable item: matched by guid in main pipeline (content changed).
               item: { ...stableItem, ...computeItemHashes(stableItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-stable',
               matchedBy: 'guid',
             },
             {
               // Unstable item: reconciled by link (guid changed, content same).
               item: { ...unstableItem, ...computeItemHashes(unstableItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-unstable',
               matchedBy: 'link',
             },
@@ -5816,7 +5816,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -5887,19 +5887,19 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem3, ...computeItemHashes(feedItem3) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-2',
               matchedBy: 'link',
             },
@@ -6026,18 +6026,54 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
           ],
           fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
+      it('should reconcile when both GUIDs are null and link differs but content matches', () => {
+        const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const feedItem = {
+          link: 'https://example.com/new-link',
+          title: 'Post Title',
+          content: '<p>Content</p>',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              link: 'https://example.com/old-link',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt,
+            }),
+          ],
+        }
+        const expected: ClassifyItemsResult = {
+          inserts: [],
+          updates: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+              existingItemId: 'existing-1',
+              matchedBy: 'title',
+            },
+          ],
+          fingerprintLevel: 'link',
         }
 
         expect(classifyItems(value)).toEqual(expected)
@@ -6077,7 +6113,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -6115,7 +6151,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
@@ -6162,13 +6198,13 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
               existingItemId: 'existing-1',
               matchedBy: 'guid',
             },
@@ -6205,7 +6241,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(/^[a-f0-9]{32}$/),
+              fingerprintHash: expect.stringMatching(md5Regex),
             },
           ],
           updates: [],
