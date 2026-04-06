@@ -5206,6 +5206,41 @@ describe('classifyItems', () => {
         expect(classifyItems(value)).toEqual(expected)
       })
 
+      it('should not reconcile when content matches but publishedAt differs', () => {
+        const feedItem = {
+          guid: 'new-guid',
+          link: 'https://example.com/post',
+          title: 'Post Title',
+          content: '<p>Content</p>',
+          publishedAt: new Date('2024-01-02T00:00:00Z'),
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'old-guid',
+              link: 'https://example.com/post',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt: new Date('2024-01-01T00:00:00Z'),
+            }),
+          ],
+        }
+        const expected: ClassifyItemsResult = {
+          inserts: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+            },
+          ],
+          updates: [],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
       it('should not reconcile when both GUIDs are null and link differs but content differs', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
