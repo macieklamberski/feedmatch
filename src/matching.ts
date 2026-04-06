@@ -9,9 +9,9 @@ import type {
   IncomingItem,
   ItemHashes,
   ItemIdLike,
-  MatchedBy,
   MatchPolicy,
   MatchResult,
+  MatchSignal,
   MatchStrategy,
   MatchStrategyContext,
   MatchStrategyResult,
@@ -133,7 +133,7 @@ export const applyCandidateFilters = ({
   matchPolicy,
 }: {
   candidates: Array<ExistingItem>
-  matchedBy: MatchedBy
+  matchedBy: MatchSignal
   filters: Array<CandidateFilter>
   incoming: IncomingItem
   matchPolicy: MatchPolicy
@@ -448,7 +448,10 @@ export const selectMatchingItem = ({
   matchPolicy: MatchPolicy
   candidateFilters: Array<CandidateFilter>
 }): MatchResult | undefined => {
-  const filtered = (matchedBy: MatchedBy, candidates: Array<ExistingItem>): Array<ExistingItem> => {
+  const filtered = (
+    matchedBy: MatchSignal,
+    candidates: Array<ExistingItem>,
+  ): Array<ExistingItem> => {
     return applyCandidateFilters({
       candidates,
       matchedBy,
