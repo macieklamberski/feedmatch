@@ -6079,6 +6079,57 @@ describe('classifyItems', () => {
         expect(classifyItems(value)).toEqual(expected)
       })
 
+      it('should not reconcile when new guid conflicts with another existing item', () => {
+        const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const feedItem = {
+          guid: 'guid-new',
+          link: 'https://example.com/post-1',
+          title: 'Same Title',
+          content: '<p>Content</p>',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'guid-old',
+              link: 'https://example.com/post-1',
+              title: 'Same Title',
+              content: '<p>Content</p>',
+              publishedAt,
+            }),
+            makeExisting({
+              id: 'existing-2',
+              guid: 'guid-new',
+              link: 'https://example.com/post-2',
+              title: 'Different Title',
+              content: '<p>Other content</p>',
+              publishedAt,
+            }),
+          ],
+        }
+
+        // Incoming GUID is new (not guid-old), link matches existing-1, content matches.
+        // Normal matching matches existing-2 by GUID. Reconciliation would try
+        // existing-1 by link+content match, but incoming guid-new already belongs
+        // to existing-2, so the ambiguity guard blocks it.
+        const expected: ClassifyItemsResult = {
+          inserts: [],
+          updates: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+              existingItemId: 'existing-2',
+              matchedBy: 'guid',
+            },
+          ],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
       it('should not reconcile Case 2 when incoming link belongs to another existing item', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
