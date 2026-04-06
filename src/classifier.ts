@@ -77,8 +77,6 @@ export const findReconciliationCandidate = (
   if (incoming.guidHash == null && existing.guidHash == null && !isLinkMatch) {
     return { match: existing, matchedBy: 'title' }
   }
-
-  return
 }
 
 // Check if any changed identity field (guid or link) already belongs to a
