@@ -472,6 +472,4 @@ export const selectMatchingItem = ({
       return
     }
   }
-
-  return
 }

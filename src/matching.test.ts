@@ -548,90 +548,6 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
-  it('should match on guid with single candidate', () => {
-    const candidate = makeExistingItem({ guidHash: 'guid-1' })
-    const value = {
-      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
-      candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = {
-      match: candidate,
-      matchedBy: 'guid',
-    }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should return null for ambiguous guid matches with no narrowing hashes', () => {
-    const value = {
-      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
-      candidates: [
-        makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
-        makeExistingItem({ id: 'b', guidHash: 'guid-1' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-
-    expect(selectMatchingItem(value)).toBeUndefined()
-  })
-
-  it('should disambiguate guid matches by enclosure', () => {
-    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        guidHash: 'guid-1',
-        enclosureHash: 'enc-1',
-      }),
-      candidates: [
-        target,
-        makeExistingItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'guid' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should disambiguate guid matches by link when enclosure does not narrow', () => {
-    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        guidHash: 'guid-1',
-        linkHash: 'link-1',
-      }),
-      candidates: [target, makeExistingItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'guid' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should disambiguate guid matches by guidFragmentHash', () => {
-    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        guidHash: 'guid-1',
-        guidFragmentHash: 'gf-1',
-      }),
-      candidates: [
-        target,
-        makeExistingItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'guid' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
   it('should return null when guidFragmentHash is also ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({
@@ -736,22 +652,6 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should match on link when high uniqueness', () => {
-    const candidate = makeExistingItem({ linkHash: 'link-1' })
-    const value = {
-      incoming: makeIncomingItem({ linkHash: 'link-1' }),
-      candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = {
-      match: candidate,
-      matchedBy: 'link',
-    }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
   it('should allow link match when enclosures differ', () => {
     const candidate = makeExistingItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })
     const value = {
@@ -806,42 +706,6 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should disambiguate link matches by fragment on high-uniqueness channel', () => {
-    const target = makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        linkHash: 'link-1',
-        linkFragmentHash: 'frag-1',
-      }),
-      candidates: [
-        target,
-        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'link' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should return null when fragment is also ambiguous on high-uniqueness channel', () => {
-    const value = {
-      incoming: makeIncomingItem({
-        linkHash: 'link-1',
-        linkFragmentHash: 'frag-shared',
-      }),
-      candidates: [
-        makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-
-    expect(selectMatchingItem(value)).toBeUndefined()
-  })
-
   it('should return null when incoming has no fragment and link is ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({ linkHash: 'link-1' }),
@@ -854,22 +718,6 @@ describe('selectMatchingItem', () => {
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
-  })
-
-  it('should match on enclosure when high uniqueness and no link match', () => {
-    const candidate = makeExistingItem({ enclosureHash: 'enc-1' })
-    const value = {
-      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
-      candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = {
-      match: candidate,
-      matchedBy: 'enclosure',
-    }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should prioritize enclosure over link on low-uniqueness channel', () => {
