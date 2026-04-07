@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyCandidateFilters,
+  changeFilter,
   classifyCandidateFilters,
   computeFeedProfile,
   computeMatchPolicy,
   computeSignalStats,
-  contentChangeFilter,
   dateProximityFilter,
   findMatchCandidates,
   hasLinkOnly,
@@ -30,6 +30,7 @@ import type {
   MatchPolicy,
   MatchResult,
   MatchStrategyContext,
+  UpdateFilterContext,
 } from './types.js'
 
 const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
@@ -547,90 +548,6 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
-  it('should match on guid with single candidate', () => {
-    const candidate = makeExistingItem({ guidHash: 'guid-1' })
-    const value = {
-      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
-      candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = {
-      match: candidate,
-      matchedBy: 'guid',
-    }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should return null for ambiguous guid matches with no narrowing hashes', () => {
-    const value = {
-      incoming: makeIncomingItem({ guidHash: 'guid-1' }),
-      candidates: [
-        makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
-        makeExistingItem({ id: 'b', guidHash: 'guid-1' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-
-    expect(selectMatchingItem(value)).toBeUndefined()
-  })
-
-  it('should disambiguate guid matches by enclosure', () => {
-    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', enclosureHash: 'enc-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        guidHash: 'guid-1',
-        enclosureHash: 'enc-1',
-      }),
-      candidates: [
-        target,
-        makeExistingItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'guid' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should disambiguate guid matches by link when enclosure does not narrow', () => {
-    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        guidHash: 'guid-1',
-        linkHash: 'link-1',
-      }),
-      candidates: [target, makeExistingItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-2' })],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'guid' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should disambiguate guid matches by guidFragmentHash', () => {
-    const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        guidHash: 'guid-1',
-        guidFragmentHash: 'gf-1',
-      }),
-      candidates: [
-        target,
-        makeExistingItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-2' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'guid' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
   it('should return null when guidFragmentHash is also ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({
@@ -735,22 +652,6 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should match on link when high uniqueness', () => {
-    const candidate = makeExistingItem({ linkHash: 'link-1' })
-    const value = {
-      incoming: makeIncomingItem({ linkHash: 'link-1' }),
-      candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = {
-      match: candidate,
-      matchedBy: 'link',
-    }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
   it('should allow link match when enclosures differ', () => {
     const candidate = makeExistingItem({ linkHash: 'link-1', enclosureHash: 'enc-old' })
     const value = {
@@ -805,42 +706,6 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should disambiguate link matches by fragment on high-uniqueness channel', () => {
-    const target = makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' })
-    const value = {
-      incoming: makeIncomingItem({
-        linkHash: 'link-1',
-        linkFragmentHash: 'frag-1',
-      }),
-      candidates: [
-        target,
-        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = { match: target, matchedBy: 'link' }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
-  })
-
-  it('should return null when fragment is also ambiguous on high-uniqueness channel', () => {
-    const value = {
-      incoming: makeIncomingItem({
-        linkHash: 'link-1',
-        linkFragmentHash: 'frag-shared',
-      }),
-      candidates: [
-        makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-        makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
-      ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-
-    expect(selectMatchingItem(value)).toBeUndefined()
-  })
-
   it('should return null when incoming has no fragment and link is ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({ linkHash: 'link-1' }),
@@ -853,22 +718,6 @@ describe('selectMatchingItem', () => {
     }
 
     expect(selectMatchingItem(value)).toBeUndefined()
-  })
-
-  it('should match on enclosure when high uniqueness and no link match', () => {
-    const candidate = makeExistingItem({ enclosureHash: 'enc-1' })
-    const value = {
-      incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
-      candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
-      candidateFilters: classifyCandidateFilters,
-    }
-    const expected: MatchResult = {
-      match: candidate,
-      matchedBy: 'enclosure',
-    }
-
-    expect(selectMatchingItem(value)).toEqual(expected)
   })
 
   it('should prioritize enclosure over link on low-uniqueness channel', () => {
@@ -1257,6 +1106,37 @@ describe('matchByGuid', () => {
     })
   })
 
+  it('should fall through to guid fragment when enclosure does not narrow multiple matches', () => {
+    const target = makeExistingItem({
+      id: 'a',
+      guidHash: 'guid-1',
+      enclosureHash: 'enc-same',
+      guidFragmentHash: 'gf-1',
+    })
+    const context: MatchStrategyContext = {
+      incoming: makeIncomingItem({
+        guidHash: 'guid-1',
+        enclosureHash: 'enc-same',
+        guidFragmentHash: 'gf-1',
+      }),
+      candidates: [
+        target,
+        makeExistingItem({
+          id: 'b',
+          guidHash: 'guid-1',
+          enclosureHash: 'enc-same',
+          guidFragmentHash: 'gf-2',
+        }),
+      ],
+      filtered: identity,
+    }
+
+    expect(matchByGuid(context)).toEqual({
+      outcome: 'matched',
+      result: { match: target, matchedBy: 'guid' },
+    })
+  })
+
   it('should disambiguate by link when guid fragment fails', () => {
     const target = makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })
     const context: MatchStrategyContext = {
@@ -1600,7 +1480,7 @@ describe('dateProximityFilter', () => {
   })
 })
 
-describe('contentChangeFilter', () => {
+describe('changeFilter', () => {
   it('should update when title changes', () => {
     const value = {
       existing: makeExistingItem({ titleHash: 'title-1' }),
@@ -1608,7 +1488,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when summary changes', () => {
@@ -1618,7 +1498,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when content changes', () => {
@@ -1628,7 +1508,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when enclosure changes', () => {
@@ -1638,27 +1518,37 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should not update when all content hashes match', () => {
+  it('should update when linkHash changes', () => {
     const value = {
-      existing: makeExistingItem({
-        titleHash: 'title-1',
-        summaryHash: 'sum-1',
-        contentHash: 'cnt-1',
-        enclosureHash: 'enc-1',
-      }),
-      incoming: makeIncomingItem({
-        titleHash: 'title-1',
-        summaryHash: 'sum-1',
-        contentHash: 'cnt-1',
-        enclosureHash: 'enc-1',
-      }),
+      existing: makeExistingItem({ linkHash: 'link-1' }),
+      incoming: makeIncomingItem({ linkHash: 'link-2' }),
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when guidFragmentHash changes', () => {
+    const value = {
+      existing: makeExistingItem({ guidFragmentHash: 'gf-1' }),
+      incoming: makeIncomingItem({ guidFragmentHash: 'gf-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when linkFragmentHash changes', () => {
+    const value = {
+      existing: makeExistingItem({ linkFragmentHash: 'lf-1' }),
+      incoming: makeIncomingItem({ linkFragmentHash: 'lf-2' }),
+      matchedBy: 'guid' as MatchedBy,
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should not update when null and undefined are compared', () => {
@@ -1668,7 +1558,7 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
 
   it('should update when content appears for the first time', () => {
@@ -1678,17 +1568,68 @@ describe('contentChangeFilter', () => {
       matchedBy: 'guid' as MatchedBy,
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should ignore non-content hashes', () => {
-    const value = {
-      existing: makeExistingItem({ guidHash: 'guid-1', linkHash: 'link-1' }),
-      incoming: makeIncomingItem({ guidHash: 'guid-2', linkHash: 'link-2' }),
-      matchedBy: 'guid' as MatchedBy,
+  it('should update when content disappears', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ enclosureHash: 'enc-1' }),
+      incoming: makeIncomingItem({ enclosureHash: null }),
+      matchedBy: 'guid',
     }
 
-    expect(contentChangeFilter.shouldUpdate(value)).toBe(false)
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  // In practice, the matching field (e.g. guidHash) is always equal between
+  // incoming and existing. This test only verifies the filter's correctness
+  // in isolation - it will never happen in the real pipeline.
+  it('should update when guidHash differs', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ guidHash: 'guid-1' }),
+      incoming: makeIncomingItem({ guidHash: 'guid-2' }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when multiple fields change at once', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({
+        titleHash: 'title-1',
+        linkHash: 'link-1',
+        contentHash: 'cnt-1',
+      }),
+      incoming: makeIncomingItem({
+        titleHash: 'title-2',
+        linkHash: 'link-2',
+        contentHash: 'cnt-2',
+      }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should not update when all 8 hash fields match', () => {
+    const hashes: ItemHashes = {
+      guidHash: 'guid-1',
+      guidFragmentHash: 'gf-1',
+      linkHash: 'link-1',
+      linkFragmentHash: 'lf-1',
+      enclosureHash: 'enc-1',
+      titleHash: 'title-1',
+      contentHash: 'cnt-1',
+      summaryHash: 'sum-1',
+    }
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem(hashes),
+      incoming: makeIncomingItem(hashes),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
 })
 
