@@ -1631,6 +1631,77 @@ describe('changeFilter', () => {
 
     expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
+
+  it('should update when publishedAt changes', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ publishedAt: new Date('2024-01-01') }),
+      incoming: makeIncomingItem({ publishedAt: new Date('2024-01-02') }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when publishedAt goes from null to a value', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem(),
+      incoming: makeIncomingItem({ publishedAt: new Date('2024-01-01') }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should update when publishedAt goes from a value to undefined', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ publishedAt: new Date('2024-01-01') }),
+      incoming: makeIncomingItem(),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should not update when publishedAt matches and all hashes match', () => {
+    const hashes: ItemHashes = {
+      guidHash: 'guid-1',
+      guidFragmentHash: 'gf-1',
+      linkHash: 'link-1',
+      linkFragmentHash: 'lf-1',
+      enclosureHash: 'enc-1',
+      titleHash: 'title-1',
+      contentHash: 'cnt-1',
+      summaryHash: 'sum-1',
+    }
+    const publishedAt = new Date('2024-01-01')
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ ...hashes, publishedAt }),
+      incoming: makeIncomingItem({ ...hashes, publishedAt }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should not update when both publishedAt are undefined and all hashes match', () => {
+    const hashes: ItemHashes = {
+      guidHash: 'guid-1',
+      guidFragmentHash: 'gf-1',
+      linkHash: 'link-1',
+      linkFragmentHash: 'lf-1',
+      enclosureHash: 'enc-1',
+      titleHash: 'title-1',
+      contentHash: 'cnt-1',
+      summaryHash: 'sum-1',
+    }
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem(hashes),
+      incoming: makeIncomingItem(hashes),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
+  })
 })
 
 describe('applyCandidateFilters', () => {

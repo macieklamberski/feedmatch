@@ -13,8 +13,14 @@ import type {
   HashKey,
   HashMeta,
   ItemHashes,
-  MatchedBy,
+  MatchSignal,
 } from './types.js'
+
+// Minimum number of content hash fields (title, content, summary, enclosure)
+// that must be non-null on both sides and match for reconciliation to accept
+// a merge. Items with fewer matching fields are too sparse to safely merge
+// (e.g. two items with only the same generic title like "Newsletter").
+export const minReconciliationFields = 2
 
 export const fingerprintLevels = [
   'guid',
@@ -121,9 +127,9 @@ export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
 export const hashKeys: Array<HashKey> = hashMeta.map((meta) => meta.key)
 
 // Signal-to-hash-key mapping for the four matchable signals.
-export const signalHashKeys: Array<[MatchedBy, keyof ItemHashes]> = hashMeta
+export const signalHashKeys: Array<[MatchSignal, keyof ItemHashes]> = hashMeta
   .filter((meta) => meta.isMatchable)
-  .map((meta) => [meta.level as MatchedBy, meta.key])
+  .map((meta) => [meta.level as MatchSignal, meta.key])
 
 // Pre-computed fingerprint prefix arrays per level (avoids findIndex + slice per call).
 export const fingerprintPrefixByLevel = new Map<FingerprintLevel, Array<FingerprintMeta>>(

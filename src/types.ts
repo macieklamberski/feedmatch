@@ -79,7 +79,9 @@ export type FeedProfile = {
   title: FeedProfileSignal
 }
 
-export type MatchedBy = 'guid' | 'link' | 'enclosure' | 'title'
+export type MatchSignal = 'guid' | 'link' | 'enclosure' | 'title'
+
+export type MatchedBy = MatchSignal | 'reconciled'
 
 export type MatchResult = {
   match: ExistingItem
@@ -88,13 +90,13 @@ export type MatchResult = {
 
 export type MatchStrategyResult =
   | { outcome: 'matched'; result: MatchResult }
-  | { outcome: 'ambiguous'; source: MatchedBy; count: number }
+  | { outcome: 'ambiguous'; source: MatchSignal; count: number }
   | { outcome: 'pass' }
 
 export type MatchStrategyContext = {
   incoming: IncomingItem
   candidates: Array<ExistingItem>
-  filtered: (matchedBy: MatchedBy, candidates: Array<ExistingItem>) => Array<ExistingItem>
+  filtered: (matchedBy: MatchSignal, candidates: Array<ExistingItem>) => Array<ExistingItem>
 }
 
 export type MatchStrategyGateContext = {
@@ -124,7 +126,7 @@ export type UpdateAction<T extends NewItem = NewItem> = {
 }
 
 export type CandidateFilterContext = {
-  matchedBy: MatchedBy
+  matchedBy: MatchSignal
   incoming: IncomingItem
   candidate: ExistingItem
   matchPolicy: MatchPolicy
@@ -134,7 +136,7 @@ export type CandidateFilterResult = { allow: true } | { allow: false; reason: st
 
 export type CandidateFilter = {
   name: string
-  appliesTo: Array<MatchedBy>
+  appliesTo: Array<MatchSignal>
   evaluate: (context: CandidateFilterContext) => CandidateFilterResult
 }
 

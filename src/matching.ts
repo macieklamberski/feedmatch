@@ -9,9 +9,9 @@ import type {
   IncomingItem,
   ItemHashes,
   ItemIdLike,
-  MatchedBy,
   MatchPolicy,
   MatchResult,
+  MatchSignal,
   MatchStrategy,
   MatchStrategyContext,
   MatchStrategyResult,
@@ -100,14 +100,22 @@ export const dateProximityFilter: CandidateFilter = {
   },
 }
 
-// Updates when any hash field differs between existing and incoming. The
-// matching field is always equal (by definition), so this only detects
-// changes in fields below the match level.
+// Updates when any hash field or publishedAt differs between existing and
+// incoming. The matching field is always equal (by definition), so this only
+// detects changes in fields below the match level.
 export const changeFilter: UpdateFilter = {
   name: 'change',
   shouldUpdate: (context) => {
-    /* biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined. */
-    return hashMeta.some((meta) => context.existing[meta.key] != context.incoming[meta.key])
+    const hashChanged = hashMeta.some(
+      // biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined.
+      (meta) => context.existing[meta.key] != context.incoming[meta.key],
+    )
+
+    if (hashChanged) {
+      return true
+    }
+
+    return context.existing.publishedAt?.getTime() !== context.incoming.publishedAt?.getTime()
   },
 }
 
@@ -125,7 +133,7 @@ export const applyCandidateFilters = ({
   matchPolicy,
 }: {
   candidates: Array<ExistingItem>
-  matchedBy: MatchedBy
+  matchedBy: MatchSignal
   filters: Array<CandidateFilter>
   incoming: IncomingItem
   matchPolicy: MatchPolicy
@@ -440,7 +448,10 @@ export const selectMatchingItem = ({
   matchPolicy: MatchPolicy
   candidateFilters: Array<CandidateFilter>
 }): MatchResult | undefined => {
-  const filtered = (matchedBy: MatchedBy, candidates: Array<ExistingItem>): Array<ExistingItem> => {
+  const filtered = (
+    matchedBy: MatchSignal,
+    candidates: Array<ExistingItem>,
+  ): Array<ExistingItem> => {
     return applyCandidateFilters({
       candidates,
       matchedBy,
