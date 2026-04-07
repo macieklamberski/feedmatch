@@ -3731,6 +3731,45 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    // Real-world: Some media sites use URL-format GUIDs with a rotating
+    // fragment (e.g., #4 → #5 → #6) that changes across scans. The base URL
+    // stays the same so guidHash (fragment-stripped) is identical. The item
+    // should match by guidHash and changeFilter should detect the
+    // guidFragmentHash difference, producing an update (not an insert).
+    it('should update when URL-format GUID fragment rotates but base stays the same', () => {
+      const feedItem = {
+        guid: 'https://www.example.com/news/10628994#5',
+        link: 'https://www.example.com/news/10628994',
+        title: 'News Article',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'https://www.example.com/news/10628994#4',
+            link: 'https://www.example.com/news/10628994',
+            title: 'News Article',
+          }),
+        ],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should update via link on high-uniqueness channel without explicit fingerprintLevel', () => {
       const feedItem = {
         link: 'https://example.com/post',
@@ -4950,6 +4989,275 @@ describe('classifyItems', () => {
     expect(result.updates).toHaveLength(0)
   })
 
+  // Real-world: Some broken CMS feeds use the blog index
+  // URL as the GUID for every item. All items share one GUID, but have
+  // different links and titles. The fingerprint level should downgrade from
+  // guid to link since guid is useless for disambiguation.
+  it('should downgrade to link when all items share a single GUID', () => {
+    const sharedGuid = 'https://example.com/blog//'
+    const feedItemA = { guid: sharedGuid, link: 'https://example.com/blog/post-a', title: 'Post A' }
+    const feedItemB = { guid: sharedGuid, link: 'https://example.com/blog/post-b', title: 'Post B' }
+    const feedItemC = { guid: sharedGuid, link: 'https://example.com/blog/post-c', title: 'Post C' }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItemA, feedItemB, feedItemC],
+      existingItems: [],
+      fingerprintLevel: 'guid',
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [
+        {
+          item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+        },
+        {
+          item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+        },
+        {
+          item: { ...feedItemC, ...computeItemHashes(feedItemC) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+        },
+      ],
+      updates: [],
+      fingerprintLevel: 'link',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  // Real-world: Extension of the broken CMS pattern above — same feed, but
+  // now existing items from a prior scan are present. The single shared GUID
+  // forces downgrade to link-level fingerprinting, and items should match
+  // existing items by link to produce updates.
+  it('should downgrade and match by link when all items share a single GUID with existing items', () => {
+    const sharedGuid = 'https://example.com/blog//'
+    const feedItemA = {
+      guid: sharedGuid,
+      link: 'https://example.com/blog/post-a',
+      title: 'Post A',
+      content: 'Updated content A',
+    }
+    const feedItemB = {
+      guid: sharedGuid,
+      link: 'https://example.com/blog/post-b',
+      title: 'Post B',
+      content: 'Updated content B',
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItemA, feedItemB],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-a',
+          guid: sharedGuid,
+          link: 'https://example.com/blog/post-a',
+          title: 'Post A',
+          content: 'Old content A',
+        }),
+        makeMatchable({
+          id: 'existing-b',
+          guid: sharedGuid,
+          link: 'https://example.com/blog/post-b',
+          title: 'Post B',
+          content: 'Old content B',
+        }),
+      ],
+      fingerprintLevel: 'guid',
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-a',
+          matchedBy: 'guid',
+        },
+        {
+          item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-b',
+          matchedBy: 'guid',
+        },
+      ],
+      fingerprintLevel: 'link',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  // Real-world: Many podcast feeds set <link> to the show homepage for every
+  // episode instead of an episode-specific URL. Each episode has a unique
+  // GUID but all share one link. GUID matching should still work since GUIDs
+  // are unique — the low link uniqueness only affects link-based strategies.
+  it('should match by guid when all items share a single link', () => {
+    const sharedLink = 'https://example.com/show'
+    const feedItemA = {
+      guid: 'episode-100',
+      link: sharedLink,
+      title: 'Episode 100',
+      content: 'New show notes',
+    }
+    const feedItemB = {
+      guid: 'episode-101',
+      link: sharedLink,
+      title: 'Episode 101',
+      content: 'New show notes B',
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItemA, feedItemB],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-100',
+          guid: 'episode-100',
+          link: sharedLink,
+          title: 'Episode 100',
+          content: 'Old show notes',
+        }),
+        makeMatchable({
+          id: 'existing-101',
+          guid: 'episode-101',
+          link: sharedLink,
+          title: 'Episode 101',
+          content: 'Old show notes B',
+        }),
+      ],
+      fingerprintLevel: 'guid',
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-100',
+          matchedBy: 'guid',
+        },
+        {
+          item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-101',
+          matchedBy: 'guid',
+        },
+      ],
+      fingerprintLevel: 'guid',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  // Real-world: 644 channels (22%) where GUID and link are the identical
+  // string (e.g., guid="https://example.com/post", link="https://example.com/post").
+  // guidHash and linkHash end up identical. Matching should still work since
+  // the GUID strategy runs first and finds a unique match.
+  it('should match when guid and link are identical strings', () => {
+    const url = 'https://example.com/post-1'
+    const feedItem = { guid: url, link: url, title: 'Post 1', content: 'New content' }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          guid: url,
+          link: url,
+          title: 'Post 1',
+          content: 'Old content',
+        }),
+      ],
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItem, ...computeItemHashes(feedItem) },
+          fingerprintHash: expect.stringMatching(md5Regex),
+          existingItemId: 'existing-1',
+          matchedBy: 'guid',
+        },
+      ],
+      fingerprintLevel: 'guid',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  // Real-world: Some video podcast feeds have no GUIDs and no links. Items
+  // have only title + enclosure. Some items share a title but have different
+  // enclosure URLs, so enclosure
+  // is the disambiguating signal. The fingerprint level should downgrade
+  // to enclosure and items should match existing items correctly.
+  it('should match by enclosure when items have no guid and no link', () => {
+    const feedItemA = {
+      title: 'Find Freedom',
+      summary: 'Updated sermon notes A',
+      enclosures: [{ url: 'https://example.com/media/sermon-a.mp4' }],
+    }
+    const feedItemB = {
+      title: 'Find Freedom',
+      summary: 'Updated sermon notes B',
+      enclosures: [{ url: 'https://example.com/media/sermon-b.mp4' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItemA, feedItemB],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-a',
+          title: 'Find Freedom',
+          summary: 'Old sermon notes A',
+          enclosures: [{ url: 'https://example.com/media/sermon-a.mp4' }],
+        }),
+        makeMatchable({
+          id: 'existing-b',
+          title: 'Find Freedom',
+          summary: 'Old sermon notes B',
+          enclosures: [{ url: 'https://example.com/media/sermon-b.mp4' }],
+        }),
+      ],
+    }
+    const result = classifyItems(value)
+
+    expect(result.inserts).toHaveLength(0)
+    expect(result.updates).toHaveLength(2)
+    expect(result.updates.map((u) => u.existingItemId).sort()).toEqual(['existing-a', 'existing-b'])
+    expect(result.fingerprintLevel).toBe('enclosure')
+  })
+
+  // Real-world: Forum feeds expose each thread reply as a separate feed item.
+  // Within a single scan, multiple items share the same link (thread URL) and
+  // title (thread title) but have unique GUIDs and different summaries. These
+  // are distinct items, not duplicates.
+  it('should treat forum replies sharing link and title as distinct items', () => {
+    const threadLink = 'https://forum.example.com/t/shutdown-option-missing/45754'
+    const threadTitle = 'Application Launcher is Missing Shutdown Option'
+    const replyA = {
+      guid: 'forum.example.com-post-140876',
+      link: threadLink,
+      title: threadTitle,
+      summary: '<p>To the left of Session there are normally options for shutting down</p>',
+    }
+    const replyB = {
+      guid: 'forum.example.com-post-140889',
+      link: threadLink,
+      title: threadTitle,
+      summary: '<p>I have the same problem on KDE Linux on master</p>',
+    }
+    const replyC = {
+      guid: 'forum.example.com-post-140896',
+      link: threadLink,
+      title: threadTitle,
+      summary: '<p>Lock / logout / switch user</p>',
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [replyA, replyB, replyC],
+      existingItems: [],
+      fingerprintLevel: 'guid',
+    }
+    const result = classifyItems(value)
+
+    expect(result.inserts).toHaveLength(3)
+    expect(result.updates).toHaveLength(0)
+    expect(result.fingerprintLevel).toBe('guid')
+  })
+
   describe('multi-scan replay', () => {
     it('should downgrade level on hub onset across scans', () => {
       const scan1 = classifyItems({
@@ -5038,6 +5346,60 @@ describe('classifyItems', () => {
       expect(scan2.fingerprintLevel).toBe('link')
       expect(scan2.updates).toHaveLength(1)
       expect(scan2.inserts).toHaveLength(1)
+    })
+
+    // Real-world: News liveblog feeds have items with a stable GUID and link,
+    // but the title changes every scan as the headline is updated. Each scan
+    // should produce an update because the title hash differs.
+    it('should produce update on each scan when liveblog title keeps changing', () => {
+      const scan1 = classifyItems({
+        newItems: [
+          {
+            guid: 'liveblog-monday-110',
+            link: 'https://example.com/newsticker/liveblog-monday-110.html',
+            title: 'Liveblog: ++ Breaking development A ++',
+          },
+        ],
+        existingItems: [],
+      })
+
+      expect(scan1.inserts).toHaveLength(1)
+
+      const afterScan1: Array<ExistingItem> = scan1.inserts.map((insert) => {
+        return { id: 'liveblog-1', ...insert.item }
+      })
+
+      const scan2 = classifyItems({
+        newItems: [
+          {
+            guid: 'liveblog-monday-110',
+            link: 'https://example.com/newsticker/liveblog-monday-110.html',
+            title: 'Liveblog: ++ Breaking development B ++',
+          },
+        ],
+        existingItems: afterScan1,
+        fingerprintLevel: scan1.fingerprintLevel,
+      })
+
+      expect(scan2.updates).toHaveLength(1)
+      expect(scan2.inserts).toHaveLength(0)
+
+      const afterScan2: Array<ExistingItem> = [{ id: 'liveblog-1', ...scan2.updates[0].item }]
+
+      const scan3 = classifyItems({
+        newItems: [
+          {
+            guid: 'liveblog-monday-110',
+            link: 'https://example.com/newsticker/liveblog-monday-110.html',
+            title: 'Liveblog: ++ Breaking development C ++',
+          },
+        ],
+        existingItems: afterScan2,
+        fingerprintLevel: scan2.fingerprintLevel,
+      })
+
+      expect(scan3.updates).toHaveLength(1)
+      expect(scan3.inserts).toHaveLength(0)
     })
   })
 
@@ -5565,6 +5927,41 @@ describe('classifyItems', () => {
               matchedBy: 'link',
             },
           ],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
+      // Real-world: 89,524 items have only a title (no summary, no content,
+      // no enclosure). With minReconciliationFields=2, a title-only match
+      // should never reconcile — one matching content field is below the
+      // threshold, preventing false merges on generic titles like "Newsletter".
+      it('should not reconcile title-only item even when title matches perfectly', () => {
+        const feedItem = {
+          guid: 'new-guid',
+          link: 'https://example.com/post',
+          title: 'Newsletter',
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'old-guid',
+              link: 'https://example.com/post',
+              title: 'Newsletter',
+            }),
+          ],
+        }
+        const expected: ClassifyItemsResult = {
+          inserts: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+            },
+          ],
+          updates: [],
           fingerprintLevel: 'guid',
         }
 
@@ -6621,6 +7018,51 @@ describe('classifyItems', () => {
         // 3 remaining items reconciled. No inserts (removed items just unmatched).
         expect(scan2.updates).toHaveLength(3)
         expect(scan2.inserts).toHaveLength(0)
+      })
+
+      // Real-world: Some feeds use a "ID at URL" GUID format (e.g.,
+      // "650 at https://www.example.com/en") where the embedded domain varies
+      // between www/non-www or staging domains. The GUID doesn't start with
+      // http, so it's treated as an opaque string — each variant hashes
+      // differently. Link stays stable, all content matches.
+      it('should reconcile when non-URL GUID embeds a varying domain', () => {
+        const publishedAt = new Date('2024-06-15T10:00:00Z')
+        const feedItem = {
+          guid: '650 at https://example.com/en',
+          link: 'https://www.example.com/en/news/check-your-documents',
+          title: 'Check Your Documents',
+          summary: 'Please check your documents are valid.',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: '650 at https://www.example.com/en',
+              link: 'https://www.example.com/en/news/check-your-documents',
+              title: 'Check Your Documents',
+              summary: 'Please check your documents are valid.',
+              publishedAt,
+            }),
+          ],
+          fingerprintLevel: 'guid',
+        }
+
+        const expected: ClassifyItemsResult = {
+          inserts: [],
+          updates: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+              existingItemId: 'existing-1',
+              matchedBy: 'link',
+            },
+          ],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
       })
     })
   })
