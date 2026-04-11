@@ -628,6 +628,93 @@ describe('findReconciliationCandidate', () => {
 
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
+
+    it('should match when guid==link on both sides, both differ, and content+body hash match', () => {
+      const incoming = makeIncoming({
+        guidHash: 'new-url',
+        linkHash: 'new-url',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+      const existing = makeExistingItem({
+        guidHash: 'old-url',
+        linkHash: 'old-url',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+      const expected: MatchResult = { match: existing, matchedBy: 'reconciled' }
+
+      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
+    })
+
+    it('should match when guid==link on both sides with summaryHash instead of contentHash', () => {
+      const incoming = makeIncoming({
+        guidHash: 'new-url',
+        linkHash: 'new-url',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+      })
+      const existing = makeExistingItem({
+        guidHash: 'old-url',
+        linkHash: 'old-url',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+      })
+      const expected: MatchResult = { match: existing, matchedBy: 'reconciled' }
+
+      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
+    })
+
+    it('should not match when guid != link on incoming side', () => {
+      const incoming = makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'new-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+      const existing = makeExistingItem({
+        guidHash: 'old-url',
+        linkHash: 'old-url',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+
+      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
+    })
+
+    it('should not match when guid != link on existing side', () => {
+      const incoming = makeIncoming({
+        guidHash: 'new-url',
+        linkHash: 'new-url',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+      const existing = makeExistingItem({
+        guidHash: 'old-guid',
+        linkHash: 'old-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+
+      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
+    })
+
+    it('should not match when guid==link on both sides but no body hash', () => {
+      const incoming = makeIncoming({
+        guidHash: 'new-url',
+        linkHash: 'new-url',
+        titleHash: 'same-title',
+        enclosureHash: 'same-enc',
+      })
+      const existing = makeExistingItem({
+        guidHash: 'old-url',
+        linkHash: 'old-url',
+        titleHash: 'same-title',
+        enclosureHash: 'same-enc',
+      })
+
+      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
+    })
   })
 })
 
@@ -6747,7 +6834,7 @@ describe('classifyItems', () => {
         expect(classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when both GUID and link change (domain migration)', () => {
+      it('should reconcile when both GUID and link change but guid==link on both sides (domain migration)', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'https://new-domain.com/post',
@@ -6770,6 +6857,44 @@ describe('classifyItems', () => {
           ],
         }
         const expected: ClassifyItemsResult = {
+          inserts: [],
+          updates: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+              existingItemId: 'existing-1',
+              matchedBy: 'reconciled',
+            },
+          ],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
+      it('should not reconcile domain migration when guid != link', () => {
+        const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const feedItem = {
+          guid: 'https://new-domain.com/?p=123',
+          link: 'https://new-domain.com/post',
+          title: 'Post Title',
+          content: '<p>Content</p>',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'https://old-domain.com/?p=456',
+              link: 'https://old-domain.com/post',
+              title: 'Post Title',
+              content: '<p>Content</p>',
+              publishedAt,
+            }),
+          ],
+        }
+        const expected: ClassifyItemsResult = {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
@@ -6780,9 +6905,6 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        // Both GUID and link changed. Reconciliation can't match because
-        // neither identity field is the same. Known limitation until fuzzy
-        // matching is implemented.
         expect(classifyItems(value)).toEqual(expected)
       })
 
@@ -7063,6 +7185,71 @@ describe('classifyItems', () => {
         }
 
         expect(classifyItems(value)).toEqual(expected)
+      })
+
+      it('should reconcile multiple items when domain migrates and guid==link', () => {
+        const feedItems = [
+          {
+            guid: 'https://new-domain.com/post-1',
+            link: 'https://new-domain.com/post-1',
+            title: 'Post 1',
+            content: '<p>Content 1</p>',
+            publishedAt: new Date('2024-01-01T00:00:00Z'),
+          },
+          {
+            guid: 'https://new-domain.com/post-2',
+            link: 'https://new-domain.com/post-2',
+            title: 'Post 2',
+            content: '<p>Content 2</p>',
+            publishedAt: new Date('2024-01-02T00:00:00Z'),
+          },
+          {
+            guid: 'https://new-domain.com/post-3',
+            link: 'https://new-domain.com/post-3',
+            title: 'Post 3',
+            content: '<p>Content 3</p>',
+            publishedAt: new Date('2024-01-03T00:00:00Z'),
+          },
+        ]
+        const value: ClassifyItemsInput = {
+          newItems: feedItems,
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'https://old-domain.com/post-1',
+              link: 'https://old-domain.com/post-1',
+              title: 'Post 1',
+              content: '<p>Content 1</p>',
+              publishedAt: new Date('2024-01-01T00:00:00Z'),
+            }),
+            makeExisting({
+              id: 'existing-2',
+              guid: 'https://old-domain.com/post-2',
+              link: 'https://old-domain.com/post-2',
+              title: 'Post 2',
+              content: '<p>Content 2</p>',
+              publishedAt: new Date('2024-01-02T00:00:00Z'),
+            }),
+            makeExisting({
+              id: 'existing-3',
+              guid: 'https://old-domain.com/post-3',
+              link: 'https://old-domain.com/post-3',
+              title: 'Post 3',
+              content: '<p>Content 3</p>',
+              publishedAt: new Date('2024-01-03T00:00:00Z'),
+            }),
+          ],
+          fingerprintLevel: 'guid',
+        }
+
+        const result = classifyItems(value)
+
+        expect(result.inserts).toHaveLength(0)
+        expect(result.updates).toHaveLength(3)
+        expect(result.updates[0].existingItemId).toBe('existing-1')
+        expect(result.updates[0].matchedBy).toBe('reconciled')
+        expect(result.updates[1].existingItemId).toBe('existing-2')
+        expect(result.updates[2].existingItemId).toBe('existing-3')
       })
     })
   })

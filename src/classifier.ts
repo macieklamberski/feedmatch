@@ -83,6 +83,19 @@ export const findReconciliationCandidate = (
   if (incoming.guidHash == null && existing.guidHash == null && !isLinkMatch && hasBodyHash) {
     return { match: existing, matchedBy: 'reconciled' }
   }
+
+  // Domain migration. Both GUID and link changed but guid == link on each
+  // side (common blog pattern where the post URL serves as both). All
+  // content fields and publishedAt already verified above.
+  if (
+    !isGuidMatch &&
+    !isLinkMatch &&
+    hasBodyHash &&
+    incoming.guidHash === incoming.linkHash &&
+    existing.guidHash === existing.linkHash
+  ) {
+    return { match: existing, matchedBy: 'reconciled' }
+  }
 }
 
 // Check if any changed identity field (guid or link) already belongs to a
