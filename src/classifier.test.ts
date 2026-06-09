@@ -1302,6 +1302,49 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    // Regression: a publisher fixed the letter case of an image URL inside the
+    // item body. The lowercased summary hash made both versions hash-identical,
+    // so the correction was classified as a no-op and never reached the
+    // existing item.
+    it('should update when summary differs only in letter case', () => {
+      const storedSummary = '<p><img src="https://example.com/posts/my-image.png"></p>'
+      const correctedSummary = '<p><img src="https://example.com/posts/My-Image.png"></p>'
+      const value: ClassifyItemsInput = {
+        newItems: [{ guid: 'guid-1', title: 'Post 1', summary: correctedSummary }],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'guid-1',
+            title: 'Post 1',
+            summary: storedSummary,
+          }),
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: {
+              guid: 'guid-1',
+              title: 'Post 1',
+              summary: correctedSummary,
+              ...computeItemHashes({
+                guid: 'guid-1',
+                title: 'Post 1',
+                summary: correctedSummary,
+              }),
+            },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should handle mix of inserts, updates, and skips', () => {
       const value: ClassifyItemsInput = {
         newItems: [
