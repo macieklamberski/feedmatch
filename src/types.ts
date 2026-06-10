@@ -29,6 +29,7 @@ export type IncomingItem<T extends NewItem = NewItem> = T & ItemHashes
 
 export type ExistingItem = ItemHashes & {
   id: ItemIdLike
+  title?: string | null
   publishedAt?: Date
 }
 
