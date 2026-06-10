@@ -140,13 +140,13 @@ export const normalizeEnclosureForHashing = (
   return safeNormalizeUrl(url)
 }
 
-// Collapse whitespace and lowercase for text-based hashing (title).
-export const normalizeTextForHashing = (text: string | null | undefined): string | undefined => {
+// Trim and collapse whitespace runs into single spaces, keeping letter case.
+export const normalizeWhitespace = (text: string | null | undefined): string | undefined => {
   if (!text) {
     return
   }
 
-  const normalized = text.trim().replace(/\s+/g, ' ').toLowerCase()
+  const normalized = text.trim().replace(/\s+/g, ' ')
 
   if (normalized === '') {
     return
@@ -155,11 +155,17 @@ export const normalizeTextForHashing = (text: string | null | undefined): string
   return normalized
 }
 
-// Normalize HTML content for hashing (summary, content).
-// TODO: Strip HTML tags → plain text before normalizing. Currently delegates
-// to normalizeTextForHashing which only handles whitespace/case. A proper
-// implementation would strip tags so that markup-only changes (different
-// wrapper elements, whitespace in tags, ad markup) don't affect the hash.
+// Collapse whitespace and lowercase for text-based hashing (title). Lowercasing
+// keeps title matching tolerant to casing drift in feeds without guids/links.
+export const normalizeTextForHashing = (text: string | null | undefined): string | undefined => {
+  return normalizeWhitespace(text)?.toLowerCase()
+}
+
+// Normalize HTML content for hashing (summary, content). Keeps letter case and
+// tags: these hashes drive change detection, and a publisher's fix can be a
+// case-only edit inside an attribute (a wrongly-cased image URL that 404s on a
+// case-sensitive server). Lowercasing made such fixes hash-identical, so the
+// corrected content was never written to the existing item.
 export const normalizeHtmlForHashing = (html: string | null | undefined): string | undefined => {
-  return normalizeTextForHashing(html)
+  return normalizeWhitespace(html)
 }

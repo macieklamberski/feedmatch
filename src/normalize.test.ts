@@ -8,6 +8,7 @@ import {
   normalizeLinkFragmentForHashing,
   normalizeLinkWithFragmentForHashing,
   normalizeTextForHashing,
+  normalizeWhitespace,
 } from './normalize.js'
 
 describe('normalizeLinkForHashing', () => {
@@ -376,8 +377,28 @@ describe('normalizeTextForHashing', () => {
 })
 
 describe('normalizeHtmlForHashing', () => {
-  it('should delegate to normalizeTextForHashing', () => {
-    expect(normalizeHtmlForHashing('  Hello World  ')).toBe('hello world')
+  it('should trim and collapse whitespace', () => {
+    expect(normalizeHtmlForHashing('  Hello   World  ')).toBe('Hello World')
+  })
+
+  it('should keep letter case', () => {
+    expect(normalizeHtmlForHashing('<p><img src="https://example.com/My-Image.png"></p>')).toBe(
+      '<p><img src="https://example.com/My-Image.png"></p>',
+    )
+  })
+
+  it('should produce different values for case-only differences', () => {
+    const lowercase = normalizeHtmlForHashing('<img src="https://example.com/image.png">')
+    const capitalized = normalizeHtmlForHashing('<img src="https://example.com/Image.png">')
+
+    expect(lowercase).not.toBe(capitalized)
+  })
+
+  it('should produce equal values for whitespace-only differences', () => {
+    const spaced = normalizeHtmlForHashing('<p>Hello   World</p>')
+    const collapsed = normalizeHtmlForHashing('<p>Hello World</p>')
+
+    expect(spaced).toBe(collapsed)
   })
 
   it('should return undefined for undefined input', () => {
@@ -390,5 +411,31 @@ describe('normalizeHtmlForHashing', () => {
 
   it('should return undefined for null input', () => {
     expect(normalizeHtmlForHashing(null)).toBeUndefined()
+  })
+})
+
+describe('normalizeWhitespace', () => {
+  it('should trim and collapse whitespace while keeping case', () => {
+    expect(normalizeWhitespace('  Hello   World  ')).toBe('Hello World')
+  })
+
+  it('should collapse tabs and newlines', () => {
+    expect(normalizeWhitespace('Hello\t\nWorld')).toBe('Hello World')
+  })
+
+  it('should return undefined for undefined input', () => {
+    expect(normalizeWhitespace(undefined)).toBeUndefined()
+  })
+
+  it('should return undefined for empty string', () => {
+    expect(normalizeWhitespace('')).toBeUndefined()
+  })
+
+  it('should return undefined for whitespace-only string', () => {
+    expect(normalizeWhitespace('   ')).toBeUndefined()
+  })
+
+  it('should return undefined for null input', () => {
+    expect(normalizeWhitespace(null)).toBeUndefined()
   })
 })

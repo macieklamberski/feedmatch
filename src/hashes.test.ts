@@ -337,11 +337,32 @@ describe('computeItemHashes', () => {
     expect(computeItemHashes(value1).titleHash).toBe(computeItemHashes(value2).titleHash)
   })
 
-  it('should produce same summaryHash for equivalent summaries', () => {
+  it('should produce same summaryHash for whitespace-equivalent summaries', () => {
     const value1: NewItem = { summary: '  Hello  World  ' }
-    const value2: NewItem = { summary: 'hello world' }
+    const value2: NewItem = { summary: 'Hello World' }
 
     expect(computeItemHashes(value1).summaryHash).toBe(computeItemHashes(value2).summaryHash)
+  })
+
+  it('should produce different summaryHash for case-only differences', () => {
+    const value1: NewItem = { summary: '<img src="https://example.com/image.png">' }
+    const value2: NewItem = { summary: '<img src="https://example.com/Image.png">' }
+
+    expect(computeItemHashes(value1).summaryHash).not.toBe(computeItemHashes(value2).summaryHash)
+  })
+
+  it('should produce different contentHash for case-only differences', () => {
+    const value1: NewItem = { content: '<img src="https://example.com/image.png">' }
+    const value2: NewItem = { content: '<img src="https://example.com/Image.png">' }
+
+    expect(computeItemHashes(value1).contentHash).not.toBe(computeItemHashes(value2).contentHash)
+  })
+
+  it('should produce same titleHash for case-only differences', () => {
+    const value1: NewItem = { title: 'hello world' }
+    const value2: NewItem = { title: 'Hello World' }
+
+    expect(computeItemHashes(value1).titleHash).toBe(computeItemHashes(value2).titleHash)
   })
 
   it('should produce different contentHash for different content', () => {
