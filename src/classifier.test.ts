@@ -1302,6 +1302,49 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    // Regression: a publisher fixed the letter case of an image URL inside the
+    // item body. The lowercased summary hash made both versions hash-identical,
+    // so the correction was classified as a no-op and never reached the
+    // existing item.
+    it('should update when summary differs only in letter case', () => {
+      const storedSummary = '<p><img src="https://example.com/posts/my-image.png"></p>'
+      const correctedSummary = '<p><img src="https://example.com/posts/My-Image.png"></p>'
+      const value: ClassifyItemsInput = {
+        newItems: [{ guid: 'guid-1', title: 'Post 1', summary: correctedSummary }],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'guid-1',
+            title: 'Post 1',
+            summary: storedSummary,
+          }),
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: {
+              guid: 'guid-1',
+              title: 'Post 1',
+              summary: correctedSummary,
+              ...computeItemHashes({
+                guid: 'guid-1',
+                title: 'Post 1',
+                summary: correctedSummary,
+              }),
+            },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should handle mix of inserts, updates, and skips', () => {
       const value: ClassifyItemsInput = {
         newItems: [
@@ -4498,6 +4541,41 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    it('should update a linkblog post whose guid and link point to an external site', () => {
+      const feedItem = {
+        guid: 'https://css-tricks.com/some-article/',
+        link: 'https://css-tricks.com/some-article/',
+        title: 'Some Article',
+        content: '<p>Updated commentary</p>',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'https://css-tricks.com/some-article/',
+            link: 'https://css-tricks.com/some-article/',
+            title: 'Some Article',
+            content: '<p>Original commentary</p>',
+          }),
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should prefer isDefault enclosure over positional first for matching', () => {
       const feedItem = {
         guid: 'guid-1',
@@ -6185,6 +6263,80 @@ describe('classifyItems', () => {
         }
 
         expect(scan3).toEqual(expectedScan3)
+      })
+
+      it('should not merge distinct linkblog posts that each have guid == link to external sites', () => {
+        const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const incomingPost = {
+          guid: 'https://css-tricks.com/article-x/',
+          link: 'https://css-tricks.com/article-x/',
+          title: 'Article X',
+          content: '<p>Notes on X</p>',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [incomingPost],
+          existingItems: [
+            makeExisting({
+              id: 'existing-y',
+              guid: 'https://example.org/article-y/',
+              link: 'https://example.org/article-y/',
+              title: 'Article Y',
+              content: '<p>Notes on Y</p>',
+              publishedAt,
+            }),
+          ],
+        }
+        const expected: ClassifyItemsResult = {
+          inserts: [
+            {
+              item: { ...incomingPost, ...computeItemHashes(incomingPost) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+            },
+          ],
+          updates: [],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
+      })
+
+      it('should reconcile a linkblog post whose external URL migrated to a new host', () => {
+        const publishedAt = new Date('2024-01-01T00:00:00Z')
+        const feedItem = {
+          guid: 'https://new-host.com/post/',
+          link: 'https://new-host.com/post/',
+          title: 'Migrated Post',
+          content: '<p>Same commentary</p>',
+          publishedAt,
+        }
+        const value: ClassifyItemsInput = {
+          newItems: [feedItem],
+          existingItems: [
+            makeExisting({
+              id: 'existing-1',
+              guid: 'https://old-host.com/post/',
+              link: 'https://old-host.com/post/',
+              title: 'Migrated Post',
+              content: '<p>Same commentary</p>',
+              publishedAt,
+            }),
+          ],
+        }
+        const expected: ClassifyItemsResult = {
+          inserts: [],
+          updates: [
+            {
+              item: { ...feedItem, ...computeItemHashes(feedItem) },
+              fingerprintHash: expect.stringMatching(md5Regex),
+              existingItemId: 'existing-1',
+              matchedBy: 'reconciled',
+            },
+          ],
+          fingerprintLevel: 'guid',
+        }
+
+        expect(classifyItems(value)).toEqual(expected)
       })
 
       it('should handle partial GUID instability (some stable, some change)', () => {
