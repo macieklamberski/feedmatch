@@ -1,4 +1,5 @@
-import { defaultStrippedParams, type NormalizeOptions, normalizeUrl } from 'feedcanon'
+import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
+import { defaultTrackingParams } from 'urlpurify'
 
 const normalizeOptions: NormalizeOptions = {
   stripProtocol: true,
@@ -7,7 +8,7 @@ const normalizeOptions: NormalizeOptions = {
   stripTrailingSlash: true,
   stripHash: true,
   sortQueryParams: true,
-  stripQueryParams: defaultStrippedParams,
+  stripQueryParams: defaultTrackingParams,
   stripEmptyQuery: true,
   normalizeEncoding: true,
   normalizeUnicode: true,
