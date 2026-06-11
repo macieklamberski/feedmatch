@@ -17,6 +17,7 @@ import {
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
+  CleanUrlFn,
   ExistingItem,
   FingerprintedItem,
   FingerprintLevel,
@@ -224,8 +225,9 @@ export const scoreItem = (hashes: ItemHashes): number => {
 
 export const composeIncomingItems = <T extends NewItem>(
   items: Array<T>,
+  cleanUrlFn?: CleanUrlFn,
 ): Array<IncomingItem<T>> => {
-  return items.map((item) => ({ ...item, ...computeItemHashes(item) }))
+  return items.map((item) => ({ ...item, ...computeItemHashes(item, cleanUrlFn) }))
 }
 
 // Build fingerprints for all hashed items at a given level.
@@ -268,9 +270,9 @@ export const deduplicateItemsByFingerprint = <T extends NewItem>(
 export const classifyItems = <T extends NewItem>(
   input: ClassifyItemsInput<T>,
 ): ClassifyItemsResult<T> => {
-  const { newItems, existingItems, fingerprintLevel: inputLevel } = input
+  const { newItems, existingItems, fingerprintLevel: inputLevel, cleanUrlFn } = input
 
-  const incomingItems = composeIncomingItems(newItems)
+  const incomingItems = composeIncomingItems(newItems, cleanUrlFn)
 
   // Compute profile early — used for both pre-match exclusion and final
   // classification. Uses raw (not deduped) incoming hashes; duplicates

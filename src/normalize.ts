@@ -1,5 +1,5 @@
 import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
-import { defaultTrackingParams } from 'urlpurify'
+import type { CleanUrlFn, Nullish } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
   stripProtocol: true,
@@ -8,7 +8,6 @@ const normalizeOptions: NormalizeOptions = {
   stripTrailingSlash: true,
   stripHash: true,
   sortQueryParams: true,
-  stripQueryParams: defaultTrackingParams,
   stripEmptyQuery: true,
   normalizeEncoding: true,
   normalizeUnicode: true,
@@ -24,30 +23,34 @@ const normalizeWithFragmentOptions: NormalizeOptions = {
 
 // Trim + normalize URL. Feeds often contain whitespace-only strings that
 // feedcanon returns as-is (garbage). Guard against that with a trim check.
-const safeNormalizeUrl = (value: string): string | undefined => {
+const safeNormalizeUrl = (value: string, cleanUrlFn?: CleanUrlFn): string | undefined => {
   const trimmed = value.trim()
 
   if (trimmed === '') {
     return
   }
 
-  return normalizeUrl(trimmed, normalizeOptions)
+  return normalizeUrl(cleanUrlFn ? cleanUrlFn(trimmed) : trimmed, normalizeOptions)
 }
 
 // Normalize link for hashing to prevent duplicates from URL variations like
 // http vs https, trailing slashes, www prefix, UTM params, etc.
-export const normalizeLinkForHashing = (link: string | null | undefined): string | undefined => {
+export const normalizeLinkForHashing = (
+  link: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
+): string | undefined => {
   if (!link) {
     return
   }
 
-  return safeNormalizeUrl(link)
+  return safeNormalizeUrl(link, cleanUrlFn)
 }
 
 // Normalize link preserving fragment for disambiguation. Applies same
 // normalization as normalizeLinkForHashing but keeps the fragment intact.
 export const normalizeLinkWithFragmentForHashing = (
-  link: string | null | undefined,
+  link: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!link) {
     return
@@ -59,25 +62,29 @@ export const normalizeLinkWithFragmentForHashing = (
     return
   }
 
-  return normalizeUrl(trimmed, normalizeWithFragmentOptions)
+  return normalizeUrl(cleanUrlFn ? cleanUrlFn(trimmed) : trimmed, normalizeWithFragmentOptions)
 }
 
 // Normalize link fragment for hashing. Only returns a value when link
 // contains '#' — without a fragment, normalization produces the same
 // string as linkHash, making a separate hash wasteful.
 export const normalizeLinkFragmentForHashing = (
-  link: string | null | undefined,
+  link: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!link?.includes('#')) {
     return
   }
 
-  return normalizeLinkWithFragmentForHashing(link)
+  return normalizeLinkWithFragmentForHashing(link, cleanUrlFn)
 }
 
 // Normalize GUID for hashing. 70% of GUIDs are URLs — normalize those
 // the same way as links. Non-URL GUIDs are opaque strings, just trimmed.
-export const normalizeGuidForHashing = (guid: string | null | undefined): string | undefined => {
+export const normalizeGuidForHashing = (
+  guid: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
+): string | undefined => {
   if (!guid) {
     return
   }
@@ -89,7 +96,7 @@ export const normalizeGuidForHashing = (guid: string | null | undefined): string
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return normalizeLinkForHashing(trimmed) || trimmed
+    return normalizeLinkForHashing(trimmed, cleanUrlFn) || trimmed
   }
 
   return trimmed
@@ -99,7 +106,8 @@ export const normalizeGuidForHashing = (guid: string | null | undefined): string
 // a URL containing '#'. Non-URL GUIDs don't strip fragments during
 // normalization, so the fragment is already part of guidHash.
 export const normalizeGuidFragmentForHashing = (
-  guid: string | null | undefined,
+  guid: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!guid) {
     return
@@ -115,7 +123,7 @@ export const normalizeGuidFragmentForHashing = (
     return
   }
 
-  return normalizeLinkWithFragmentForHashing(guid)
+  return normalizeLinkWithFragmentForHashing(guid, cleanUrlFn)
 }
 
 // Select preferred enclosure (isDefault first, then first with URL) and normalize
@@ -124,7 +132,8 @@ export const normalizeGuidFragmentForHashing = (
 // picking one. Current approach changes hash if feed reorders enclosures or
 // toggles isDefault between scans, causing false duplicates over time.
 export const normalizeEnclosureForHashing = (
-  enclosures: Array<{ url?: string; isDefault?: boolean }> | null | undefined,
+  enclosures: Nullish<Array<{ url?: string; isDefault?: boolean }>>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!enclosures?.length) {
     return
@@ -138,11 +147,11 @@ export const normalizeEnclosureForHashing = (
     return
   }
 
-  return safeNormalizeUrl(url)
+  return safeNormalizeUrl(url, cleanUrlFn)
 }
 
 // Trim and collapse whitespace runs into single spaces, keeping letter case.
-export const normalizeWhitespace = (text: string | null | undefined): string | undefined => {
+export const normalizeWhitespace = (text: Nullish<string>): string | undefined => {
   if (!text) {
     return
   }
@@ -158,7 +167,7 @@ export const normalizeWhitespace = (text: string | null | undefined): string | u
 
 // Collapse whitespace and lowercase for text-based hashing (title). Lowercasing
 // keeps title matching tolerant to casing drift in feeds without guids/links.
-export const normalizeTextForHashing = (text: string | null | undefined): string | undefined => {
+export const normalizeTextForHashing = (text: Nullish<string>): string | undefined => {
   return normalizeWhitespace(text)?.toLowerCase()
 }
 
@@ -167,6 +176,6 @@ export const normalizeTextForHashing = (text: string | null | undefined): string
 // case-only edit inside an attribute (a wrongly-cased image URL that 404s on a
 // case-sensitive server). Lowercasing made such fixes hash-identical, so the
 // corrected content was never written to the existing item.
-export const normalizeHtmlForHashing = (html: string | null | undefined): string | undefined => {
+export const normalizeHtmlForHashing = (html: Nullish<string>): string | undefined => {
   return normalizeWhitespace(html)
 }

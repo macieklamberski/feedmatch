@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants.js'
-import type { FingerprintLevel, ItemHashes, NewItem } from './types.js'
+import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem, Nullish } from './types.js'
 
 export {
   normalizeEnclosureForHashing,
@@ -13,7 +13,7 @@ export {
   normalizeTextForHashing,
 } from './normalize.js'
 
-export const generateHash = (...values: Array<string | null | undefined>) => {
+export const generateHash = (...values: Array<Nullish<string>>) => {
   return createHash('sha256').update(values.join('\0')).digest('hex').slice(0, 32)
 }
 
@@ -131,7 +131,10 @@ export const resolveFingerprintLevel = (
 
 // Compute all available hashes for a feed item. Returns null for fields
 // that cannot be computed (absent or empty source data).
-export const computeItemHashes = <TItem extends NewItem>(item: TItem): ItemHashes => {
+export const computeItemHashes = <TItem extends NewItem>(
+  item: TItem,
+  cleanUrlFn?: CleanUrlFn,
+): ItemHashes => {
   const hashes: ItemHashes = {
     guidHash: null,
     guidFragmentHash: null,
@@ -144,7 +147,7 @@ export const computeItemHashes = <TItem extends NewItem>(item: TItem): ItemHashe
   }
 
   for (const meta of hashMeta) {
-    const normalized = meta.normalizeFn(item)
+    const normalized = meta.normalizeFn(item, cleanUrlFn)
 
     if (normalized) {
       hashes[meta.key] = generateHash(normalized)
