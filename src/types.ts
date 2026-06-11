@@ -1,3 +1,7 @@
+export type Nullish<T> = T | null | undefined
+
+export type CleanUrlFn = (url: string) => string
+
 import type { fingerprintLevels } from './constants.js'
 
 export type FingerprintLevel = (typeof fingerprintLevels)[number]
@@ -45,7 +49,7 @@ export type HashMeta = {
   isStrongHash: boolean
   isMatchable: boolean
   isContent: boolean
-  normalizeFn: (item: NewItem) => string | undefined
+  normalizeFn: (item: NewItem, cleanUrlFn?: CleanUrlFn) => string | undefined
   level?: FingerprintLevel
 }
 
@@ -155,6 +159,7 @@ export type ClassifyItemsInput<T extends NewItem = NewItem> = {
   newItems: Array<T>
   existingItems: Array<ExistingItem>
   fingerprintLevel?: FingerprintLevel
+  cleanUrlFn?: CleanUrlFn
 }
 
 export type ClassifyItemsResult<T extends NewItem = NewItem> = {

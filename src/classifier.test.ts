@@ -43,6 +43,19 @@ const makeMatchable = (input: NewItem & { id?: string } = {}): ExistingItem => {
   return { id, ...computeItemHashes(hashableFields) }
 }
 
+// Stand-in for an injected cleaner (e.g. urlpurify): removes utm_ params.
+const stripUtm = (url: string): string => {
+  const parsed = new URL(url)
+
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (key.startsWith('utm_')) {
+      parsed.searchParams.delete(key)
+    }
+  }
+
+  return parsed.toString()
+}
+
 describe('scoreItem', () => {
   it('should sum weights for multiple hashes', () => {
     const value = makeHashes({ guidHash: 'g1', linkHash: 'l1', titleHash: 't1' })
@@ -1839,11 +1852,12 @@ describe('classifyItems', () => {
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
+        cleanUrlFn: stripUtm,
       }
       const expected: ClassifyItemsResult = {
         inserts: [
           {
-            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            item: { ...feedItemA, ...computeItemHashes(feedItemA, stripUtm) },
             fingerprintHash: expect.stringMatching(md5Regex),
           },
         ],

@@ -36,14 +36,12 @@
     "build": "tsdown src/index.ts --format esm --dts --clean --unbundle --no-fixed-extension"
   },
   "peerDependencies": {
-    "feedcanon": "^2.0.0-beta.1",
-    "urlpurify": "^1.0.0"
+    "feedcanon": "^2.0.0-beta.1"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
     "feedcanon": "2.0.0-beta.1",
     "kvalita": "^1.14.0",
-    "tsdown": "^0.22.0",
-    "urlpurify": "^1.0.0"
+    "tsdown": "^0.22.0"
   }
 }

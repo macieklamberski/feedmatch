@@ -41,7 +41,7 @@ export const hashMeta: Array<HashMeta> = [
     isStrongHash: true,
     isMatchable: true,
     isContent: false,
-    normalizeFn: (item) => normalizeGuidForHashing(item.guid),
+    normalizeFn: (item, cleanUrlFn) => normalizeGuidForHashing(item.guid, cleanUrlFn),
     level: 'guid',
   },
   {
@@ -51,7 +51,7 @@ export const hashMeta: Array<HashMeta> = [
     isStrongHash: false,
     isMatchable: false,
     isContent: false,
-    normalizeFn: (item) => normalizeGuidFragmentForHashing(item.guid),
+    normalizeFn: (item, cleanUrlFn) => normalizeGuidFragmentForHashing(item.guid, cleanUrlFn),
     level: 'guidFragment',
   },
   {
@@ -61,7 +61,7 @@ export const hashMeta: Array<HashMeta> = [
     isStrongHash: true,
     isMatchable: true,
     isContent: false,
-    normalizeFn: (item) => normalizeLinkForHashing(item.link),
+    normalizeFn: (item, cleanUrlFn) => normalizeLinkForHashing(item.link, cleanUrlFn),
     level: 'link',
   },
   {
@@ -71,7 +71,7 @@ export const hashMeta: Array<HashMeta> = [
     isStrongHash: false,
     isMatchable: false,
     isContent: false,
-    normalizeFn: (item) => normalizeLinkFragmentForHashing(item.link),
+    normalizeFn: (item, cleanUrlFn) => normalizeLinkFragmentForHashing(item.link, cleanUrlFn),
     level: 'linkFragment',
   },
   {
@@ -81,7 +81,7 @@ export const hashMeta: Array<HashMeta> = [
     isStrongHash: true,
     isMatchable: true,
     isContent: true,
-    normalizeFn: (item) => normalizeEnclosureForHashing(item.enclosures),
+    normalizeFn: (item, cleanUrlFn) => normalizeEnclosureForHashing(item.enclosures, cleanUrlFn),
     level: 'enclosure',
   },
   {

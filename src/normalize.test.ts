@@ -11,6 +11,19 @@ import {
   normalizeWhitespace,
 } from './normalize.js'
 
+// Stand-in for an injected cleaner (e.g. urlpurify): removes utm_ params.
+const stripUtm = (url: string): string => {
+  const parsed = new URL(url)
+
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (key.startsWith('utm_')) {
+      parsed.searchParams.delete(key)
+    }
+  }
+
+  return parsed.toString()
+}
+
 describe('normalizeLinkForHashing', () => {
   it('should strip protocol from link', () => {
     expect(normalizeLinkForHashing('https://example.com/post')).toBe('example.com/post')
@@ -29,10 +42,18 @@ describe('normalizeLinkForHashing', () => {
     expect(normalizeLinkForHashing('https://example.com/post#section')).toBe('example.com/post')
   })
 
-  it('should strip utm params', () => {
-    expect(normalizeLinkForHashing('https://example.com/post?utm_source=rss')).toBe(
-      'example.com/post',
-    )
+  it('should strip utm params with a cleanUrlFn', () => {
+    const value = 'https://example.com/post?utm_source=rss'
+    const expected = 'example.com/post'
+
+    expect(normalizeLinkForHashing(value, stripUtm)).toBe(expected)
+  })
+
+  it('should keep tracking params without a cleanUrlFn', () => {
+    const value = 'https://example.com/post?utm_source=rss'
+    const expected = 'example.com/post?utm_source=rss'
+
+    expect(normalizeLinkForHashing(value)).toBe(expected)
   })
 
   it('should sort query params', () => {
@@ -51,7 +72,7 @@ describe('normalizeLinkForHashing', () => {
       'https://example.com/post?utm_source=rss',
     ]
 
-    const results = values.map(normalizeLinkForHashing)
+    const results = values.map((value) => normalizeLinkForHashing(value, stripUtm))
     expect(new Set(results).size).toBe(1)
     expect(results[0]).toBe('example.com/post')
   })
@@ -91,9 +112,10 @@ describe('normalizeLinkWithFragmentForHashing', () => {
   })
 
   it('should strip utm params but keep fragment', () => {
-    expect(
-      normalizeLinkWithFragmentForHashing('https://example.com/post?utm_source=rss#section'),
-    ).toBe('example.com/post#section')
+    const value = 'https://example.com/post?utm_source=rss#section'
+    const expected = 'example.com/post#section'
+
+    expect(normalizeLinkWithFragmentForHashing(value, stripUtm)).toBe(expected)
   })
 
   it('should strip trailing slash', () => {
@@ -175,9 +197,10 @@ describe('normalizeGuidForHashing', () => {
   })
 
   it('should handle URL GUIDs with tracking params', () => {
-    expect(normalizeGuidForHashing('https://example.com/post?utm_source=feed')).toBe(
-      'example.com/post',
-    )
+    const value = 'https://example.com/post?utm_source=feed'
+    const expected = 'example.com/post'
+
+    expect(normalizeGuidForHashing(value, stripUtm)).toBe(expected)
   })
 
   it('should fall back to trimmed value when URL normalization fails', () => {
@@ -261,8 +284,9 @@ describe('normalizeEnclosureForHashing', () => {
 
   it('should strip utm params but keep identity params', () => {
     const value = [{ url: 'https://example.com/dl?id=123&utm_source=rss' }]
+    const expected = 'example.com/dl?id=123'
 
-    expect(normalizeEnclosureForHashing(value)).toBe('example.com/dl?id=123')
+    expect(normalizeEnclosureForHashing(value, stripUtm)).toBe(expected)
   })
 
   it('should sort query params', () => {
