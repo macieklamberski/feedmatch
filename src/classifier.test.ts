@@ -22,7 +22,7 @@ import type {
   NewItem,
 } from './types.js'
 
-const md5Regex = /^[a-f0-9]{32}$/
+const hashRegex = /^[a-f0-9]{32}$/
 
 const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
   return {
@@ -41,6 +41,14 @@ const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
 const makeMatchable = (input: NewItem & { id?: string } = {}): ExistingItem => {
   const { id = 'item-1', ...hashableFields } = input
   return { id, ...computeItemHashes(hashableFields) }
+}
+
+const makeIncoming = (overrides: Partial<IncomingItem> = {}): IncomingItem => {
+  return { ...makeHashes(), ...overrides }
+}
+
+const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => {
+  return { id: 'existing-1', ...makeHashes(), ...overrides }
 }
 
 // Stand-in for an injected cleaner (e.g. urlpurify): removes utm_ params.
@@ -110,6 +118,11 @@ describe('composeIncomingItems', () => {
     ]
 
     expect(composeIncomingItems(value)).toEqual(expected)
+  })
+
+  it.todo('should pass cleanUrlFn through to hash computation', () => {
+    // composeIncomingItems(items, stripUtm) with a utm-tagged link should produce
+    // the same linkHash as the equivalent item whose link has no utm params.
   })
 
   it('should return empty array for empty input', () => {
@@ -195,6 +208,28 @@ describe('deduplicateItemsByFingerprint', () => {
     expect(deduplicateItemsByFingerprint(value)).toEqual(expected)
   })
 
+  it('should keep richer item when it comes first', () => {
+    const value: Array<FingerprintedItem> = [
+      {
+        guid: 'g1',
+        link: 'https://example.com',
+        ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
+        fingerprint: 'key1',
+      },
+      { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
+    ]
+    const expected: Array<FingerprintedItem> = [
+      {
+        guid: 'g1',
+        link: 'https://example.com',
+        ...makeHashes({ guidHash: 'gh1', linkHash: 'lh1' }),
+        fingerprint: 'key1',
+      },
+    ]
+
+    expect(deduplicateItemsByFingerprint(value)).toEqual(expected)
+  })
+
   it('should keep items with different fingerprints', () => {
     const value: Array<FingerprintedItem> = [
       { guid: 'g1', ...makeHashes({ guidHash: 'gh1' }), fingerprint: 'key1' },
@@ -214,31 +249,6 @@ describe('deduplicateItemsByFingerprint', () => {
 })
 
 describe('findReconciliationCandidate', () => {
-  const makeIncoming = (overrides: Partial<IncomingItem> = {}): IncomingItem => ({
-    guidHash: null,
-    guidFragmentHash: null,
-    linkHash: null,
-    linkFragmentHash: null,
-    enclosureHash: null,
-    titleHash: null,
-    summaryHash: null,
-    contentHash: null,
-    ...overrides,
-  })
-
-  const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => ({
-    id: 'existing-1',
-    guidHash: null,
-    guidFragmentHash: null,
-    linkHash: null,
-    linkFragmentHash: null,
-    enclosureHash: null,
-    titleHash: null,
-    summaryHash: null,
-    contentHash: null,
-    ...overrides,
-  })
-
   describe('happy paths', () => {
     it('should return link match when GUID differs but link and all content match', () => {
       const incoming = makeIncoming({
@@ -732,31 +742,6 @@ describe('findReconciliationCandidate', () => {
 })
 
 describe('hasAmbiguousIdentity', () => {
-  const makeIncoming = (overrides: Partial<IncomingItem> = {}): IncomingItem => ({
-    guidHash: null,
-    guidFragmentHash: null,
-    linkHash: null,
-    linkFragmentHash: null,
-    enclosureHash: null,
-    titleHash: null,
-    summaryHash: null,
-    contentHash: null,
-    ...overrides,
-  })
-
-  const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => ({
-    id: 'candidate',
-    guidHash: null,
-    guidFragmentHash: null,
-    linkHash: null,
-    linkFragmentHash: null,
-    enclosureHash: null,
-    titleHash: null,
-    summaryHash: null,
-    contentHash: null,
-    ...overrides,
-  })
-
   it('should return true when incoming guidHash belongs to a different existing item', () => {
     const incoming = makeIncoming({ guidHash: 'guid-a', linkHash: 'same-link' })
     const candidate = makeExistingItem({
@@ -887,34 +872,20 @@ describe('hasAmbiguousIdentity', () => {
 
     expect(hasAmbiguousIdentity(incoming, candidate, existingItems)).toBe(false)
   })
+
+  it('should return false for empty existing items', () => {
+    const incoming = makeIncoming({ guidHash: 'new-guid', linkHash: 'same-link' })
+    const candidate = makeExistingItem({
+      id: 'candidate',
+      guidHash: 'old-guid',
+      linkHash: 'same-link',
+    })
+
+    expect(hasAmbiguousIdentity(incoming, candidate, [])).toBe(false)
+  })
 })
 
 describe('reconcileInserts', () => {
-  const makeIncoming = (overrides: Partial<IncomingItem> = {}): IncomingItem => ({
-    guidHash: null,
-    guidFragmentHash: null,
-    linkHash: null,
-    linkFragmentHash: null,
-    enclosureHash: null,
-    titleHash: null,
-    summaryHash: null,
-    contentHash: null,
-    ...overrides,
-  })
-
-  const makeExistingItem = (overrides: Partial<ExistingItem> = {}): ExistingItem => ({
-    id: 'existing-1',
-    guidHash: null,
-    guidFragmentHash: null,
-    linkHash: null,
-    linkFragmentHash: null,
-    enclosureHash: null,
-    titleHash: null,
-    summaryHash: null,
-    contentHash: null,
-    ...overrides,
-  })
-
   it('should return empty arrays when inserts is empty', () => {
     const result = reconcileInserts([], [makeExistingItem()], new Set())
 
@@ -998,6 +969,12 @@ describe('reconcileInserts', () => {
     expect(result.reconciledUpdates).toHaveLength(2)
     expect(result.reconciledUpdates[0].existingItemId).toBe('existing-1')
     expect(result.reconciledUpdates[1].existingItemId).toBe('existing-2')
+  })
+
+  it.todo('should populate full update content including matchedBy on reconciled updates', () => {
+    // Reconcile one insert and assert the whole reconciledUpdates entry with toEqual:
+    // item, fingerprintHash, existingItemId, and matchedBy ('link' for the
+    // guid-changed case, 'reconciled' for the null-guid link-changed case).
   })
 
   it('should not reconcile when ambiguity guard blocks the match', () => {
@@ -1260,7 +1237,7 @@ describe('classifyItems', () => {
               title: 'Post 1',
               ...computeItemHashes({ guid: 'guid-1', title: 'Post 1' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: {
@@ -1268,7 +1245,7 @@ describe('classifyItems', () => {
               title: 'Post 2',
               ...computeItemHashes({ guid: 'guid-2', title: 'Post 2' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1304,7 +1281,7 @@ describe('classifyItems', () => {
                 content: 'New content',
               }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -1347,7 +1324,7 @@ describe('classifyItems', () => {
                 summary: correctedSummary,
               }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -1387,7 +1364,7 @@ describe('classifyItems', () => {
               title: 'Brand New',
               ...computeItemHashes({ guid: 'guid-3', title: 'Brand New' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [
@@ -1398,7 +1375,7 @@ describe('classifyItems', () => {
               content: 'New',
               ...computeItemHashes({ guid: 'guid-2', title: 'Changed Title', content: 'New' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-2',
             matchedBy: 'guid',
           },
@@ -1476,7 +1453,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -1512,15 +1489,9 @@ describe('classifyItems', () => {
         newItems: [skipItem, updateItem, insertItem],
         existingItems,
       })
-      const sortByHash = (items: Array<{ fingerprintHash: string }>) => {
-        return [...items].sort((a, b) => {
-          return a.fingerprintHash.localeCompare(b.fingerprintHash)
-        })
-      }
-
       expect(forward.fingerprintLevel).toBe(reversed.fingerprintLevel)
-      expect(sortByHash(forward.inserts)).toEqual(sortByHash(reversed.inserts))
-      expect(sortByHash(forward.updates)).toEqual(sortByHash(reversed.updates))
+      expect(forward.inserts).toEqual(reversed.inserts)
+      expect(forward.updates).toEqual(reversed.updates)
     })
 
     it('should preserve extra fields in output', () => {
@@ -1533,7 +1504,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1583,11 +1554,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItem3, ...computeItemHashes(feedItem3) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1627,7 +1598,7 @@ describe('classifyItems', () => {
               title: 'Post',
               ...computeItemHashes({ guid: 'guid-1', title: 'Post' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1648,7 +1619,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1668,7 +1639,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1689,7 +1660,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1738,7 +1709,7 @@ describe('classifyItems', () => {
                 content: 'Date: Jan',
               }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1770,7 +1741,7 @@ describe('classifyItems', () => {
                 content: 'Version 1',
               }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1806,7 +1777,7 @@ describe('classifyItems', () => {
               title: 'Title B',
               ...computeItemHashes({ guid: 'guid-2', title: 'Title B' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1835,7 +1806,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItemRich, ...computeItemHashes(feedItemRich) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -1858,7 +1829,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA, stripUtm) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1882,11 +1853,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1908,11 +1879,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1934,11 +1905,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -1973,7 +1944,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2000,7 +1971,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2021,11 +1992,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2047,11 +2018,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2073,11 +2044,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2107,11 +2078,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2141,11 +2112,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2167,11 +2138,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2193,11 +2164,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2227,11 +2198,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2253,11 +2224,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2359,11 +2330,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2391,11 +2362,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2417,11 +2388,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2443,11 +2414,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2477,11 +2448,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2511,11 +2482,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2545,11 +2516,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2579,11 +2550,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2642,7 +2613,7 @@ describe('classifyItems', () => {
               content: 'New content',
               ...computeItemHashes({ guid: 'guid-1', title: 'Updated', content: 'New content' }),
             },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -2680,7 +2651,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
           },
@@ -2712,7 +2683,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2733,11 +2704,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2769,7 +2740,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2802,7 +2773,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'link',
           },
@@ -2842,7 +2813,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
           },
@@ -2870,7 +2841,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2897,7 +2868,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2924,7 +2895,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2955,7 +2926,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -2982,7 +2953,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3015,7 +2986,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3045,7 +3016,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3078,7 +3049,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3110,7 +3081,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3150,7 +3121,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-2',
             matchedBy: 'link',
           },
@@ -3178,7 +3149,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'title',
           },
@@ -3212,7 +3183,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3245,7 +3216,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3277,7 +3248,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3316,7 +3287,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3347,7 +3318,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3383,7 +3354,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3420,13 +3391,13 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...fillerItem, ...computeItemHashes(fillerItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [
           {
             item: { ...targetItem, ...computeItemHashes(targetItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
           },
@@ -3461,7 +3432,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-a',
             matchedBy: 'guid',
           },
@@ -3489,7 +3460,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3542,7 +3513,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'target',
             matchedBy: 'link',
           },
@@ -3602,7 +3573,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'target',
             matchedBy: 'enclosure',
           },
@@ -3644,7 +3615,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'target',
             matchedBy: 'link',
           },
@@ -3691,13 +3662,13 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...duplicateItem, ...computeItemHashes(duplicateItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'target',
             matchedBy: 'enclosure',
           },
@@ -3736,7 +3707,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -3744,6 +3715,33 @@ describe('classifyItems', () => {
       }
 
       expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should insert when guid+link match but dates are far apart', () => {
+      const feedItem = {
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
+        title: 'Reused Title',
+        publishedAt: new Date('2026-06-01T00:00:00Z'),
+      }
+      const existing = makeMatchable({
+        id: 'existing-1',
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        enclosures: [{ url: 'https://example.com/old-image.jpg' }],
+        title: 'Reused Title',
+        publishedAt: new Date('2026-01-01T00:00:00Z'),
+      })
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [{ ...existing, publishedAt: new Date('2026-01-01T00:00:00Z') }],
+        fingerprintLevel: 'guid',
+      }
+      const result = classifyItems(value)
+
+      expect(result.inserts).toHaveLength(1)
+      expect(result.updates).toHaveLength(0)
     })
   })
 
@@ -3774,7 +3772,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3809,7 +3807,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3858,13 +3856,13 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-2',
             matchedBy: 'guid',
           },
@@ -3903,7 +3901,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -3936,7 +3934,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'link',
           },
@@ -3969,7 +3967,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4001,7 +3999,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4040,7 +4038,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'link',
           },
@@ -4085,13 +4083,13 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'link',
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-2',
             matchedBy: 'link',
           },
@@ -4130,7 +4128,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-2',
             matchedBy: 'link',
           },
@@ -4173,7 +4171,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-a',
             matchedBy: 'guid',
           },
@@ -4213,7 +4211,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'v1',
             matchedBy: 'guid',
           },
@@ -4258,7 +4256,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 's1',
             matchedBy: 'link',
           },
@@ -4301,7 +4299,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4334,7 +4332,106 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should update when guid+link match but enclosure changed (CDN migration)', () => {
+      const feedItems = [
+        {
+          guid: 'guid-1',
+          link: 'https://example.com/post-1',
+          enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
+          title: 'Post 1',
+          content: 'Content 1',
+        },
+        {
+          guid: 'guid-2',
+          link: 'https://example.com/post-2',
+          enclosures: [{ url: 'https://cdn.example.com/new-image-2.jpg' }],
+          title: 'Post 2',
+          content: 'Content 2',
+        },
+      ]
+      const value: ClassifyItemsInput = {
+        newItems: feedItems,
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'guid-1',
+            link: 'https://example.com/post-1',
+            enclosures: [{ url: 'https://example.com/old-image.jpg' }],
+            title: 'Post 1',
+            content: 'Content 1',
+          }),
+          makeMatchable({
+            id: 'existing-2',
+            guid: 'guid-2',
+            link: 'https://example.com/post-2',
+            enclosures: [{ url: 'https://example.com/old-image-2.jpg' }],
+            title: 'Post 2',
+            content: 'Content 2',
+          }),
+        ],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItems[0], ...computeItemHashes(feedItems[0]) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+          {
+            item: { ...feedItems[1], ...computeItemHashes(feedItems[1]) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-2',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should update when guid+link match but enclosure and title changed', () => {
+      const feedItem = {
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
+        title: 'Updated Title',
+        content: 'New content',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: 'guid-1',
+            link: 'https://example.com/post-1',
+            enclosures: [{ url: 'https://example.com/old-image.jpg' }],
+            title: 'Original Title',
+            content: 'Old content',
+          }),
+        ],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4376,7 +4473,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
           },
@@ -4399,11 +4496,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -4433,11 +4530,11 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
           {
             item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -4488,7 +4585,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4522,13 +4619,13 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItemNew, ...computeItemHashes(feedItemNew) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [
           {
             item: { ...feedItemUpdate, ...computeItemHashes(feedItemUpdate) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'link',
           },
@@ -4557,8 +4654,8 @@ describe('classifyItems', () => {
 
     it('should update a linkblog post whose guid and link point to an external site', () => {
       const feedItem = {
-        guid: 'https://css-tricks.com/some-article/',
-        link: 'https://css-tricks.com/some-article/',
+        guid: 'https://example.org/some-article/',
+        link: 'https://example.org/some-article/',
         title: 'Some Article',
         content: '<p>Updated commentary</p>',
       }
@@ -4567,8 +4664,8 @@ describe('classifyItems', () => {
         existingItems: [
           makeMatchable({
             id: 'existing-1',
-            guid: 'https://css-tricks.com/some-article/',
-            link: 'https://css-tricks.com/some-article/',
+            guid: 'https://example.org/some-article/',
+            link: 'https://example.org/some-article/',
             title: 'Some Article',
             content: '<p>Original commentary</p>',
           }),
@@ -4579,7 +4676,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4620,7 +4717,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4647,7 +4744,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -4679,7 +4776,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4713,7 +4810,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4747,7 +4844,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4820,7 +4917,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -4848,7 +4945,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4877,7 +4974,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4917,7 +5014,7 @@ describe('classifyItems', () => {
         inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
           },
         ],
         updates: [],
@@ -4957,7 +5054,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'guid',
           },
@@ -4990,7 +5087,7 @@ describe('classifyItems', () => {
         updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
-            fingerprintHash: expect.stringMatching(md5Regex),
+            fingerprintHash: expect.stringMatching(hashRegex),
             existingItemId: 'existing-1',
             matchedBy: 'enclosure',
           },
@@ -5000,441 +5097,289 @@ describe('classifyItems', () => {
 
       expect(classifyItems(value)).toEqual(expected)
     })
-  })
 
-  it('should update when guid+link match but enclosure changed (CDN migration)', () => {
-    const feedItems = [
-      {
-        guid: 'guid-1',
-        link: 'https://example.com/post-1',
-        enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
-        title: 'Post 1',
-        content: 'Content 1',
-      },
-      {
-        guid: 'guid-2',
-        link: 'https://example.com/post-2',
-        enclosures: [{ url: 'https://cdn.example.com/new-image-2.jpg' }],
-        title: 'Post 2',
-        content: 'Content 2',
-      },
-    ]
-    const value: ClassifyItemsInput = {
-      newItems: feedItems,
-      existingItems: [
-        makeMatchable({
-          id: 'existing-1',
-          guid: 'guid-1',
-          link: 'https://example.com/post-1',
-          enclosures: [{ url: 'https://example.com/old-image.jpg' }],
-          title: 'Post 1',
-          content: 'Content 1',
-        }),
-        makeMatchable({
-          id: 'existing-2',
-          guid: 'guid-2',
-          link: 'https://example.com/post-2',
-          enclosures: [{ url: 'https://example.com/old-image-2.jpg' }],
-          title: 'Post 2',
-          content: 'Content 2',
-        }),
-      ],
-      fingerprintLevel: 'guid',
-    }
-    const expected: ClassifyItemsResult = {
-      inserts: [],
-      updates: [
-        {
-          item: { ...feedItems[0], ...computeItemHashes(feedItems[0]) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-1',
-          matchedBy: 'guid',
-        },
-        {
-          item: { ...feedItems[1], ...computeItemHashes(feedItems[1]) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-2',
-          matchedBy: 'guid',
-        },
-      ],
-      fingerprintLevel: 'guid',
-    }
+    // Real-world: Some broken CMS feeds use the blog index
+    // URL as the GUID for every item. All items share one GUID, but have
+    // different links and titles. The fingerprint level should downgrade from
+    // guid to link since guid is useless for disambiguation.
+    it('should downgrade to link when all items share a single GUID', () => {
+      const sharedGuid = 'https://example.com/blog//'
+      const feedItemA = {
+        guid: sharedGuid,
+        link: 'https://example.com/blog/post-a',
+        title: 'Post A',
+      }
+      const feedItemB = {
+        guid: sharedGuid,
+        link: 'https://example.com/blog/post-b',
+        title: 'Post B',
+      }
+      const feedItemC = {
+        guid: sharedGuid,
+        link: 'https://example.com/blog/post-c',
+        title: 'Post C',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB, feedItemC],
+        existingItems: [],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [
+          {
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+          },
+          {
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+          },
+          {
+            item: { ...feedItemC, ...computeItemHashes(feedItemC) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+          },
+        ],
+        updates: [],
+        fingerprintLevel: 'link',
+      }
 
-    expect(classifyItems(value)).toEqual(expected)
-  })
-
-  it('should update when guid+link match but enclosure and title changed', () => {
-    const feedItem = {
-      guid: 'guid-1',
-      link: 'https://example.com/post-1',
-      enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
-      title: 'Updated Title',
-      content: 'New content',
-    }
-    const value: ClassifyItemsInput = {
-      newItems: [feedItem],
-      existingItems: [
-        makeMatchable({
-          id: 'existing-1',
-          guid: 'guid-1',
-          link: 'https://example.com/post-1',
-          enclosures: [{ url: 'https://example.com/old-image.jpg' }],
-          title: 'Original Title',
-          content: 'Old content',
-        }),
-      ],
-      fingerprintLevel: 'guid',
-    }
-    const expected: ClassifyItemsResult = {
-      inserts: [],
-      updates: [
-        {
-          item: { ...feedItem, ...computeItemHashes(feedItem) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-1',
-          matchedBy: 'guid',
-        },
-      ],
-      fingerprintLevel: 'guid',
-    }
-
-    expect(classifyItems(value)).toEqual(expected)
-  })
-
-  it('should produce same result regardless of existing item order', () => {
-    const feedItem = {
-      guid: 'guid-2',
-      link: 'https://example.com/post-2',
-      enclosures: [{ url: 'https://cdn.example.com/image-2.jpg' }],
-      title: 'Post 2',
-      content: 'Updated content',
-    }
-    const existingA = makeMatchable({
-      id: 'existing-1',
-      guid: 'guid-1',
-      link: 'https://example.com/post-1',
-      title: 'Post 1',
-    })
-    const existingB = makeMatchable({
-      id: 'existing-2',
-      guid: 'guid-2',
-      link: 'https://example.com/post-2',
-      enclosures: [{ url: 'https://example.com/old-image-2.jpg' }],
-      title: 'Post 2',
-      content: 'Old content',
-    })
-    const base = {
-      newItems: [feedItem],
-      fingerprintLevel: 'guid' as const,
-    }
-    const resultForward = classifyItems({
-      ...base,
-      existingItems: [existingA, existingB],
-    })
-    const resultReversed = classifyItems({
-      ...base,
-      existingItems: [existingB, existingA],
+      expect(classifyItems(value)).toEqual(expected)
     })
 
-    expect(resultForward.inserts).toHaveLength(resultReversed.inserts.length)
-    expect(resultForward.updates).toHaveLength(resultReversed.updates.length)
-    expect(resultForward.fingerprintLevel).toBe(resultReversed.fingerprintLevel)
-  })
+    // Real-world: Extension of the broken CMS pattern above — same feed, but
+    // now existing items from a prior scan are present. The single shared GUID
+    // forces downgrade to link-level fingerprinting, and items should match
+    // existing items by link to produce updates.
+    it('should downgrade and match by link when all items share a single GUID with existing items', () => {
+      const sharedGuid = 'https://example.com/blog//'
+      const feedItemA = {
+        guid: sharedGuid,
+        link: 'https://example.com/blog/post-a',
+        title: 'Post A',
+        content: 'Updated content A',
+      }
+      const feedItemB = {
+        guid: sharedGuid,
+        link: 'https://example.com/blog/post-b',
+        title: 'Post B',
+        content: 'Updated content B',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-a',
+            guid: sharedGuid,
+            link: 'https://example.com/blog/post-a',
+            title: 'Post A',
+            content: 'Old content A',
+          }),
+          makeMatchable({
+            id: 'existing-b',
+            guid: sharedGuid,
+            link: 'https://example.com/blog/post-b',
+            title: 'Post B',
+            content: 'Old content B',
+          }),
+        ],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-a',
+            matchedBy: 'guid',
+          },
+          {
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-b',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'link',
+      }
 
-  it('should insert when guid+link match but dates are far apart', () => {
-    const feedItem = {
-      guid: 'guid-1',
-      link: 'https://example.com/post-1',
-      enclosures: [{ url: 'https://cdn.example.com/new-image.jpg' }],
-      title: 'Reused Title',
-      publishedAt: new Date('2026-06-01T00:00:00Z'),
-    }
-    const existing = makeMatchable({
-      id: 'existing-1',
-      guid: 'guid-1',
-      link: 'https://example.com/post-1',
-      enclosures: [{ url: 'https://example.com/old-image.jpg' }],
-      title: 'Reused Title',
-      publishedAt: new Date('2026-01-01T00:00:00Z'),
+      expect(classifyItems(value)).toEqual(expected)
     })
-    const value: ClassifyItemsInput = {
-      newItems: [feedItem],
-      existingItems: [{ ...existing, publishedAt: new Date('2026-01-01T00:00:00Z') }],
-      fingerprintLevel: 'guid',
-    }
-    const result = classifyItems(value)
 
-    expect(result.inserts).toHaveLength(1)
-    expect(result.updates).toHaveLength(0)
-  })
+    // Real-world: Many podcast feeds set <link> to the show homepage for every
+    // episode instead of an episode-specific URL. Each episode has a unique
+    // GUID but all share one link. GUID matching should still work since GUIDs
+    // are unique — the low link uniqueness only affects link-based strategies.
+    it('should match by guid when all items share a single link', () => {
+      const sharedLink = 'https://example.com/show'
+      const feedItemA = {
+        guid: 'episode-100',
+        link: sharedLink,
+        title: 'Episode 100',
+        content: 'New show notes',
+      }
+      const feedItemB = {
+        guid: 'episode-101',
+        link: sharedLink,
+        title: 'Episode 101',
+        content: 'New show notes B',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-100',
+            guid: 'episode-100',
+            link: sharedLink,
+            title: 'Episode 100',
+            content: 'Old show notes',
+          }),
+          makeMatchable({
+            id: 'existing-101',
+            guid: 'episode-101',
+            link: sharedLink,
+            title: 'Episode 101',
+            content: 'Old show notes B',
+          }),
+        ],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItemA, ...computeItemHashes(feedItemA) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-100',
+            matchedBy: 'guid',
+          },
+          {
+            item: { ...feedItemB, ...computeItemHashes(feedItemB) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-101',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
 
-  // Real-world: Some broken CMS feeds use the blog index
-  // URL as the GUID for every item. All items share one GUID, but have
-  // different links and titles. The fingerprint level should downgrade from
-  // guid to link since guid is useless for disambiguation.
-  it('should downgrade to link when all items share a single GUID', () => {
-    const sharedGuid = 'https://example.com/blog//'
-    const feedItemA = { guid: sharedGuid, link: 'https://example.com/blog/post-a', title: 'Post A' }
-    const feedItemB = { guid: sharedGuid, link: 'https://example.com/blog/post-b', title: 'Post B' }
-    const feedItemC = { guid: sharedGuid, link: 'https://example.com/blog/post-c', title: 'Post C' }
-    const value: ClassifyItemsInput = {
-      newItems: [feedItemA, feedItemB, feedItemC],
-      existingItems: [],
-      fingerprintLevel: 'guid',
-    }
-    const expected: ClassifyItemsResult = {
-      inserts: [
-        {
-          item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-        },
-        {
-          item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-        },
-        {
-          item: { ...feedItemC, ...computeItemHashes(feedItemC) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-        },
-      ],
-      updates: [],
-      fingerprintLevel: 'link',
-    }
+      expect(classifyItems(value)).toEqual(expected)
+    })
 
-    expect(classifyItems(value)).toEqual(expected)
-  })
+    // Real-world: 644 channels (22%) where GUID and link are the identical
+    // string (e.g., guid="https://example.com/post", link="https://example.com/post").
+    // guidHash and linkHash end up identical. Matching should still work since
+    // the GUID strategy runs first and finds a unique match.
+    it('should match when guid and link are identical strings', () => {
+      const url = 'https://example.com/post-1'
+      const feedItem = { guid: url, link: url, title: 'Post 1', content: 'New content' }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-1',
+            guid: url,
+            link: url,
+            title: 'Post 1',
+            content: 'Old content',
+          }),
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
 
-  // Real-world: Extension of the broken CMS pattern above — same feed, but
-  // now existing items from a prior scan are present. The single shared GUID
-  // forces downgrade to link-level fingerprinting, and items should match
-  // existing items by link to produce updates.
-  it('should downgrade and match by link when all items share a single GUID with existing items', () => {
-    const sharedGuid = 'https://example.com/blog//'
-    const feedItemA = {
-      guid: sharedGuid,
-      link: 'https://example.com/blog/post-a',
-      title: 'Post A',
-      content: 'Updated content A',
-    }
-    const feedItemB = {
-      guid: sharedGuid,
-      link: 'https://example.com/blog/post-b',
-      title: 'Post B',
-      content: 'Updated content B',
-    }
-    const value: ClassifyItemsInput = {
-      newItems: [feedItemA, feedItemB],
-      existingItems: [
-        makeMatchable({
-          id: 'existing-a',
-          guid: sharedGuid,
-          link: 'https://example.com/blog/post-a',
-          title: 'Post A',
-          content: 'Old content A',
-        }),
-        makeMatchable({
-          id: 'existing-b',
-          guid: sharedGuid,
-          link: 'https://example.com/blog/post-b',
-          title: 'Post B',
-          content: 'Old content B',
-        }),
-      ],
-      fingerprintLevel: 'guid',
-    }
-    const expected: ClassifyItemsResult = {
-      inserts: [],
-      updates: [
-        {
-          item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-a',
-          matchedBy: 'guid',
-        },
-        {
-          item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-b',
-          matchedBy: 'guid',
-        },
-      ],
-      fingerprintLevel: 'link',
-    }
+      expect(classifyItems(value)).toEqual(expected)
+    })
 
-    expect(classifyItems(value)).toEqual(expected)
-  })
+    // Real-world: Some video podcast feeds have no GUIDs and no links. Items
+    // have only title + enclosure. Some items share a title but have different
+    // enclosure URLs, so enclosure
+    // is the disambiguating signal. The fingerprint level should downgrade
+    // to enclosure and items should match existing items correctly.
+    it('should match by enclosure when items have no guid and no link', () => {
+      const feedItemA = {
+        title: 'Find Freedom',
+        summary: 'Updated sermon notes A',
+        enclosures: [{ url: 'https://example.com/media/sermon-a.mp4' }],
+      }
+      const feedItemB = {
+        title: 'Find Freedom',
+        summary: 'Updated sermon notes B',
+        enclosures: [{ url: 'https://example.com/media/sermon-b.mp4' }],
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItemA, feedItemB],
+        existingItems: [
+          makeMatchable({
+            id: 'existing-a',
+            title: 'Find Freedom',
+            summary: 'Old sermon notes A',
+            enclosures: [{ url: 'https://example.com/media/sermon-a.mp4' }],
+          }),
+          makeMatchable({
+            id: 'existing-b',
+            title: 'Find Freedom',
+            summary: 'Old sermon notes B',
+            enclosures: [{ url: 'https://example.com/media/sermon-b.mp4' }],
+          }),
+        ],
+      }
+      const result = classifyItems(value)
 
-  // Real-world: Many podcast feeds set <link> to the show homepage for every
-  // episode instead of an episode-specific URL. Each episode has a unique
-  // GUID but all share one link. GUID matching should still work since GUIDs
-  // are unique — the low link uniqueness only affects link-based strategies.
-  it('should match by guid when all items share a single link', () => {
-    const sharedLink = 'https://example.com/show'
-    const feedItemA = {
-      guid: 'episode-100',
-      link: sharedLink,
-      title: 'Episode 100',
-      content: 'New show notes',
-    }
-    const feedItemB = {
-      guid: 'episode-101',
-      link: sharedLink,
-      title: 'Episode 101',
-      content: 'New show notes B',
-    }
-    const value: ClassifyItemsInput = {
-      newItems: [feedItemA, feedItemB],
-      existingItems: [
-        makeMatchable({
-          id: 'existing-100',
-          guid: 'episode-100',
-          link: sharedLink,
-          title: 'Episode 100',
-          content: 'Old show notes',
-        }),
-        makeMatchable({
-          id: 'existing-101',
-          guid: 'episode-101',
-          link: sharedLink,
-          title: 'Episode 101',
-          content: 'Old show notes B',
-        }),
-      ],
-      fingerprintLevel: 'guid',
-    }
-    const expected: ClassifyItemsResult = {
-      inserts: [],
-      updates: [
-        {
-          item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-100',
-          matchedBy: 'guid',
-        },
-        {
-          item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-101',
-          matchedBy: 'guid',
-        },
-      ],
-      fingerprintLevel: 'guid',
-    }
+      const updatedItemIds = result.updates.map((update) => update.existingItemId).sort()
 
-    expect(classifyItems(value)).toEqual(expected)
-  })
+      expect(result.inserts).toHaveLength(0)
+      expect(result.updates).toHaveLength(2)
+      expect(updatedItemIds).toEqual(['existing-a', 'existing-b'])
+      expect(result.fingerprintLevel).toBe('enclosure')
+    })
 
-  // Real-world: 644 channels (22%) where GUID and link are the identical
-  // string (e.g., guid="https://example.com/post", link="https://example.com/post").
-  // guidHash and linkHash end up identical. Matching should still work since
-  // the GUID strategy runs first and finds a unique match.
-  it('should match when guid and link are identical strings', () => {
-    const url = 'https://example.com/post-1'
-    const feedItem = { guid: url, link: url, title: 'Post 1', content: 'New content' }
-    const value: ClassifyItemsInput = {
-      newItems: [feedItem],
-      existingItems: [
-        makeMatchable({
-          id: 'existing-1',
-          guid: url,
-          link: url,
-          title: 'Post 1',
-          content: 'Old content',
-        }),
-      ],
-    }
-    const expected: ClassifyItemsResult = {
-      inserts: [],
-      updates: [
-        {
-          item: { ...feedItem, ...computeItemHashes(feedItem) },
-          fingerprintHash: expect.stringMatching(md5Regex),
-          existingItemId: 'existing-1',
-          matchedBy: 'guid',
-        },
-      ],
-      fingerprintLevel: 'guid',
-    }
+    // Real-world: Forum feeds expose each thread reply as a separate feed item.
+    // Within a single scan, multiple items share the same link (thread URL) and
+    // title (thread title) but have unique GUIDs and different summaries. These
+    // are distinct items, not duplicates.
+    it('should treat forum replies sharing link and title as distinct items', () => {
+      const threadLink = 'https://forum.example.com/t/shutdown-option-missing/45754'
+      const threadTitle = 'Application Launcher is Missing Shutdown Option'
+      const replyA = {
+        guid: 'forum.example.com-post-140876',
+        link: threadLink,
+        title: threadTitle,
+        summary: '<p>To the left of Session there are normally options for shutting down</p>',
+      }
+      const replyB = {
+        guid: 'forum.example.com-post-140889',
+        link: threadLink,
+        title: threadTitle,
+        summary: '<p>I have the same problem on KDE Linux on master</p>',
+      }
+      const replyC = {
+        guid: 'forum.example.com-post-140896',
+        link: threadLink,
+        title: threadTitle,
+        summary: '<p>Lock / logout / switch user</p>',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [replyA, replyB, replyC],
+        existingItems: [],
+        fingerprintLevel: 'guid',
+      }
+      const result = classifyItems(value)
 
-    expect(classifyItems(value)).toEqual(expected)
-  })
-
-  // Real-world: Some video podcast feeds have no GUIDs and no links. Items
-  // have only title + enclosure. Some items share a title but have different
-  // enclosure URLs, so enclosure
-  // is the disambiguating signal. The fingerprint level should downgrade
-  // to enclosure and items should match existing items correctly.
-  it('should match by enclosure when items have no guid and no link', () => {
-    const feedItemA = {
-      title: 'Find Freedom',
-      summary: 'Updated sermon notes A',
-      enclosures: [{ url: 'https://example.com/media/sermon-a.mp4' }],
-    }
-    const feedItemB = {
-      title: 'Find Freedom',
-      summary: 'Updated sermon notes B',
-      enclosures: [{ url: 'https://example.com/media/sermon-b.mp4' }],
-    }
-    const value: ClassifyItemsInput = {
-      newItems: [feedItemA, feedItemB],
-      existingItems: [
-        makeMatchable({
-          id: 'existing-a',
-          title: 'Find Freedom',
-          summary: 'Old sermon notes A',
-          enclosures: [{ url: 'https://example.com/media/sermon-a.mp4' }],
-        }),
-        makeMatchable({
-          id: 'existing-b',
-          title: 'Find Freedom',
-          summary: 'Old sermon notes B',
-          enclosures: [{ url: 'https://example.com/media/sermon-b.mp4' }],
-        }),
-      ],
-    }
-    const result = classifyItems(value)
-
-    expect(result.inserts).toHaveLength(0)
-    expect(result.updates).toHaveLength(2)
-    expect(result.updates.map((u) => u.existingItemId).sort()).toEqual(['existing-a', 'existing-b'])
-    expect(result.fingerprintLevel).toBe('enclosure')
-  })
-
-  // Real-world: Forum feeds expose each thread reply as a separate feed item.
-  // Within a single scan, multiple items share the same link (thread URL) and
-  // title (thread title) but have unique GUIDs and different summaries. These
-  // are distinct items, not duplicates.
-  it('should treat forum replies sharing link and title as distinct items', () => {
-    const threadLink = 'https://forum.example.com/t/shutdown-option-missing/45754'
-    const threadTitle = 'Application Launcher is Missing Shutdown Option'
-    const replyA = {
-      guid: 'forum.example.com-post-140876',
-      link: threadLink,
-      title: threadTitle,
-      summary: '<p>To the left of Session there are normally options for shutting down</p>',
-    }
-    const replyB = {
-      guid: 'forum.example.com-post-140889',
-      link: threadLink,
-      title: threadTitle,
-      summary: '<p>I have the same problem on KDE Linux on master</p>',
-    }
-    const replyC = {
-      guid: 'forum.example.com-post-140896',
-      link: threadLink,
-      title: threadTitle,
-      summary: '<p>Lock / logout / switch user</p>',
-    }
-    const value: ClassifyItemsInput = {
-      newItems: [replyA, replyB, replyC],
-      existingItems: [],
-      fingerprintLevel: 'guid',
-    }
-    const result = classifyItems(value)
-
-    expect(result.inserts).toHaveLength(3)
-    expect(result.updates).toHaveLength(0)
-    expect(result.fingerprintLevel).toBe('guid')
+      expect(result.inserts).toHaveLength(3)
+      expect(result.updates).toHaveLength(0)
+      expect(result.fingerprintLevel).toBe('guid')
+    })
   })
 
   describe('multi-scan replay', () => {
@@ -5659,31 +5604,67 @@ describe('classifyItems', () => {
       expect(new Set(targetIds).size).toBe(targetIds.length)
     })
 
-    it('should never resolve fingerprintLevel stronger than input', () => {
-      const levels: Array<FingerprintLevel> = [
-        'guid',
-        'guidFragment',
-        'link',
-        'linkFragment',
-        'enclosure',
-        'title',
-      ]
+    const levels: Array<FingerprintLevel> = [
+      'guid',
+      'guidFragment',
+      'link',
+      'linkFragment',
+      'enclosure',
+      'title',
+    ]
+
+    it.each(levels)('should never resolve fingerprintLevel stronger than input %s', (level) => {
       const feedItems = [
         { guid: 'guid-1', link: 'https://example.com/p1', title: 'Post 1' },
         { guid: 'guid-2', link: 'https://example.com/p2', title: 'Post 2' },
       ]
+      const result = classifyItems({
+        newItems: feedItems,
+        existingItems: [],
+        fingerprintLevel: level,
+      })
 
-      for (const level of levels) {
-        const result = classifyItems({
-          newItems: feedItems,
-          existingItems: [],
-          fingerprintLevel: level,
-        })
-        const inputIndex = levels.indexOf(level)
-        const outputIndex = levels.indexOf(result.fingerprintLevel)
+      expect(result.fingerprintLevel).toBe(level)
+    })
 
-        expect(outputIndex).toBeGreaterThanOrEqual(inputIndex)
+    it('should produce same result regardless of existing item order', () => {
+      const feedItem = {
+        guid: 'guid-2',
+        link: 'https://example.com/post-2',
+        enclosures: [{ url: 'https://cdn.example.com/image-2.jpg' }],
+        title: 'Post 2',
+        content: 'Updated content',
       }
+      const existingA = makeMatchable({
+        id: 'existing-1',
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        title: 'Post 1',
+      })
+      const existingB = makeMatchable({
+        id: 'existing-2',
+        guid: 'guid-2',
+        link: 'https://example.com/post-2',
+        enclosures: [{ url: 'https://example.com/old-image-2.jpg' }],
+        title: 'Post 2',
+        content: 'Old content',
+      })
+      const base: Omit<ClassifyItemsInput, 'existingItems'> = {
+        newItems: [feedItem],
+        fingerprintLevel: 'guid',
+      }
+      const resultForward = classifyItems({
+        ...base,
+        existingItems: [existingA, existingB],
+      })
+      const resultReversed = classifyItems({
+        ...base,
+        existingItems: [existingB, existingA],
+      })
+
+      expect(resultForward.inserts).toHaveLength(resultReversed.inserts.length)
+      expect(resultForward.updates).toHaveLength(resultReversed.updates.length)
+      expect(resultForward.fingerprintLevel).toBe(resultReversed.fingerprintLevel)
     })
   })
 
@@ -5723,7 +5704,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -5759,7 +5740,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'reconciled',
             },
@@ -5812,13 +5793,13 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-2',
               matchedBy: 'link',
             },
@@ -5854,7 +5835,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -5889,7 +5870,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -5921,7 +5902,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -5955,7 +5936,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -5995,13 +5976,13 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'guid',
             },
@@ -6027,7 +6008,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6064,7 +6045,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6080,7 +6061,7 @@ describe('classifyItems', () => {
           guid: 'new-guid',
           link: 'https://example.com/post',
           title: 'Post Title',
-          enclosures: [{ url: 'https://example.com/audio.mp3' }] as Array<{ url: string }>,
+          enclosures: [{ url: 'https://example.com/audio.mp3' }],
           publishedAt,
         }
         const value: ClassifyItemsInput = {
@@ -6101,7 +6082,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -6137,7 +6118,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6181,7 +6162,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6219,7 +6200,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6243,7 +6224,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItemB, ...computeItemHashes(feedItemB) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'item-1',
               matchedBy: 'link',
             },
@@ -6268,7 +6249,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItemA, ...computeItemHashes(feedItemA) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'item-1',
               matchedBy: 'link',
             },
@@ -6282,8 +6263,8 @@ describe('classifyItems', () => {
       it('should not merge distinct linkblog posts that each have guid == link to external sites', () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const incomingPost = {
-          guid: 'https://css-tricks.com/article-x/',
-          link: 'https://css-tricks.com/article-x/',
+          guid: 'https://example.net/article-x/',
+          link: 'https://example.net/article-x/',
           title: 'Article X',
           content: '<p>Notes on X</p>',
           publishedAt,
@@ -6305,7 +6286,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...incomingPost, ...computeItemHashes(incomingPost) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6342,7 +6323,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'reconciled',
             },
@@ -6396,14 +6377,14 @@ describe('classifyItems', () => {
             {
               // Stable item: matched by guid in main pipeline (content changed).
               item: { ...stableItem, ...computeItemHashes(stableItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-stable',
               matchedBy: 'guid',
             },
             {
               // Unstable item: reconciled by link (guid changed, content same).
               item: { ...unstableItem, ...computeItemHashes(unstableItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-unstable',
               matchedBy: 'link',
             },
@@ -6443,7 +6424,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
@@ -6514,19 +6495,19 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem3, ...computeItemHashes(feedItem3) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-2',
               matchedBy: 'link',
             },
@@ -6653,11 +6634,11 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6692,7 +6673,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'reconciled',
             },
@@ -6806,7 +6787,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-2',
               matchedBy: 'guid',
             },
@@ -6851,7 +6832,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6889,7 +6870,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -6936,13 +6917,13 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [
             {
               item: { ...feedItem1, ...computeItemHashes(feedItem1) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'guid',
             },
@@ -6990,7 +6971,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem2, ...computeItemHashes(feedItem2) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -7027,7 +7008,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'reconciled',
             },
@@ -7064,7 +7045,7 @@ describe('classifyItems', () => {
           inserts: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
             },
           ],
           updates: [],
@@ -7342,7 +7323,7 @@ describe('classifyItems', () => {
           updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
-              fingerprintHash: expect.stringMatching(md5Regex),
+              fingerprintHash: expect.stringMatching(hashRegex),
               existingItemId: 'existing-1',
               matchedBy: 'link',
             },

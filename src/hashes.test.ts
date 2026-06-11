@@ -8,7 +8,7 @@ import {
 } from './hashes.js'
 import type { ItemHashes, NewItem } from './types.js'
 
-const md5Regex = /^[a-f0-9]{32}$/
+const hashRegex = /^[a-f0-9]{32}$/
 
 const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
   return {
@@ -25,11 +25,33 @@ const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
 }
 
 describe('generateHash', () => {
-  it('should produce deterministic 32-char hex and distinguish multi-value from single-value', () => {
-    expect(generateHash('hello')).toMatch(md5Regex)
+  it('should produce a 32-character hex hash', () => {
+    expect(generateHash('hello')).toMatch(hashRegex)
+  })
+
+  it('should produce deterministic hash for the same input', () => {
     expect(generateHash('hello')).toBe(generateHash('hello'))
+  })
+
+  it('should produce different hashes for different inputs', () => {
     expect(generateHash('hello')).not.toBe(generateHash('world'))
+  })
+
+  it('should distinguish multi-value input from concatenated single value', () => {
     expect(generateHash('ab', 'cd')).not.toBe(generateHash('abcd'))
+  })
+
+  it('should hash empty string input', () => {
+    expect(generateHash('')).toBe('e3b0c44298fc1c149afbf4c8996fb924')
+  })
+
+  it('should hash zero arguments like a single empty string', () => {
+    expect(generateHash()).toBe('e3b0c44298fc1c149afbf4c8996fb924')
+  })
+
+  it('should treat null and undefined values as empty strings', () => {
+    expect(generateHash(null)).toBe('e3b0c44298fc1c149afbf4c8996fb924')
+    expect(generateHash(null, undefined)).toBe('6e340b9cffb37a989ca544e6bb780a2c')
   })
 })
 
@@ -131,6 +153,11 @@ describe('buildFingerprint', () => {
 
     expect(buildFingerprint(value, 'link')).toBeUndefined()
   })
+
+  it.todo('should return undefined for an unknown fingerprint level', () => {
+    // A level missing from fingerprintPrefixByLevel hits the `?? []` fallback,
+    // leaving an empty prefix so no fingerprint can be built.
+  })
 })
 
 describe('resolveFingerprintLevel', () => {
@@ -223,6 +250,14 @@ describe('resolveFingerprintLevel', () => {
 
     expect(resolveFingerprintLevel(values, 'title')).toBe('title')
   })
+
+  it('should throw for unknown current level', () => {
+    const values = [makeHashes({ guidHash: 'g1' })]
+    // @ts-expect-error: This is for testing purposes.
+    const throwing = () => resolveFingerprintLevel(values, 'not-a-level')
+
+    expect(throwing).toThrow('Invalid fingerprint level: not-a-level')
+  })
 })
 
 describe('computeItemHashes', () => {
@@ -236,23 +271,29 @@ describe('computeItemHashes', () => {
       enclosures: [{ url: 'https://example.com/audio.mp3' }],
     }
     const expected = {
-      guidHash: expect.stringMatching(md5Regex),
+      guidHash: expect.stringMatching(hashRegex),
       guidFragmentHash: null,
-      linkHash: expect.stringMatching(md5Regex),
+      linkHash: expect.stringMatching(hashRegex),
       linkFragmentHash: null,
-      enclosureHash: expect.stringMatching(md5Regex),
-      titleHash: expect.stringMatching(md5Regex),
-      summaryHash: expect.stringMatching(md5Regex),
-      contentHash: expect.stringMatching(md5Regex),
+      enclosureHash: expect.stringMatching(hashRegex),
+      titleHash: expect.stringMatching(hashRegex),
+      summaryHash: expect.stringMatching(hashRegex),
+      contentHash: expect.stringMatching(hashRegex),
     }
 
     expect(computeItemHashes(value)).toEqual(expected)
   })
 
+  it.todo('should pass cleanUrlFn to URL-based normalizers', () => {
+    // computeItemHashes(item, cleanUrlFn) with utm-tagged guid, link, and enclosure
+    // URLs should produce the same guidHash, linkHash, and enclosureHash as the
+    // equivalent item whose URLs have no utm params.
+  })
+
   it('should compute only guidHash when only guid present', () => {
     const value: NewItem = { guid: 'abc-123' }
     const expected = {
-      guidHash: expect.stringMatching(md5Regex),
+      guidHash: expect.stringMatching(hashRegex),
       guidFragmentHash: null,
       linkHash: null,
       linkFragmentHash: null,
@@ -406,7 +447,7 @@ describe('computeItemHashes', () => {
   it('should compute linkFragmentHash when link contains fragment', () => {
     const value: NewItem = { link: 'https://example.com/post#section' }
 
-    expect(computeItemHashes(value).linkFragmentHash).toMatch(md5Regex)
+    expect(computeItemHashes(value).linkFragmentHash).toMatch(hashRegex)
   })
 
   it('should not compute linkFragmentHash when link has no fragment', () => {
@@ -440,7 +481,7 @@ describe('computeItemHashes', () => {
   it('should compute guidFragmentHash when guid is URL with fragment', () => {
     const value: NewItem = { guid: 'https://example.com/page#item1' }
 
-    expect(computeItemHashes(value).guidFragmentHash).toMatch(md5Regex)
+    expect(computeItemHashes(value).guidFragmentHash).toMatch(hashRegex)
   })
 
   it('should not compute guidFragmentHash when guid is URL without fragment', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyCandidateFilters,
+  buildMatchIndex,
   changeFilter,
   classifyCandidateFilters,
   computeFeedProfile,
@@ -26,7 +27,6 @@ import type {
   FeedProfileStats,
   IncomingItem,
   ItemHashes,
-  MatchedBy,
   MatchPolicy,
   MatchResult,
   MatchStrategyContext,
@@ -312,28 +312,30 @@ describe('computeFeedProfile', () => {
         titleHash: 't-3',
       }),
     ]
-    const profile = computeFeedProfile(existingItems, incomingItems)
+    const expected: FeedProfile = {
+      guid: {
+        existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+        incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+        effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+      },
+      link: {
+        existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
+        incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+        effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
+      },
+      enclosure: {
+        existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
+        incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+        effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
+      },
+      title: {
+        existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
+        incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
+        effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
+      },
+    }
 
-    expect(profile.guid).toEqual({
-      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
-      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
-      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
-    })
-    expect(profile.link).toEqual({
-      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
-      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
-      effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
-    })
-    expect(profile.enclosure).toEqual({
-      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 2, uniquenessRate: 1.0 },
-      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
-      effective: { presenceRate: 1.0, uniquenessRate: 1.0 },
-    })
-    expect(profile.title).toEqual({
-      existing: { present: 2, total: 2, presenceRate: 1.0, distinct: 1, uniquenessRate: 0.5 },
-      incoming: { present: 1, total: 1, presenceRate: 1.0, distinct: 1, uniquenessRate: 1.0 },
-      effective: { presenceRate: 1.0, uniquenessRate: 0.5 },
-    })
+    expect(computeFeedProfile(existingItems, incomingItems)).toEqual(expected)
   })
 
   it('should return zero stats for absent signals across both sides', () => {
@@ -537,18 +539,106 @@ describe('findMatchCandidates', () => {
   })
 })
 
+describe('buildMatchIndex', () => {
+  it('should match on guidHash', () => {
+    const existing = [
+      makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
+      makeExistingItem({ id: 'b', guidHash: 'guid-2' }),
+    ]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({ guidHash: 'guid-1' })
+    const expected = [existing[0]]
+
+    expect(findCandidates(value)).toEqual(expected)
+  })
+
+  it('should match on linkHash', () => {
+    const existing = [
+      makeExistingItem({ id: 'a', linkHash: 'link-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'link-2' }),
+    ]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({ linkHash: 'link-1' })
+    const expected = [existing[0]]
+
+    expect(findCandidates(value)).toEqual(expected)
+  })
+
+  it('should return multiple matches across different hashes', () => {
+    const existing = [
+      makeExistingItem({ id: 'a', guidHash: 'guid-1' }),
+      makeExistingItem({ id: 'b', linkHash: 'link-2' }),
+    ]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({
+      guidHash: 'guid-1',
+      linkHash: 'link-2',
+    })
+    const expected = [existing[0], existing[1]]
+
+    expect(findCandidates(value)).toEqual(expected)
+  })
+
+  it('should not duplicate items matching on multiple hashes', () => {
+    const existing = [makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-1' })]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({
+      guidHash: 'guid-1',
+      linkHash: 'link-1',
+    })
+    const expected = [existing[0]]
+
+    expect(findCandidates(value)).toEqual(expected)
+  })
+
+  it('should not match on titleHash when strong hashes present', () => {
+    const existing = [makeExistingItem({ id: 'a', titleHash: 'title-1' })]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({
+      guidHash: 'guid-1',
+      titleHash: 'title-1',
+    })
+
+    expect(findCandidates(value)).toEqual([])
+  })
+
+  it('should not match on summaryHash', () => {
+    const existing = [makeExistingItem({ id: 'a', summaryHash: 'sum-1' })]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({ summaryHash: 'sum-1' })
+
+    expect(findCandidates(value)).toEqual([])
+  })
+
+  it('should return empty array when no matches', () => {
+    const existing = [makeExistingItem({ id: 'a', guidHash: 'guid-1' })]
+    const findCandidates = buildMatchIndex(existing)
+    const value = makeHashes({ guidHash: 'guid-x' })
+
+    expect(findCandidates(value)).toEqual([])
+  })
+
+  it('should return empty array for empty existing items', () => {
+    const findCandidates = buildMatchIndex([])
+    const value = makeHashes({ guidHash: 'guid-1' })
+
+    expect(findCandidates(value)).toEqual([])
+  })
+})
+
 describe('selectMatchingItem', () => {
-  it('should return null for empty candidates', () => {
+  it('should return undefined for empty candidates', () => {
     const value = {
       incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [],
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
+
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
-  it('should return null when guidFragmentHash is also ambiguous', () => {
+  it('should return undefined when guidFragmentHash is also ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({
         guidHash: 'guid-1',
@@ -565,7 +655,7 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
-  it('should return null when guid disambiguation still ambiguous', () => {
+  it('should return undefined when guid disambiguation still ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({
         guidHash: 'guid-1',
@@ -706,7 +796,7 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should return null when incoming has no fragment and link is ambiguous', () => {
+  it('should return undefined when incoming has no fragment and link is ambiguous', () => {
     const value = {
       incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [
@@ -752,6 +842,7 @@ describe('selectMatchingItem', () => {
       matchPolicy: { linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
+
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
@@ -790,7 +881,7 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should return null when fragment is also ambiguous on low-uniqueness channel', () => {
+  it('should return undefined when fragment is also ambiguous on low-uniqueness channel', () => {
     const value = {
       incoming: makeIncomingItem({
         linkHash: 'link-1',
@@ -823,7 +914,7 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toEqual(expected)
   })
 
-  it('should return null for ambiguous title matches', () => {
+  it('should return undefined for ambiguous title matches', () => {
     const value = {
       incoming: makeIncomingItem({ titleHash: 'title-1' }),
       candidates: [
@@ -833,6 +924,7 @@ describe('selectMatchingItem', () => {
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
+
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
@@ -987,14 +1079,21 @@ describe('selectMatchingItem', () => {
     expect(selectMatchingItem(value)).toBeUndefined()
   })
 
-  it('should return null when no hashes match any priority', () => {
+  it('should return undefined when no hashes match any priority', () => {
     const value = {
       incoming: makeIncomingItem({ guidHash: 'guid-x' }),
       candidates: [makeExistingItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
+
     expect(selectMatchingItem(value)).toBeUndefined()
+  })
+
+  it.todo('should return undefined when dateProximityFilter rejects the only guid candidate', () => {
+    // Incoming and candidate share guidHash but their publishedAt dates are more
+    // than dateProximityDays apart, so the filter removes the candidate and no
+    // match is returned even though the hashes agree.
   })
 })
 
@@ -1189,6 +1288,12 @@ describe('matchByGuid', () => {
     }
 
     expect(matchByGuid(context)).toEqual({ outcome: 'pass' })
+  })
+
+  it.todo('should return ambiguous when enclosure narrowing eliminates all candidates', () => {
+    // Two candidates share guidHash and the incoming enclosureHash matches neither,
+    // so narrowing by enclosure yields zero items. Expected: fall through past the
+    // enclosure step and return ambiguous with source 'guid' and count 2.
   })
 })
 
@@ -1397,9 +1502,11 @@ describe('dateProximityFilter', () => {
       candidate: makeExistingItem({ publishedAt: thirtyDaysAgo }),
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
-    const result = dateProximityFilter.evaluate(value)
 
-    expect(result.allow).toBe(false)
+    expect(dateProximityFilter.evaluate(value)).toEqual({
+      allow: false,
+      reason: 'Date difference 30d exceeds 7d',
+    })
   })
 
   it('should allow match when incoming has no publishedAt', () => {
@@ -1457,9 +1564,11 @@ describe('dateProximityFilter', () => {
       candidate: makeExistingItem({ publishedAt: justBeyond }),
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     }
-    const result = dateProximityFilter.evaluate(value)
 
-    expect(result.allow).toBe(false)
+    expect(dateProximityFilter.evaluate(value)).toEqual({
+      allow: false,
+      reason: 'Date difference 7d exceeds 7d',
+    })
   })
 
   it('should respect custom dateProximityDays threshold', () => {
@@ -1482,90 +1591,90 @@ describe('dateProximityFilter', () => {
 
 describe('changeFilter', () => {
   it('should update when title changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ titleHash: 'title-1' }),
       incoming: makeIncomingItem({ titleHash: 'title-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when summary changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ summaryHash: 'sum-1' }),
       incoming: makeIncomingItem({ summaryHash: 'sum-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when content changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ contentHash: 'cnt-1' }),
       incoming: makeIncomingItem({ contentHash: 'cnt-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when enclosure changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ enclosureHash: 'enc-1' }),
       incoming: makeIncomingItem({ enclosureHash: 'enc-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when linkHash changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ linkHash: 'link-1' }),
       incoming: makeIncomingItem({ linkHash: 'link-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when guidFragmentHash changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ guidFragmentHash: 'gf-1' }),
       incoming: makeIncomingItem({ guidFragmentHash: 'gf-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should update when linkFragmentHash changes', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ linkFragmentHash: 'lf-1' }),
       incoming: makeIncomingItem({ linkFragmentHash: 'lf-2' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
   it('should not update when null and undefined are compared', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ titleHash: null, contentHash: null }),
       incoming: makeIncomingItem(),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
 
   it('should update when content appears for the first time', () => {
-    const value = {
+    const value: UpdateFilterContext = {
       existing: makeExistingItem({ contentHash: null }),
       incoming: makeIncomingItem({ contentHash: 'cnt-new' }),
-      matchedBy: 'guid' as MatchedBy,
+      matchedBy: 'guid',
     }
 
     expect(changeFilter.shouldUpdate(value)).toBe(true)
@@ -1714,7 +1823,7 @@ describe('applyCandidateFilters', () => {
         return { allow: false, reason: 'blocked' }
       },
     }
-    const value = applyCandidateFilters({
+    const result = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [filter],
@@ -1722,7 +1831,7 @@ describe('applyCandidateFilters', () => {
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
 
-    expect(value).toEqual(candidates)
+    expect(result).toEqual(candidates)
   })
 
   it('should filter candidates using applicable filter', () => {
@@ -1741,7 +1850,7 @@ describe('applyCandidateFilters', () => {
         return { allow: true }
       },
     }
-    const value = applyCandidateFilters({
+    const result = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [filter],
@@ -1750,7 +1859,7 @@ describe('applyCandidateFilters', () => {
     })
     const expected = [candidates[0]]
 
-    expect(value).toEqual(expected)
+    expect(result).toEqual(expected)
   })
 
   it('should apply filter to all match types', () => {
@@ -1762,7 +1871,7 @@ describe('applyCandidateFilters', () => {
       },
     }
     const candidates = [makeExistingItem({ id: 'a' })]
-    const value = applyCandidateFilters({
+    const result = applyCandidateFilters({
       candidates,
       matchedBy: 'title',
       filters: [filter],
@@ -1770,7 +1879,7 @@ describe('applyCandidateFilters', () => {
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
 
-    expect(value).toEqual([])
+    expect(result).toEqual([])
   })
 
   it('should apply filters sequentially', () => {
@@ -1797,7 +1906,7 @@ describe('applyCandidateFilters', () => {
       makeExistingItem({ id: 'b' }),
       makeExistingItem({ id: 'c' }),
     ]
-    const value = applyCandidateFilters({
+    const result = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [filterA, filterB],
@@ -1806,7 +1915,7 @@ describe('applyCandidateFilters', () => {
     })
     const expected = [candidates[0]]
 
-    expect(value).toEqual(expected)
+    expect(result).toEqual(expected)
   })
 
   it('should return empty array when all candidates are removed', () => {
@@ -1818,7 +1927,7 @@ describe('applyCandidateFilters', () => {
       },
     }
     const candidates = [makeExistingItem({ id: 'a' }), makeExistingItem({ id: 'b' })]
-    const value = applyCandidateFilters({
+    const result = applyCandidateFilters({
       candidates,
       matchedBy: 'guid',
       filters: [filter],
@@ -1826,7 +1935,7 @@ describe('applyCandidateFilters', () => {
       matchPolicy: { linkReliable: true, dateProximityDays: 7 },
     })
 
-    expect(value).toEqual([])
+    expect(result).toEqual([])
   })
 
   it('should pass correct context to filter evaluate function', () => {
