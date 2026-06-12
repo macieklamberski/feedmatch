@@ -81,6 +81,10 @@ describe('normalizeLinkForHashing', () => {
     expect(normalizeLinkForHashing('  https://example.com/post  ')).toBe('example.com/post')
   })
 
+  it('should return non-URL garbage unchanged', () => {
+    expect(normalizeLinkForHashing('not a url')).toBe('not a url')
+  })
+
   it('should return undefined for empty string', () => {
     expect(normalizeLinkForHashing('')).toBeUndefined()
   })
@@ -180,6 +184,10 @@ describe('normalizeLinkFragmentForHashing', () => {
     expect(normalizeLinkFragmentForHashing('')).toBeUndefined()
   })
 
+  it('should return undefined for whitespace-only string', () => {
+    expect(normalizeLinkFragmentForHashing('   ')).toBeUndefined()
+  })
+
   it('should return undefined for null input', () => {
     expect(normalizeLinkFragmentForHashing(null)).toBeUndefined()
   })
@@ -205,6 +213,14 @@ describe('normalizeGuidForHashing', () => {
 
   it('should fall back to trimmed value when URL normalization fails', () => {
     expect(normalizeGuidForHashing('https://')).toBe('https://')
+  })
+
+  it('should treat uppercase-scheme guid as opaque string', () => {
+    expect(normalizeGuidForHashing('HTTPS://example.com/post')).toBe('HTTPS://example.com/post')
+  })
+
+  it('should treat protocol-relative guid as opaque string', () => {
+    expect(normalizeGuidForHashing('//example.com/post')).toBe('//example.com/post')
   })
 
   it('should return undefined for undefined input', () => {
@@ -431,6 +447,10 @@ describe('normalizeHtmlForHashing', () => {
 
   it('should return undefined for empty string', () => {
     expect(normalizeHtmlForHashing('')).toBeUndefined()
+  })
+
+  it('should return undefined for whitespace-only string', () => {
+    expect(normalizeHtmlForHashing('   ')).toBeUndefined()
   })
 
   it('should return undefined for null input', () => {
