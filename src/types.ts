@@ -1,4 +1,4 @@
-import type { fingerprintLevels } from './constants.js'
+import type { fingerprintLevels, HashMetaMatchableEntry } from './constants.js'
 
 export type FingerprintLevel = (typeof fingerprintLevels)[number]
 
@@ -72,14 +72,12 @@ export type FeedProfileSignal = {
   }
 }
 
-export type FeedProfile = {
-  guid: FeedProfileSignal
-  link: FeedProfileSignal
-  enclosure: FeedProfileSignal
-  title: FeedProfileSignal
-}
+export type FeedProfile = { [Key in MatchSignal]: FeedProfileSignal }
 
-export type MatchSignal = 'guid' | 'link' | 'enclosure' | 'title'
+// The matchable signals, derived from hashMeta so the set stays in sync: the
+// level of every matchable hash (guid, link, enclosure, title). Fragments and
+// content hashes are not matchable and so are excluded.
+export type MatchSignal = HashMetaMatchableEntry['level']
 
 export type MatchedBy = MatchSignal | 'reconciled'
 
