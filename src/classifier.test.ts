@@ -2936,7 +2936,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid update changes title and level is title', () => {
+    it('should update by guid when the title changes and level is title', () => {
       const feedItem = { guid: 'guid-1', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -2950,13 +2950,15 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
       const expected: ClassifyItemsResult = {
-        inserts: [
+        inserts: [],
+        updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
           },
         ],
-        updates: [],
         fingerprintLevel: 'title',
       }
 
@@ -3679,7 +3681,10 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid and link signals point to different existing items under link level', () => {
+    it('should update the guid-matched item when guid and link signals point to different existing items', () => {
+      // Incoming shares guid with item a and (coincidentally) link with item b.
+      // Guid is authoritative and unique, so this is item a with a changed link;
+      // inserting instead would create a second row with guid g1 (a duplicate).
       const feedItem = {
         guid: 'g1',
         link: 'https://example.com/b',
@@ -3704,13 +3709,15 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
       const expected: ClassifyItemsResult = {
-        inserts: [
+        inserts: [],
+        updates: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'a',
+            matchedBy: 'guid',
           },
         ],
-        updates: [],
         fingerprintLevel: 'link',
       }
 
