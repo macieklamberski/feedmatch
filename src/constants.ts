@@ -33,7 +33,7 @@ export const fingerprintLevels = [
 
 // Single source of truth for hash key metadata.
 // Order determines fingerprintMeta derivation order.
-export const hashMeta: Array<HashMeta> = [
+export const hashMeta = [
   {
     key: 'guidHash',
     tag: 'g',
@@ -112,12 +112,16 @@ export const hashMeta: Array<HashMeta> = [
     isContent: true,
     normalizeFn: (item) => normalizeHtmlForHashing(item.summary),
   },
-]
+] as const satisfies ReadonlyArray<HashMeta>
+
+// A single hashMeta entry, and the subset that participates in matching.
+export type HashMetaEntry = (typeof hashMeta)[number]
+export type HashMetaMatchableEntry = Extract<HashMetaEntry, { isMatchable: true }>
 
 // Derived from hashMeta — entries with level form the fingerprint level metadata.
 export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
-  .filter((meta): meta is HashMeta & { level: FingerprintLevel } => {
-    return meta.level !== undefined
+  .filter((meta): meta is Extract<HashMetaEntry, { level: FingerprintLevel }> => {
+    return 'level' in meta
   })
   .map((meta) => {
     return { level: meta.level, key: meta.key, tag: meta.tag }
@@ -126,10 +130,12 @@ export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
 // All hash keys derived from hashMeta.
 export const hashKeys: Array<HashKey> = hashMeta.map((meta) => meta.key)
 
-// Signal-to-hash-key mapping for the four matchable signals.
+// Signal-to-hash-key mapping for the matchable signals.
 export const signalHashKeys: Array<[MatchSignal, keyof ItemHashes]> = hashMeta
-  .filter((meta) => meta.isMatchable)
-  .map((meta) => [meta.level as MatchSignal, meta.key])
+  .filter((meta): meta is HashMetaMatchableEntry => {
+    return meta.isMatchable
+  })
+  .map((meta) => [meta.level, meta.key])
 
 // Pre-computed fingerprint prefix arrays per level (avoids findIndex + slice per call).
 export const fingerprintPrefixByLevel = new Map<FingerprintLevel, Array<FingerprintMeta>>(
