@@ -75,10 +75,20 @@ export const computeFeedProfile = (
 // Rejects GUID/link matches when dates are too far apart. Fixes the GUID reuse
 // blind spot where feeds reuse a GUID months later for different content.
 // Allows match if either side lacks publishedAt (backward compatible).
+//
+// Guid matches on a feed with trusted (feed-unique) guids are exempt: the
+// window exists to guard guid reuse, and the uniqueness gate already screens
+// feeds that reuse guids. Without the exemption, a publisher that republishes
+// an article with a bumped date re-inserts it as a duplicate and the repeated
+// guid permanently downgrades the channel's fingerprint level.
 export const dateProximityFilter: CandidateFilter = {
   name: 'dateProximity',
   appliesTo: ['guid', 'link'],
   evaluate: (context) => {
+    if (context.matchedBy === 'guid' && context.matchPolicy.guidReliable) {
+      return { allow: true }
+    }
+
     const incomingDate = context.incoming.publishedAt
     const candidateDate = context.candidate.publishedAt
 
@@ -454,6 +464,7 @@ export const computeMatchPolicy = (
   options?: { dateProximityDays?: number },
 ): MatchPolicy => {
   return {
+    guidReliable: feedProfile.guid.effective.uniquenessRate >= uniqueIdentifierThreshold,
     linkReliable: feedProfile.link.effective.uniquenessRate >= uniqueIdentifierThreshold,
     dateProximityDays: options?.dateProximityDays ?? 7,
   }

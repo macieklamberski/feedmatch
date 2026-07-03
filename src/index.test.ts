@@ -425,6 +425,82 @@ describe('classifyItems duplicate resilience (e2e)', () => {
     })
   })
 
+  describe('republished items (date-bumped edits)', () => {
+    it('should update a republished article whose date was bumped beyond the proximity window', () => {
+      // Publishers refresh old articles with a new pubDate. Before the trusted
+      // guid exemption this re-inserted the article and the repeated guid
+      // permanently downgraded the channel level; the level staying at guid is
+      // part of the fix.
+      const original: NewItem = {
+        guid: 'https://example.com/evergreen-post',
+        link: 'https://example.com/evergreen-post',
+        title: 'Evergreen Post',
+        publishedAt: olderPublishedAt,
+      }
+      const republished: NewItem = {
+        ...original,
+        title: 'Evergreen Post (updated)',
+        publishedAt: new Date('2026-07-30T12:00:00Z'),
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [republished],
+        existingItems: [toExisting(original, 'existing-1')],
+        fingerprintLevel: 'guid',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: withHashes(republished),
+            fingerprintHash: expect.stringMatching(md5Regex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should keep far-apart releases distinct on a degenerate-guid feed', () => {
+      // A feed that reuses one guid for genuinely different releases sits far
+      // below the uniqueness gate, so the date window still applies and the
+      // new release inserts instead of merging into an old one.
+      const incoming: NewItem = {
+        guid: 'shared-guid',
+        title: 'Release 3.0',
+        publishedAt,
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [incoming],
+        existingItems: [
+          toExisting(
+            { guid: 'shared-guid', title: 'Release 1.0', publishedAt: olderPublishedAt },
+            'release-1',
+          ),
+          toExisting(
+            { guid: 'shared-guid', title: 'Release 2.0', publishedAt: olderPublishedAt },
+            'release-2',
+          ),
+        ],
+        fingerprintLevel: 'title',
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [
+          {
+            item: withHashes(incoming),
+            fingerprintHash: expect.stringMatching(md5Regex),
+          },
+        ],
+        updates: [],
+        fingerprintLevel: 'title',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+  })
+
   describe('level recovery and mixed feeds', () => {
     it('should classify clean unique guids by guid even when the channel was stuck at title', () => {
       const postOne: NewItem = { guid: 'guid-1', title: 'Post 1 original', publishedAt }

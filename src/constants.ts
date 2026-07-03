@@ -23,10 +23,11 @@ import type {
 export const minReconciliationFields = 2
 
 // Minimum feed-wide uniqueness rate for a signal to be trusted as an item
-// identifier. Gates both link reliability in computeMatchPolicy (which match
-// strategy order to use) and the guid agreement bypass in the level filter
-// (two items sharing a guid on such a feed are the same logical item; below
-// the gate the feed reuses the signal, so agreement proves nothing).
+// identifier. Below the gate the feed reuses the signal, so agreement proves
+// nothing; at or above it, two items sharing the signal are the same logical
+// item. Gates link and guid reliability in computeMatchPolicy (match strategy
+// order, the date proximity exemption) and the guid agreement bypass in the
+// level filter.
 export const uniqueIdentifierThreshold = 0.95
 
 export const fingerprintLevels = [

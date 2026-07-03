@@ -3724,7 +3724,7 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid+link match but dates are far apart', () => {
+    it('should update a republished item when trusted guid and link match despite far-apart dates', () => {
       const feedItem = {
         guid: 'guid-1',
         link: 'https://example.com/post-1',
@@ -3745,10 +3745,20 @@ describe('classifyItems', () => {
         existingItems: [{ ...existing, publishedAt: new Date('2026-01-01T00:00:00Z') }],
         fingerprintLevel: 'guid',
       }
-      const result = classifyItems(value)
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
 
-      expect(result.inserts).toHaveLength(1)
-      expect(result.updates).toHaveLength(0)
+      expect(classifyItems(value)).toEqual(expected)
     })
   })
 
@@ -4862,7 +4872,12 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid reused with far-apart dates', () => {
+    it('should merge a far-apart guid reuse on a trusted-guid feed (accepted residual)', () => {
+      // On a feed whose guids pass the uniqueness gate, the date proximity
+      // window no longer guards guid reuse: a guid reappearing months later is
+      // treated as a republished edit and merged. Every measured production
+      // family with this shape was a republish, and feeds that genuinely reuse
+      // guids stay below the gate.
       const now = new Date()
       const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
       const feedItem = {
@@ -4885,10 +4900,20 @@ describe('classifyItems', () => {
           },
         ],
       }
-      const result = classifyItems(value)
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
 
-      expect(result.inserts).toHaveLength(1)
-      expect(result.updates).toHaveLength(0)
+      expect(classifyItems(value)).toEqual(expected)
     })
 
     it('should work with numeric existing item IDs', () => {
