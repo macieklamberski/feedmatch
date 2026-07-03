@@ -6,6 +6,7 @@ import {
   resolveFingerprintLevel,
 } from './hashes.js'
 import {
+  agreesOnUniqueIdentifier,
   buildMatchIndex,
   classifyCandidateFilters,
   computeFeedProfile,
@@ -359,8 +360,16 @@ export const classifyItems = <T extends NewItem>(
     const candidates = findCandidates(item)
 
     // Reject candidates whose fingerprint differs from the incoming item.
-    // This prevents matching (and merging) items that the levels consider distinct.
+    // This prevents matching (and merging) items that the levels consider
+    // distinct. Exception: when the incoming item and a candidate agree on a
+    // feed-unique strong identifier (guid, link, enclosure), keep the candidate
+    // even if a volatile field changed — an edited title or rotated enclosure on
+    // a stable guid is the same item, not a new one.
     const levelFilteredCandidates = candidates.filter((candidate) => {
+      if (agreesOnUniqueIdentifier(item, candidate, feedProfile)) {
+        return true
+      }
+
       return buildFingerprint(candidate, resolvedLevel) === fingerprint
     })
 

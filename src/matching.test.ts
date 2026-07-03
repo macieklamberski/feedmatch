@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  agreesOnUniqueIdentifier,
   applyCandidateFilters,
   buildMatchIndex,
   changeFilter,
@@ -24,6 +25,7 @@ import type {
   CandidateFilterContext,
   ExistingItem,
   FeedProfile,
+  FeedProfileSignal,
   FeedProfileStats,
   IncomingItem,
   ItemHashes,
@@ -1967,5 +1969,113 @@ describe('applyCandidateFilters', () => {
 
     expect(contexts).toHaveLength(1)
     expect(contexts[0]).toEqual(expected)
+  })
+})
+
+describe('agreesOnUniqueIdentifier', () => {
+  const signal = (uniquenessRate: number): FeedProfileSignal => {
+    return { ...zeroSignal, effective: { presenceRate: 1, uniquenessRate } }
+  }
+
+  const profileWith = (
+    rates: Partial<Record<'guid' | 'link' | 'enclosure' | 'title', number>>,
+  ): FeedProfile => {
+    return {
+      guid: signal(rates.guid ?? 0),
+      link: signal(rates.link ?? 0),
+      enclosure: signal(rates.enclosure ?? 0),
+      title: signal(rates.title ?? 0),
+    }
+  }
+
+  it('should return true when both items share a unique guid', () => {
+    const incoming = makeHashes({ guidHash: 'guid-1' })
+    const candidate = makeHashes({ guidHash: 'guid-1' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ guid: 1 }))).toBe(true)
+  })
+
+  it('should return false when unique guids differ', () => {
+    const incoming = makeHashes({ guidHash: 'guid-1' })
+    const candidate = makeHashes({ guidHash: 'guid-2' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ guid: 1 }))).toBe(false)
+  })
+
+  it('should ignore volatile fields when the unique guid agrees', () => {
+    const incoming = makeHashes({
+      guidHash: 'guid-1',
+      titleHash: 'title-1',
+      enclosureHash: 'enc-1',
+    })
+    const candidate = makeHashes({
+      guidHash: 'guid-1',
+      titleHash: 'title-2',
+      enclosureHash: 'enc-2',
+    })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ guid: 1 }))).toBe(true)
+  })
+
+  it('should return false when the shared guid is not unique across the feed', () => {
+    const incoming = makeHashes({ guidHash: 'guid-1', linkHash: 'link-1' })
+    const candidate = makeHashes({ guidHash: 'guid-1', linkHash: 'link-1' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ guid: 0.5, link: 1 }))).toBe(
+      false,
+    )
+  })
+
+  it('should return false when there is no guid, even with a shared unique link', () => {
+    const incoming = makeHashes({ linkHash: 'link-1' })
+    const candidate = makeHashes({ linkHash: 'link-1' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ link: 1 }))).toBe(false)
+  })
+
+  it('should return false when unique links differ', () => {
+    const incoming = makeHashes({ linkHash: 'link-1' })
+    const candidate = makeHashes({ linkHash: 'link-2' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ link: 1 }))).toBe(false)
+  })
+
+  it('should return false when the shared link is not unique across the feed', () => {
+    const incoming = makeHashes({ linkHash: 'hub-link' })
+    const candidate = makeHashes({ linkHash: 'hub-link' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ link: 0.3 }))).toBe(false)
+  })
+
+  it('should return false when only a non-strong identifier (title) is shared', () => {
+    const incoming = makeHashes({ titleHash: 'title-1' })
+    const candidate = makeHashes({ titleHash: 'title-1' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ title: 1 }))).toBe(false)
+  })
+
+  it('should prioritise a disagreeing unique guid over an agreeing link (false-merge guard)', () => {
+    const incoming = makeHashes({ guidHash: 'guid-x', linkHash: 'shared-link' })
+    const candidate = makeHashes({ guidHash: 'guid-y', linkHash: 'shared-link' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ guid: 1, link: 1 }))).toBe(
+      false,
+    )
+  })
+
+  it('should skip an identifier present on only one side', () => {
+    const incoming = makeHashes({ guidHash: 'guid-1' })
+    const candidate = makeHashes({ linkHash: 'link-1' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ guid: 1, link: 1 }))).toBe(
+      false,
+    )
+  })
+
+  it('should return false when there is no guid, even with a shared unique enclosure', () => {
+    const incoming = makeHashes({ enclosureHash: 'enc-1' })
+    const candidate = makeHashes({ enclosureHash: 'enc-1' })
+
+    expect(agreesOnUniqueIdentifier(incoming, candidate, profileWith({ enclosure: 1 }))).toBe(false)
   })
 })

@@ -22,6 +22,13 @@ import type {
 // (e.g. two items with only the same generic title like "Newsletter").
 export const minReconciliationFields = 2
 
+// Minimum feed-wide uniqueness rate for a signal to be trusted as an item
+// identifier. Gates both link reliability in computeMatchPolicy (which match
+// strategy order to use) and the guid agreement bypass in the level filter
+// (two items sharing a guid on such a feed are the same logical item; below
+// the gate the feed reuses the signal, so agreement proves nothing).
+export const uniqueIdentifierThreshold = 0.95
+
 export const fingerprintLevels = [
   'guid',
   'guidFragment',
