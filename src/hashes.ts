@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
+import type { Nullish } from 'trousse'
 import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants.js'
-import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem, Nullish } from './types.js'
+import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
   isMediaEnclosure,

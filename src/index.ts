@@ -33,6 +33,5 @@ export type {
   ItemIdLike,
   MatchedBy,
   NewItem,
-  Nullish,
   UpdateAction,
 } from './types.js'
