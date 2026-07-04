@@ -5382,7 +5382,9 @@ describe('classifyItems', () => {
 
     expect(result.inserts).toHaveLength(0)
     expect(result.updates).toHaveLength(2)
-    expect(result.updates.map((u) => u.existingItemId).sort()).toEqual(['existing-a', 'existing-b'])
+    const updatedIds = result.updates.map((update) => String(update.existingItemId))
+
+    expect(updatedIds.sort((a, b) => a.localeCompare(b))).toEqual(['existing-a', 'existing-b'])
     expect(result.fingerprintLevel).toBe('enclosure')
   })
 
