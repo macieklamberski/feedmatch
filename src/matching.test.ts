@@ -92,9 +92,12 @@ const zeroSignal = {
   effective: { presenceRate: 0, uniquenessRate: 0 },
 }
 
-const makeFeedProfile = (linkUniquenessRate: number): FeedProfile => {
+const makeFeedProfile = (linkUniquenessRate: number, guidUniquenessRate = 0): FeedProfile => {
   return {
-    guid: zeroSignal,
+    guid: {
+      ...zeroSignal,
+      effective: { presenceRate: 0, uniquenessRate: guidUniquenessRate },
+    },
     link: {
       ...zeroSignal,
       effective: { presenceRate: 0, uniquenessRate: linkUniquenessRate },
@@ -633,7 +636,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -650,7 +653,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
         makeExistingItem({ id: 'b', guidHash: 'guid-1', guidFragmentHash: 'gf-shared' }),
       ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -667,7 +670,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', guidHash: 'guid-1', linkHash: 'link-shared' }),
         makeExistingItem({ id: 'b', guidHash: 'guid-1', linkHash: 'link-shared' }),
       ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -682,7 +685,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: candidate, matchedBy: 'guid' }
@@ -698,7 +701,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-same',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -717,7 +720,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -733,7 +736,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ guidHash: 'guid-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -752,7 +755,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: candidate, matchedBy: 'link' }
@@ -768,7 +771,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-same',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -787,7 +790,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-new',
       }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -805,7 +808,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-1' }),
         makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
       ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -823,7 +826,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-1',
       }),
       candidates,
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -841,7 +844,7 @@ describe('selectMatchingItem', () => {
         guidHash: 'guid-x',
       }),
       candidates: [makeExistingItem({ linkHash: 'link-1' })],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -853,7 +856,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ linkHash: 'link-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -875,7 +878,7 @@ describe('selectMatchingItem', () => {
         target,
         makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-2' }),
       ],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'link' }
@@ -893,7 +896,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
         makeExistingItem({ id: 'b', linkHash: 'link-1', linkFragmentHash: 'frag-shared' }),
       ],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -905,7 +908,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ titleHash: 'title-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -923,7 +926,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', titleHash: 'title-1' }),
         makeExistingItem({ id: 'b', titleHash: 'title-1' }),
       ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -937,7 +940,7 @@ describe('selectMatchingItem', () => {
         titleHash: 'title-1',
       }),
       candidates: [makeExistingItem({ titleHash: 'title-1' })],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -948,7 +951,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ summaryHash: 'sum-1' }),
       candidates: [makeExistingItem({ summaryHash: 'sum-1' })],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -959,7 +962,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ contentHash: 'cnt-1' }),
       candidates: [makeExistingItem({ contentHash: 'cnt-1' })],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -975,7 +978,7 @@ describe('selectMatchingItem', () => {
         linkHash: 'link-1',
       }),
       candidates: [guidCandidate, linkCandidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -995,7 +998,7 @@ describe('selectMatchingItem', () => {
         enclosureHash: 'enc-1',
       }),
       candidates: [linkCandidate, encCandidate],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = {
@@ -1018,7 +1021,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'b', guidHash: 'guid-1', enclosureHash: 'enc-2' }),
         makeExistingItem({ id: 'c', guidHash: 'guid-1', enclosureHash: null }),
       ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: target, matchedBy: 'guid' }
@@ -1033,7 +1036,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeExistingItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1045,7 +1048,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ enclosureHash: 'enc-1' }),
       candidates: [candidate],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
     const expected: MatchResult = { match: candidate, matchedBy: 'enclosure' }
@@ -1060,7 +1063,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', enclosureHash: 'enc-1' }),
         makeExistingItem({ id: 'b', enclosureHash: 'enc-1' }),
       ],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1074,7 +1077,7 @@ describe('selectMatchingItem', () => {
         makeExistingItem({ id: 'a', linkHash: 'link-1' }),
         makeExistingItem({ id: 'b', linkHash: 'link-1' }),
       ],
-      matchPolicy: { linkReliable: false, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: false, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1085,7 +1088,7 @@ describe('selectMatchingItem', () => {
     const value = {
       incoming: makeIncomingItem({ guidHash: 'guid-x' }),
       candidates: [makeExistingItem({ guidHash: 'guid-y', linkHash: 'link-1' })],
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
       candidateFilters: classifyCandidateFilters,
     }
 
@@ -1103,31 +1106,68 @@ describe('computeMatchPolicy', () => {
   it('should set linkReliable to true when rate is 1.0', () => {
     const value = makeFeedProfile(1.0)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true, dateProximityDays: 7 })
+    expect(computeMatchPolicy(value)).toEqual({
+      guidReliable: false,
+      linkReliable: true,
+      dateProximityDays: 7,
+    })
   })
 
   it('should set linkReliable to true when rate is exactly 0.95', () => {
     const value = makeFeedProfile(0.95)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: true, dateProximityDays: 7 })
+    expect(computeMatchPolicy(value)).toEqual({
+      guidReliable: false,
+      linkReliable: true,
+      dateProximityDays: 7,
+    })
   })
 
   it('should set linkReliable to false when rate is below 0.95', () => {
     const value = makeFeedProfile(0.94)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false, dateProximityDays: 7 })
+    expect(computeMatchPolicy(value)).toEqual({
+      guidReliable: false,
+      linkReliable: false,
+      dateProximityDays: 7,
+    })
   })
 
   it('should set linkReliable to false when rate is 0', () => {
     const value = makeFeedProfile(0)
 
-    expect(computeMatchPolicy(value)).toEqual({ linkReliable: false, dateProximityDays: 7 })
+    expect(computeMatchPolicy(value)).toEqual({
+      guidReliable: false,
+      linkReliable: false,
+      dateProximityDays: 7,
+    })
+  })
+
+  it('should set guidReliable to true when the guid rate is at the threshold', () => {
+    const value = makeFeedProfile(0, 0.95)
+
+    expect(computeMatchPolicy(value)).toEqual({
+      guidReliable: true,
+      linkReliable: false,
+      dateProximityDays: 7,
+    })
+  })
+
+  it('should set guidReliable to false when the guid rate is below the threshold', () => {
+    const value = makeFeedProfile(0, 0.94)
+
+    expect(computeMatchPolicy(value)).toEqual({
+      guidReliable: false,
+      linkReliable: false,
+      dateProximityDays: 7,
+    })
   })
 
   it('should use custom dateProximityDays when provided', () => {
     const value = makeFeedProfile(1.0)
 
     expect(computeMatchPolicy(value, { dateProximityDays: 30 })).toEqual({
+      guidReliable: false,
       linkReliable: true,
       dateProximityDays: 30,
     })
@@ -1136,13 +1176,13 @@ describe('computeMatchPolicy', () => {
 
 describe('resolveStrategies', () => {
   it('should return high uniqueness strategies when link is reliable', () => {
-    const value: MatchPolicy = { linkReliable: true, dateProximityDays: 7 }
+    const value: MatchPolicy = { guidReliable: false, linkReliable: true, dateProximityDays: 7 }
 
     expect(resolveStrategies(value)).toBe(highUniquenessStrategies)
   })
 
   it('should return low uniqueness strategies when link is not reliable', () => {
-    const value: MatchPolicy = { linkReliable: false, dateProximityDays: 7 }
+    const value: MatchPolicy = { guidReliable: false, linkReliable: false, dateProximityDays: 7 }
 
     expect(resolveStrategies(value)).toBe(lowUniquenessStrategies)
   })
@@ -1489,7 +1529,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem({ publishedAt: now }),
       candidate: makeExistingItem({ publishedAt: threeDaysAgo }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
@@ -1502,7 +1542,36 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem({ publishedAt: now }),
       candidate: makeExistingItem({ publishedAt: thirtyDaysAgo }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({
+      allow: false,
+      reason: 'Date difference 30d exceeds 7d',
+    })
+  })
+
+  it('should allow a guid match beyond the threshold when guids are reliable', () => {
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const value: CandidateFilterContext = {
+      matchedBy: 'guid',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: thirtyDaysAgo }),
+      matchPolicy: { guidReliable: true, linkReliable: true, dateProximityDays: 7 },
+    }
+
+    expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
+  })
+
+  it('should still reject a link match beyond the threshold when guids are reliable', () => {
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const value: CandidateFilterContext = {
+      matchedBy: 'link',
+      incoming: makeIncomingItem({ publishedAt: now }),
+      candidate: makeExistingItem({ publishedAt: thirtyDaysAgo }),
+      matchPolicy: { guidReliable: true, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({
@@ -1516,7 +1585,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem(),
       candidate: makeExistingItem({ publishedAt: new Date() }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
@@ -1527,7 +1596,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem({ publishedAt: new Date() }),
       candidate: makeExistingItem(),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
@@ -1538,7 +1607,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem(),
       candidate: makeExistingItem(),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
@@ -1551,7 +1620,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem({ publishedAt: now }),
       candidate: makeExistingItem({ publishedAt: sevenDaysAgo }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
@@ -1564,7 +1633,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem({ publishedAt: now }),
       candidate: makeExistingItem({ publishedAt: justBeyond }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({
@@ -1580,7 +1649,7 @@ describe('dateProximityFilter', () => {
       matchedBy: 'guid',
       incoming: makeIncomingItem({ publishedAt: now }),
       candidate: makeExistingItem({ publishedAt: twentyDaysAgo }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 30 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 30 },
     }
 
     expect(dateProximityFilter.evaluate(value)).toEqual({ allow: true })
@@ -1830,7 +1899,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filter],
       incoming: makeIncomingItem(),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     })
 
     expect(result).toEqual(candidates)
@@ -1857,7 +1926,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filter],
       incoming: makeIncomingItem({ titleHash: 'title-1' }),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     })
     const expected = [candidates[0]]
 
@@ -1878,7 +1947,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'title',
       filters: [filter],
       incoming: makeIncomingItem(),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     })
 
     expect(result).toEqual([])
@@ -1913,7 +1982,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filterA, filterB],
       incoming: makeIncomingItem(),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     })
     const expected = [candidates[0]]
 
@@ -1934,7 +2003,7 @@ describe('applyCandidateFilters', () => {
       matchedBy: 'guid',
       filters: [filter],
       incoming: makeIncomingItem(),
-      matchPolicy: { linkReliable: true, dateProximityDays: 7 },
+      matchPolicy: { guidReliable: false, linkReliable: true, dateProximityDays: 7 },
     })
 
     expect(result).toEqual([])
@@ -1952,7 +2021,11 @@ describe('applyCandidateFilters', () => {
     }
     const candidate = makeExistingItem({ id: 'a' })
     const incoming = makeIncomingItem({ guidHash: 'guid-1' })
-    const matchPolicy: MatchPolicy = { linkReliable: false, dateProximityDays: 7 }
+    const matchPolicy: MatchPolicy = {
+      guidReliable: false,
+      linkReliable: false,
+      dateProximityDays: 7,
+    }
     applyCandidateFilters({
       candidates: [candidate],
       matchedBy: 'link',

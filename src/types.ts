@@ -122,6 +122,7 @@ export type MatchStrategy = {
 }
 
 export type MatchPolicy = {
+  guidReliable: boolean
   linkReliable: boolean
   dateProximityDays: number
 }
