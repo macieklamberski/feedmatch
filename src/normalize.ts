@@ -1,6 +1,6 @@
 import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
-import { endsWithAnyOf, startsWithAnyOf } from 'trousse'
-import type { CleanUrlFn, Enclosure, Nullish } from './types.js'
+import { endsWithAnyOf, type Nullish, startsWithAnyOf } from 'trousse'
+import type { CleanUrlFn, Enclosure } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
   stripProtocol: true,

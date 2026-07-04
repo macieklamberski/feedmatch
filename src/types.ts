@@ -1,7 +1,5 @@
 import type { fingerprintLevels, HashMetaMatchableEntry } from './constants.js'
 
-export type Nullish<T> = T | null | undefined
-
 export type CleanUrlFn = (url: string) => string
 
 export type FingerprintLevel = (typeof fingerprintLevels)[number]
