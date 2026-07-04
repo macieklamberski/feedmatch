@@ -127,20 +127,20 @@ export const hasAmbiguousIdentity = (
   return false
 }
 
-// Reclassify inserts that are identical to an existing item except for guid
-// or link. Handles feeds with unstable identifiers that the fingerprint
-// system cannot match. Treats ambiguous matches (multiple candidates for one
-// insert, or multiple inserts targeting the same existing item) as non-matches.
-export const reconcileInserts = <T extends NewItem>(
+type ReconciliationCandidates = Map<number, Array<{ existing: ExistingItem; result: MatchResult }>>
+
+// Below this many insert-to-existing comparisons, scanning beats building
+// the content index, so reconciliation keeps both paths.
+const indexedReconciliationThreshold = 10_000
+
+// Collect reconciliation candidates by comparing every insert against every
+// unclaimed existing item. Fastest when only a few inserts remain.
+const collectCandidatesByScan = <T extends NewItem>(
   inserts: Array<InsertAction<T>>,
   existingItems: Array<ExistingItem>,
   claimedExistingIds: Set<ItemIdLike>,
-): { reconciledInserts: Array<InsertAction<T>>; reconciledUpdates: Array<UpdateAction<T>> } => {
-  // Phase 1: collect all eligible candidates for each insert.
-  const candidatesByInsert = new Map<
-    number,
-    Array<{ existing: ExistingItem; result: MatchResult }>
-  >()
+): ReconciliationCandidates => {
+  const candidatesByInsert: ReconciliationCandidates = new Map()
 
   for (let i = 0; i < inserts.length; i++) {
     const candidates: Array<{ existing: ExistingItem; result: MatchResult }> = []
@@ -165,6 +165,155 @@ export const reconcileInserts = <T extends NewItem>(
 
     candidatesByInsert.set(i, candidates)
   }
+
+  return candidatesByInsert
+}
+
+// Collect the same candidates as collectCandidatesByScan, but through an
+// index. Reconciliation requires every content hash and publishedAt to match
+// exactly, so unclaimed existing items are indexed by that composite key and
+// each insert looks up its candidates directly instead of scanning every
+// existing item. NaN dates never match anything (NaN !== NaN) and are
+// excluded on both sides.
+const collectCandidatesByIndex = <T extends NewItem>(
+  inserts: Array<InsertAction<T>>,
+  existingItems: Array<ExistingItem>,
+  claimedExistingIds: Set<ItemIdLike>,
+): ReconciliationCandidates => {
+  const contentKeyOf = (item: ExistingItem | IncomingItem): string | undefined => {
+    const time = item.publishedAt?.getTime()
+
+    if (Number.isNaN(time)) {
+      return
+    }
+
+    // String(null) and String(undefined) stay distinct on purpose —
+    // findReconciliationCandidate compares with strict equality where null
+    // and undefined do not match each other.
+    let key = `${time}`
+
+    for (const hashKey of contentHashKeys) {
+      key += `\0${String(item[hashKey])}`
+    }
+
+    return key
+  }
+
+  // Per-hash owner counts over all existing items (claimed included) answer
+  // hasAmbiguousIdentity's question — does a different existing item own
+  // this identity hash — without rescanning the list per candidate.
+  type OwnerEntry = { count: number; onlyId: ItemIdLike }
+
+  const candidatesByContent = new Map<string, Array<ExistingItem>>()
+  const guidOwners = new Map<string, OwnerEntry>()
+  const linkOwners = new Map<string, OwnerEntry>()
+
+  const recordOwner = (
+    owners: Map<string, OwnerEntry>,
+    value: string | null,
+    id: ItemIdLike,
+  ): void => {
+    if (value == null) {
+      return
+    }
+
+    const entry = owners.get(value)
+
+    if (entry) {
+      entry.count++
+    } else {
+      owners.set(value, { count: 1, onlyId: id })
+    }
+  }
+
+  for (const existing of existingItems) {
+    recordOwner(guidOwners, existing.guidHash, existing.id)
+    recordOwner(linkOwners, existing.linkHash, existing.id)
+
+    if (claimedExistingIds.has(existing.id)) {
+      continue
+    }
+
+    const key = contentKeyOf(existing)
+
+    if (key === undefined) {
+      continue
+    }
+
+    const bucket = candidatesByContent.get(key)
+
+    if (bucket) {
+      bucket.push(existing)
+    } else {
+      candidatesByContent.set(key, [existing])
+    }
+  }
+
+  const hasOwnerConflict = (
+    owners: Map<string, OwnerEntry>,
+    value: string,
+    candidateId: ItemIdLike,
+  ): boolean => {
+    const entry = owners.get(value)
+
+    if (!entry) {
+      return false
+    }
+
+    return entry.count > 1 || entry.onlyId !== candidateId
+  }
+
+  const candidatesByInsert: ReconciliationCandidates = new Map()
+
+  for (let i = 0; i < inserts.length; i++) {
+    const candidates: Array<{ existing: ExistingItem; result: MatchResult }> = []
+    const key = contentKeyOf(inserts[i].item)
+    const bucket = key === undefined ? undefined : candidatesByContent.get(key)
+
+    for (const existing of bucket ?? []) {
+      const result = findReconciliationCandidate(inserts[i].item, existing)
+
+      if (!result) {
+        continue
+      }
+
+      // Same answers as hasAmbiguousIdentity, read from the owner maps.
+      const { guidHash, linkHash } = inserts[i].item
+      const isAmbiguous =
+        (guidHash != null &&
+          guidHash !== existing.guidHash &&
+          hasOwnerConflict(guidOwners, guidHash, existing.id)) ||
+        (linkHash != null &&
+          linkHash !== existing.linkHash &&
+          hasOwnerConflict(linkOwners, linkHash, existing.id))
+
+      if (isAmbiguous) {
+        continue
+      }
+
+      candidates.push({ existing, result })
+    }
+
+    candidatesByInsert.set(i, candidates)
+  }
+
+  return candidatesByInsert
+}
+
+// Reclassify inserts that are identical to an existing item except for guid
+// or link. Handles feeds with unstable identifiers that the fingerprint
+// system cannot match. Treats ambiguous matches (multiple candidates for one
+// insert, or multiple inserts targeting the same existing item) as non-matches.
+export const reconcileInserts = <T extends NewItem>(
+  inserts: Array<InsertAction<T>>,
+  existingItems: Array<ExistingItem>,
+  claimedExistingIds: Set<ItemIdLike>,
+): { reconciledInserts: Array<InsertAction<T>>; reconciledUpdates: Array<UpdateAction<T>> } => {
+  // Phase 1: collect all eligible candidates for each insert.
+  const candidatesByInsert =
+    inserts.length * existingItems.length < indexedReconciliationThreshold
+      ? collectCandidatesByScan(inserts, existingItems, claimedExistingIds)
+      : collectCandidatesByIndex(inserts, existingItems, claimedExistingIds)
 
   // Phase 2: resolve — only reconcile when both insert and target are
   // uniquely determined (exactly 1 candidate, no competing inserts).
