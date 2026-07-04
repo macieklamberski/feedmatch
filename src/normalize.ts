@@ -127,19 +127,7 @@ export const normalizeGuidFragmentForHashing = (
   return normalizeLinkWithFragmentForHashing(guid, cleanUrlFn)
 }
 
-// Select the preferred enclosure: the first with isDefault and a URL, else the
-// first with a URL.
-export const selectEnclosure = (enclosures: Nullish<Array<Enclosure>>): Enclosure | undefined => {
-  if (!enclosures?.length) {
-    return
-  }
-
-  const defaultEnclosure = enclosures.find((enclosure) => enclosure.isDefault && enclosure.url)
-
-  return defaultEnclosure ?? enclosures.find((enclosure) => enclosure.url)
-}
-
-// MIME type prefixes that mark the selected enclosure as real audio/video media.
+// MIME type prefixes that mark an enclosure as real audio/video media.
 const mediaTypePrefixes = ['audio/', 'video/']
 
 // MIME type prefixes that mark it as a decorative image.
@@ -183,21 +171,13 @@ const mediaExtensions = [
   '.avi',
 ]
 
-// How we treat enclosures:
-// - Default: the enclosure is changeable content, not identity. A swapped
-//   image is an update, not a new item.
-// - It counts as identity only when it is clearly real media (audio or
-//   video). For those (podcasts), the file is the item.
-//
-// This function answers "is the selected enclosure real media". A recognized
-// MIME type decides (audio/* or video/* is media, image/* is not); a missing
-// or unrecognized type (podcast CDNs commonly serve audio as
+// Whether a single enclosure is real audio/video media. A recognized MIME type
+// decides (audio/* or video/* is media, image/* is not); a missing or
+// unrecognized type (podcast CDNs commonly serve audio as
 // application/octet-stream) falls through to the URL file extension; no type
 // and no recognized extension means not media.
-export const isMediaEnclosure = (enclosures: Nullish<Array<Enclosure>>): boolean => {
-  const enclosure = selectEnclosure(enclosures)
-
-  if (!enclosure?.url) {
+const isMedia = (enclosure: Enclosure): boolean => {
+  if (!enclosure.url) {
     return false
   }
 
@@ -217,6 +197,35 @@ export const isMediaEnclosure = (enclosures: Nullish<Array<Enclosure>>): boolean
   }
 
   return endsWithAnyOf(path, mediaExtensions)
+}
+
+// Select the preferred enclosure: the first with isDefault and a URL, else the
+// first audio/video one, else the first with a URL. Preferring media keeps an
+// image listed before the real audio/video (common in media:content groups)
+// from becoming the enclosure hash and classification target of the item.
+export const selectEnclosure = (enclosures: Nullish<Array<Enclosure>>): Enclosure | undefined => {
+  if (!enclosures?.length) {
+    return
+  }
+
+  const defaultEnclosure = enclosures.find((enclosure) => enclosure.isDefault && enclosure.url)
+
+  return (
+    defaultEnclosure ??
+    enclosures.find((enclosure) => isMedia(enclosure)) ??
+    enclosures.find((enclosure) => enclosure.url)
+  )
+}
+
+// How we treat enclosures:
+// - Default: the enclosure is changeable content, not identity. A swapped
+//   image is an update, not a new item.
+// - It counts as identity only when it is clearly real media (audio or
+//   video). For those (podcasts), the file is the item.
+export const isMediaEnclosure = (enclosures: Nullish<Array<Enclosure>>): boolean => {
+  const enclosure = selectEnclosure(enclosures)
+
+  return enclosure != null && isMedia(enclosure)
 }
 
 // Select preferred enclosure (isDefault first, then first with URL) and normalize

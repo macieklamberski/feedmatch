@@ -282,6 +282,15 @@ describe('normalizeGuidFragmentForHashing', () => {
 })
 
 describe('normalizeEnclosureForHashing', () => {
+  it('should hash the media enclosure when an image comes first', () => {
+    const value = [
+      { url: 'https://example.com/cover.jpg', type: 'image/jpeg' },
+      { url: 'https://example.com/ep.mp3', type: 'audio/mpeg' },
+    ]
+
+    expect(normalizeEnclosureForHashing(value)).toBe('example.com/ep.mp3')
+  })
+
   it('should strip protocol and www', () => {
     const value = [{ url: 'https://www.example.com/audio.mp3' }]
 
@@ -526,6 +535,52 @@ describe('selectEnclosure', () => {
     expect(selectEnclosure(null)).toBeUndefined()
     expect(selectEnclosure(undefined)).toBeUndefined()
   })
+
+  it('should prefer the first media enclosure over an earlier image', () => {
+    const value = [
+      { url: 'https://example.com/cover.jpg', type: 'image/jpeg' },
+      { url: 'https://example.com/ep.mp3', type: 'audio/mpeg' },
+    ]
+
+    expect(selectEnclosure(value)).toEqual({
+      url: 'https://example.com/ep.mp3',
+      type: 'audio/mpeg',
+    })
+  })
+
+  it('should prefer media detected by extension over an earlier image', () => {
+    const value = [
+      { url: 'https://example.com/cover.jpg', type: 'image/jpeg' },
+      { url: 'https://example.com/ep.mp3', type: 'application/octet-stream' },
+    ]
+
+    expect(selectEnclosure(value)).toEqual({
+      url: 'https://example.com/ep.mp3',
+      type: 'application/octet-stream',
+    })
+  })
+
+  it('should keep an isDefault image over later media', () => {
+    const value = [
+      { url: 'https://example.com/cover.jpg', type: 'image/jpeg', isDefault: true },
+      { url: 'https://example.com/ep.mp3', type: 'audio/mpeg' },
+    ]
+
+    expect(selectEnclosure(value)).toEqual({
+      url: 'https://example.com/cover.jpg',
+      type: 'image/jpeg',
+      isDefault: true,
+    })
+  })
+
+  it('should fall back to the first with a url when nothing is media', () => {
+    const value = [
+      { url: 'https://example.com/a.jpg', type: 'image/jpeg' },
+      { url: 'https://example.com/b.jpg', type: 'image/png' },
+    ]
+
+    expect(selectEnclosure(value)).toEqual({ url: 'https://example.com/a.jpg', type: 'image/jpeg' })
+  })
 })
 
 describe('isMediaEnclosure', () => {
@@ -557,6 +612,15 @@ describe('isMediaEnclosure', () => {
     const value = [{ url: 'https://example.com/download/12345', type: 'application/octet-stream' }]
 
     expect(isMediaEnclosure(value)).toBe(false)
+  })
+
+  it('should classify as media when audio follows an image', () => {
+    const value = [
+      { url: 'https://example.com/cover.jpg', type: 'image/jpeg' },
+      { url: 'https://example.com/ep.mp3', type: 'audio/mpeg' },
+    ]
+
+    expect(isMediaEnclosure(value)).toBe(true)
   })
 
   it('should fall through to the extension when the type is an empty string', () => {
