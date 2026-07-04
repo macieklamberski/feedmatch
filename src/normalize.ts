@@ -140,19 +140,31 @@ export const normalizeEnclosureForHashing = (
   return safeNormalizeUrl(url)
 }
 
+// Matches whitespace that still needs collapsing: a whitespace character that
+// is not a plain space, or two consecutive spaces. When neither occurs, the
+// trimmed string is already normalized.
+const needsCollapseRegex = /[^\S ]| {2}/
+const collapseRegex = /\s+/g
+
 // Trim and collapse whitespace runs into single spaces, keeping letter case.
+// Most feed strings are already normalized, so the cheap test avoids the
+// full replace scan and its allocation for them.
 export const normalizeWhitespace = (text: string | null | undefined): string | undefined => {
   if (!text) {
     return
   }
 
-  const normalized = text.trim().replace(/\s+/g, ' ')
+  const trimmed = text.trim()
 
-  if (normalized === '') {
+  if (trimmed === '') {
     return
   }
 
-  return normalized
+  if (!needsCollapseRegex.test(trimmed)) {
+    return trimmed
+  }
+
+  return trimmed.replace(collapseRegex, ' ')
 }
 
 // Collapse whitespace and lowercase for text-based hashing (title). Lowercasing

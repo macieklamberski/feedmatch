@@ -438,4 +438,28 @@ describe('normalizeWhitespace', () => {
   it('should return undefined for null input', () => {
     expect(normalizeWhitespace(null)).toBeUndefined()
   })
+
+  it('should return the input unchanged when already normalized', () => {
+    expect(normalizeWhitespace('Hello World')).toBe('Hello World')
+  })
+
+  it('should trim without collapsing when inner whitespace is single spaces', () => {
+    expect(normalizeWhitespace('  Hello World  ')).toBe('Hello World')
+  })
+
+  it('should collapse non-breaking space runs', () => {
+    expect(normalizeWhitespace('Hello\u00a0\u00a0World')).toBe('Hello World')
+  })
+
+  it('should collapse ideographic spaces', () => {
+    expect(normalizeWhitespace('\u3000Hello\u3000\u3000World\u3000')).toBe('Hello World')
+  })
+
+  it('should keep the next-line control character (not whitespace in JavaScript)', () => {
+    expect(normalizeWhitespace('Hello\u0085World')).toBe('Hello\u0085World')
+  })
+
+  it('should keep zero-width spaces (not whitespace in JavaScript)', () => {
+    expect(normalizeWhitespace('Hello\u200b\u200bWorld')).toBe('Hello\u200b\u200bWorld')
+  })
 })
