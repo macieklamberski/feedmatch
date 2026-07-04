@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  isMediaEnclosure,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
   normalizeGuidFragmentForHashing,
@@ -9,6 +10,7 @@ import {
   normalizeLinkWithFragmentForHashing,
   normalizeTextForHashing,
   normalizeWhitespace,
+  selectEnclosure,
 } from './normalize.js'
 
 // Stand-in for an injected cleaner (e.g. urlpurify): removes utm_ params.
@@ -481,5 +483,166 @@ describe('normalizeWhitespace', () => {
 
   it('should return undefined for null input', () => {
     expect(normalizeWhitespace(null)).toBeUndefined()
+  })
+})
+
+describe('selectEnclosure', () => {
+  it('should select the first enclosure with a url', () => {
+    const value = [{ url: 'https://example.com/a.mp3' }, { url: 'https://example.com/b.mp3' }]
+
+    expect(selectEnclosure(value)).toEqual({ url: 'https://example.com/a.mp3' })
+  })
+
+  it('should prefer the isDefault enclosure over an earlier one', () => {
+    const value = [
+      { url: 'https://example.com/first.mp3' },
+      { url: 'https://example.com/default.mp3', isDefault: true },
+    ]
+
+    expect(selectEnclosure(value)).toEqual({
+      url: 'https://example.com/default.mp3',
+      isDefault: true,
+    })
+  })
+
+  it('should skip an isDefault enclosure without a url', () => {
+    const value = [{ isDefault: true }, { url: 'https://example.com/a.mp3' }]
+
+    expect(selectEnclosure(value)).toEqual({ url: 'https://example.com/a.mp3' })
+  })
+
+  it('should skip url-less entries when picking the first', () => {
+    const value = [{}, { url: 'https://example.com/a.mp3' }]
+
+    expect(selectEnclosure(value)).toEqual({ url: 'https://example.com/a.mp3' })
+  })
+
+  it('should return undefined when no enclosure has a url', () => {
+    expect(selectEnclosure([{ type: 'audio/mpeg' }, { isDefault: true }])).toBeUndefined()
+  })
+
+  it('should return undefined for empty input', () => {
+    expect(selectEnclosure([])).toBeUndefined()
+    expect(selectEnclosure(null)).toBeUndefined()
+    expect(selectEnclosure(undefined)).toBeUndefined()
+  })
+})
+
+describe('isMediaEnclosure', () => {
+  it('should treat audio types as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'audio/mpeg' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'audio/mp4' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'audio/aac' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'audio/ogg' }])).toBe(true)
+  })
+
+  it('should treat video types as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'video/mp4' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'video/webm' }])).toBe(true)
+  })
+
+  it('should not treat image types as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'image/jpeg' }])).toBe(false)
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'image/png' }])).toBe(false)
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'image/webp' }])).toBe(false)
+  })
+
+  it('should treat an octet-stream enclosure with an audio extension as media', () => {
+    const value = [{ url: 'https://example.com/ep.mp3', type: 'application/octet-stream' }]
+
+    expect(isMediaEnclosure(value)).toBe(true)
+  })
+
+  it('should not treat an octet-stream enclosure without an extension as media', () => {
+    const value = [{ url: 'https://example.com/download/12345', type: 'application/octet-stream' }]
+
+    expect(isMediaEnclosure(value)).toBe(false)
+  })
+
+  it('should fall through to the extension when the type is an empty string', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/ep.mp3', type: '' }])).toBe(true)
+  })
+
+  it('should treat a type with parameters as media', () => {
+    const value = [{ url: 'https://example.com/e', type: 'audio/mpeg; charset=binary' }]
+
+    expect(isMediaEnclosure(value)).toBe(true)
+  })
+
+  it('should let an image type overrule an audio extension', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/e.mp3', type: 'image/jpeg' }])).toBe(false)
+  })
+
+  it('should not treat an audio type with an image extension as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/e.jpg', type: 'audio/mpeg' }])).toBe(false)
+  })
+
+  it('should trust an audio type when the URL has no recognized extension', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/episode', type: 'audio/mpeg' }])).toBe(
+      true,
+    )
+  })
+
+  it('should treat typeless audio and video extensions as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/ep.mp3' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/ep.m4a' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/ep.ogg' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/clip.mp4' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/clip.webm' }])).toBe(true)
+  })
+
+  it('should not treat typeless image extensions as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/thumb.jpg' }])).toBe(false)
+    expect(isMediaEnclosure([{ url: 'https://example.com/thumb.png' }])).toBe(false)
+    expect(isMediaEnclosure([{ url: 'https://example.com/thumb.webp' }])).toBe(false)
+  })
+
+  it('should not treat a url without any dot as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://localhost/stream' }])).toBe(false)
+  })
+
+  it('should not treat typeless extensionless urls as media', () => {
+    expect(isMediaEnclosure([{ url: 'https://images.example.com/photo-1607823477653' }])).toBe(
+      false,
+    )
+    expect(isMediaEnclosure([{ url: 'https://example.com/v/-1wPGYqygC8?version=3' }])).toBe(false)
+    expect(isMediaEnclosure([{ url: 'https://example.com/i?r=BCH26J05HeR4mzFJ' }])).toBe(false)
+    expect(isMediaEnclosure([{ url: 'https://example.com/avatar/e31c59f8b6bf988' }])).toBe(false)
+  })
+
+  it('should read the extension from the path before the query string', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/ep.mp3?token=abc' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/media?file=ep.mp3' }])).toBe(false)
+  })
+
+  it('should match types and extensions case-insensitively', () => {
+    expect(isMediaEnclosure([{ url: 'https://example.com/e', type: 'AUDIO/MPEG' }])).toBe(true)
+    expect(isMediaEnclosure([{ url: 'https://example.com/EP.MP3' }])).toBe(true)
+  })
+
+  it('should classify by the selected enclosure and ignore types on url-less entries', () => {
+    const value = [{ type: 'audio/mpeg' }, { url: 'https://example.com/thumb.jpg' }]
+
+    expect(isMediaEnclosure(value)).toBe(false)
+  })
+
+  it('should follow the isDefault selection when classifying', () => {
+    const defaultAudio = [
+      { url: 'https://example.com/thumb.jpg' },
+      { url: 'https://example.com/ep.mp3', isDefault: true },
+    ]
+    const defaultImage = [
+      { url: 'https://example.com/ep.mp3' },
+      { url: 'https://example.com/thumb.jpg', isDefault: true },
+    ]
+
+    expect(isMediaEnclosure(defaultAudio)).toBe(true)
+    expect(isMediaEnclosure(defaultImage)).toBe(false)
+  })
+
+  it('should return false for empty or absent enclosures', () => {
+    expect(isMediaEnclosure([])).toBe(false)
+    expect(isMediaEnclosure(null)).toBe(false)
+    expect(isMediaEnclosure(undefined)).toBe(false)
   })
 })
