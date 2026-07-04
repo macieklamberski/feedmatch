@@ -4,6 +4,8 @@ import {
   classifyItems,
   composeIncomingItems,
   deduplicateItemsByFingerprint,
+  excludeCandidateEnclosure,
+  excludeEnclosureFromIdentity,
   findReconciliationCandidate,
   hasAmbiguousIdentity,
   reconcileInserts,
@@ -40,7 +42,7 @@ const makeHashes = (overrides: Partial<ItemHashes> = {}): ItemHashes => {
 
 const makeMatchable = (input: NewItem & { id?: string } = {}): ExistingItem => {
   const { id = 'item-1', ...hashableFields } = input
-  return { id, ...computeItemHashes(hashableFields) }
+  return { id, ...computeItemHashes(hashableFields), enclosures: hashableFields.enclosures }
 }
 
 const makeIncoming = (overrides: Partial<IncomingItem> = {}): IncomingItem => {
@@ -5072,7 +5074,9 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
-    it('should update by enclosure when placeholder enclosure matches single existing item', () => {
+    it('should insert a retitled item that shares only a placeholder image enclosure', () => {
+      // A shared decorative image (a site logo) is not evidence of identity,
+      // so a guid-less link-less item with a different title is a new item.
       const feedItem = {
         enclosures: [{ url: 'https://example.com/logo.jpg' }],
         title: 'New Post',
@@ -5090,16 +5094,14 @@ describe('classifyItems', () => {
         ],
       }
       const expected: ClassifyItemsResult = {
-        inserts: [],
-        updates: [
+        inserts: [
           {
             item: { ...feedItem, ...computeItemHashes(feedItem) },
             fingerprintHash: expect.stringMatching(hashRegex),
-            existingItemId: 'existing-1',
-            matchedBy: 'enclosure',
           },
         ],
-        fingerprintLevel: 'enclosure',
+        updates: [],
+        fingerprintLevel: 'title',
       }
 
       expect(classifyItems(value)).toEqual(expected)
@@ -7408,5 +7410,400 @@ describe('classifyItems', () => {
         expect(result.updates[2].existingItemId).toBe('existing-3')
       })
     })
+  })
+})
+
+describe('excludeEnclosureFromIdentity', () => {
+  it('should return a media item unchanged', () => {
+    const value = {
+      ...makeHashes({ linkHash: 'l1', enclosureHash: 'e1' }),
+      enclosures: [{ url: 'https://example.com/ep.mp3' }],
+    }
+
+    expect(excludeEnclosureFromIdentity(value)).toBe(value)
+  })
+
+  it('should null the enclosure hash of a non-media item and preserve everything else', () => {
+    const value = {
+      ...makeHashes({ linkHash: 'l1', titleHash: 't1', enclosureHash: 'e1' }),
+      enclosures: [{ url: 'https://example.com/thumb.jpg' }],
+      publishedAt: new Date('2026-06-30T12:00:00Z'),
+    }
+    const expected = { ...value, enclosureHash: null }
+
+    expect(excludeEnclosureFromIdentity(value)).toEqual(expected)
+  })
+
+  it('should return an item without raw enclosures unchanged', () => {
+    const value = makeHashes({ linkHash: 'l1', enclosureHash: 'e1' })
+
+    expect(excludeEnclosureFromIdentity(value)).toBe(value)
+  })
+
+  it('should keep the enclosure when guid, link, and title are all absent', () => {
+    const value = {
+      ...makeHashes({ enclosureHash: 'e1' }),
+      enclosures: [{ url: 'https://example.com/thumb.jpg' }],
+    }
+
+    expect(excludeEnclosureFromIdentity(value)).toBe(value)
+  })
+})
+
+describe('excludeCandidateEnclosure', () => {
+  it('should exclude the enclosure of a candidate with raw image enclosures', () => {
+    const value: ExistingItem = {
+      id: 'item-1',
+      ...makeHashes({ linkHash: 'l1', enclosureHash: 'e1' }),
+      enclosures: [{ url: 'https://example.com/thumb.jpg' }],
+    }
+    const expected = { ...value, enclosureHash: null }
+
+    expect(excludeCandidateEnclosure(value, false)).toEqual(expected)
+  })
+
+  it('should exclude the enclosure of a candidate without raw enclosures when the incoming enclosure is excluded', () => {
+    const value: ExistingItem = {
+      id: 'item-1',
+      ...makeHashes({ linkHash: 'l1', enclosureHash: 'e1' }),
+    }
+    const expected = { ...value, enclosureHash: null }
+
+    expect(excludeCandidateEnclosure(value, true)).toEqual(expected)
+  })
+
+  it('should keep a candidate without raw enclosures when the incoming enclosure is not excluded', () => {
+    const value: ExistingItem = {
+      id: 'item-1',
+      ...makeHashes({ linkHash: 'l1', enclosureHash: 'e1' }),
+    }
+
+    expect(excludeCandidateEnclosure(value, false)).toBe(value)
+  })
+
+  it('should keep a candidate without an enclosure hash unchanged', () => {
+    const value: ExistingItem = { id: 'item-1', ...makeHashes({ linkHash: 'l1' }) }
+
+    expect(excludeCandidateEnclosure(value, true)).toBe(value)
+  })
+
+  it('should keep the enclosure of a candidate identified only by its enclosure', () => {
+    const value: ExistingItem = { id: 'item-1', ...makeHashes({ enclosureHash: 'e1' }) }
+
+    expect(excludeCandidateEnclosure(value, true)).toBe(value)
+  })
+})
+
+describe('classifyItems enclosure exclusion', () => {
+  it('should update by link when a thumbnail is swapped on a link-stable item', () => {
+    const feedItem = {
+      link: 'https://example.com/post',
+      title: 'Post Title',
+      enclosures: [{ url: 'https://example.com/new-thumb.jpg', type: 'image/jpeg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          link: 'https://example.com/post',
+          title: 'Post Title',
+          enclosures: [{ url: 'https://example.com/old-thumb.jpg', type: 'image/jpeg' }],
+        }),
+      ],
+      fingerprintLevel: 'title',
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItem, ...computeItemHashes(feedItem) },
+          fingerprintHash: expect.stringMatching(hashRegex),
+          existingItemId: 'existing-1',
+          matchedBy: 'link',
+        },
+      ],
+      fingerprintLevel: 'title',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  it('should update by title when a thumbnail is swapped on a link-less item', () => {
+    const feedItem = {
+      title: 'Stable Title',
+      enclosures: [{ url: 'https://example.com/new-thumb.jpg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          title: 'Stable Title',
+          enclosures: [{ url: 'https://example.com/old-thumb.jpg' }],
+        }),
+      ],
+    }
+    const expected: ClassifyItemsResult = {
+      inserts: [],
+      updates: [
+        {
+          item: { ...feedItem, ...computeItemHashes(feedItem) },
+          fingerprintHash: expect.stringMatching(hashRegex),
+          existingItemId: 'existing-1',
+          matchedBy: 'title',
+        },
+      ],
+      fingerprintLevel: 'title',
+    }
+
+    expect(classifyItems(value)).toEqual(expected)
+  })
+
+  it('should keep image items sharing a link distinct by title', () => {
+    const feedItemA = {
+      link: 'https://example.com/hub',
+      title: 'Article A',
+      enclosures: [{ url: 'https://example.com/thumb-a.jpg' }],
+    }
+    const feedItemB = {
+      link: 'https://example.com/hub',
+      title: 'Article B',
+      enclosures: [{ url: 'https://example.com/thumb-b.jpg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItemA, feedItemB],
+      existingItems: [],
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.updates).toEqual([])
+    expect(result.inserts).toHaveLength(2)
+    expect(result.fingerprintLevel).toBe('title')
+    expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
+  })
+
+  it('should still insert and match an item identified only by its image enclosure', () => {
+    const original = { enclosures: [{ url: 'https://example.com/only.jpg' }], content: 'Old' }
+    const edited = { enclosures: [{ url: 'https://example.com/only.jpg' }], content: 'New' }
+    const scanOne = classifyItems({ newItems: [original], existingItems: [] })
+    const scanTwo = classifyItems({
+      newItems: [edited],
+      existingItems: [makeMatchable({ id: 'existing-1', ...original })],
+      fingerprintLevel: scanOne.fingerprintLevel,
+    })
+
+    expect(scanOne.inserts).toHaveLength(1)
+    expect(scanTwo.inserts).toEqual([])
+    expect(scanTwo.updates).toHaveLength(1)
+    expect(scanTwo.updates[0]?.matchedBy).toBe('enclosure')
+  })
+
+  it('should update by enclosure when a podcast title is edited', () => {
+    const feedItem = {
+      title: 'Episode 12 (remastered)',
+      enclosures: [{ url: 'https://example.com/ep12.mp3', type: 'audio/mpeg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          title: 'Episode 12',
+          enclosures: [{ url: 'https://example.com/ep12.mp3', type: 'audio/mpeg' }],
+        }),
+      ],
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.inserts).toEqual([])
+    expect(result.updates).toHaveLength(1)
+    expect(result.updates[0]?.matchedBy).toBe('enclosure')
+  })
+
+  it('should keep podcast episodes with identical titles distinct by audio', () => {
+    const feedItemA = {
+      title: 'Weekly Update',
+      enclosures: [{ url: 'https://example.com/ep1.mp3', type: 'audio/mpeg' }],
+    }
+    const feedItemB = {
+      title: 'Weekly Update',
+      enclosures: [{ url: 'https://example.com/ep2.mp3', type: 'audio/mpeg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItemA, feedItemB],
+      existingItems: [],
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.updates).toEqual([])
+    expect(result.inserts).toHaveLength(2)
+    expect(result.fingerprintLevel).toBe('enclosure')
+    expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
+  })
+
+  it('should treat a replaced audio file on the same link and title as a new item', () => {
+    const feedItem = {
+      link: 'https://example.com/episode',
+      title: 'Episode',
+      enclosures: [{ url: 'https://example.com/ep-v2.mp3', type: 'audio/mpeg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          link: 'https://example.com/episode',
+          title: 'Episode',
+          enclosures: [{ url: 'https://example.com/ep-v1.mp3', type: 'audio/mpeg' }],
+        }),
+      ],
+      fingerprintLevel: 'enclosure',
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.updates).toEqual([])
+    expect(result.inserts).toHaveLength(1)
+  })
+
+  it('should insert a duplicate for an edited title on a stable image (accepted residual)', () => {
+    // Without the image in identity, a guid-less link-less retitled item has
+    // nothing tying it to its previous row. Previously the shared image
+    // rescued this case; the trade is documented and accepted.
+    const feedItem = {
+      title: 'Corrected Title',
+      enclosures: [{ url: 'https://example.com/stable.jpg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-1',
+          title: 'Original Title',
+          enclosures: [{ url: 'https://example.com/stable.jpg' }],
+        }),
+      ],
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.updates).toEqual([])
+    expect(result.inserts).toHaveLength(1)
+  })
+
+  it('should update an item with excluded enclosure against an existing item without raw enclosures', () => {
+    // The caller has not yet stored raw enclosures on existing items, so the
+    // candidate reuses the exclusion decision made for the incoming item.
+    const original = {
+      link: 'https://example.com/post',
+      title: 'Post Title',
+      enclosures: [{ url: 'https://example.com/old-thumb.jpg' }],
+    }
+    const feedItem = {
+      link: 'https://example.com/post',
+      title: 'Post Title',
+      enclosures: [{ url: 'https://example.com/new-thumb.jpg' }],
+    }
+    const existingWithoutEnclosures = { id: 'existing-1', ...computeItemHashes(original) }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [existingWithoutEnclosures],
+      fingerprintLevel: 'title',
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.inserts).toEqual([])
+    expect(result.updates).toHaveLength(1)
+    expect(result.updates[0]?.existingItemId).toBe('existing-1')
+  })
+
+  it('should update within a same-guid family when only the image changed', () => {
+    const feedItem = {
+      guid: 'shared-guid',
+      link: 'https://example.com/post-a',
+      title: 'Post A',
+      enclosures: [{ url: 'https://example.com/new-thumb.jpg' }],
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        makeMatchable({
+          id: 'existing-a',
+          guid: 'shared-guid',
+          link: 'https://example.com/post-a',
+          title: 'Post A',
+          enclosures: [{ url: 'https://example.com/old-thumb.jpg' }],
+        }),
+        makeMatchable({
+          id: 'existing-b',
+          guid: 'shared-guid',
+          link: 'https://example.com/post-b',
+          title: 'Post B',
+          enclosures: [{ url: 'https://example.com/other-thumb.jpg' }],
+        }),
+      ],
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.inserts).toEqual([])
+    expect(result.updates).toHaveLength(1)
+    expect(result.updates[0]?.existingItemId).toBe('existing-a')
+  })
+
+  it('should keep the enclosure-bearing variant when in-batch duplicates collapse', () => {
+    const withEnclosure = {
+      link: 'https://example.com/post',
+      title: 'Post Title',
+      enclosures: [{ url: 'https://example.com/thumb.jpg' }],
+    }
+    const withoutEnclosure = {
+      link: 'https://example.com/post',
+      title: 'Post Title',
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [withoutEnclosure, withEnclosure],
+      existingItems: [],
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.inserts).toHaveLength(1)
+    expect(result.inserts[0]?.item.enclosureHash).not.toBeNull()
+  })
+
+  it('should update on an image swap when publishedAt is set on both sides', () => {
+    const publishedAt = new Date('2026-06-30T12:00:00Z')
+    const feedItem = {
+      link: 'https://example.com/post',
+      title: 'Post Title',
+      enclosures: [{ url: 'https://example.com/new-thumb.jpg' }],
+      publishedAt,
+    }
+    const value: ClassifyItemsInput = {
+      newItems: [feedItem],
+      existingItems: [
+        {
+          ...makeMatchable({
+            id: 'existing-1',
+            link: 'https://example.com/post',
+            title: 'Post Title',
+            enclosures: [{ url: 'https://example.com/old-thumb.jpg' }],
+          }),
+          publishedAt,
+        },
+      ],
+      fingerprintLevel: 'title',
+    }
+
+    const result = classifyItems(value)
+
+    expect(result.inserts).toEqual([])
+    expect(result.updates).toHaveLength(1)
   })
 })

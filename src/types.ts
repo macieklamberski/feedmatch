@@ -8,13 +8,19 @@ export type FingerprintLevel = (typeof fingerprintLevels)[number]
 
 export type ItemIdLike = string | number
 
+export type Enclosure = {
+  url?: string
+  isDefault?: boolean
+  type?: string | null
+}
+
 export type NewItem = {
   guid?: string | null
   link?: string | null
   title?: string | null
   summary?: string | null
   content?: string | null
-  enclosures?: Array<{ url?: string; isDefault?: boolean }> | null
+  enclosures?: Array<Enclosure> | null
   publishedAt?: Date | null
 }
 
@@ -34,6 +40,11 @@ export type IncomingItem<T extends NewItem = NewItem> = T & ItemHashes
 export type ExistingItem = ItemHashes & {
   id: ItemIdLike
   publishedAt?: Date
+  // Raw enclosures as stored by the caller. When present, the classifier checks
+  // their type to decide whether the stored item's enclosure counts toward
+  // identity or is excluded from it. When absent, there is no type to check, so
+  // the stored item reuses the decision made for the incoming item.
+  enclosures?: Array<Enclosure> | null
 }
 
 export type FingerprintedItem<T extends NewItem = NewItem> = IncomingItem<T> & {

@@ -1,5 +1,6 @@
 import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
-import type { CleanUrlFn, Nullish } from './types.js'
+import { endsWithAnyOf, startsWithAnyOf } from 'trousse'
+import type { CleanUrlFn, Enclosure, Nullish } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
   stripProtocol: true,
@@ -126,22 +127,108 @@ export const normalizeGuidFragmentForHashing = (
   return normalizeLinkWithFragmentForHashing(guid, cleanUrlFn)
 }
 
+// Select the preferred enclosure: the first with isDefault and a URL, else the
+// first with a URL.
+export const selectEnclosure = (enclosures: Nullish<Array<Enclosure>>): Enclosure | undefined => {
+  if (!enclosures?.length) {
+    return
+  }
+
+  const defaultEnclosure = enclosures.find((enclosure) => enclosure.isDefault && enclosure.url)
+
+  return defaultEnclosure ?? enclosures.find((enclosure) => enclosure.url)
+}
+
+// MIME type prefixes that mark the selected enclosure as real audio/video media.
+const mediaTypePrefixes = ['audio/', 'video/']
+
+// MIME type prefixes that mark it as a decorative image.
+const imageTypePrefixes = ['image/']
+
+// Splits a URL at the start of its query string or fragment.
+const urlPathEndRegex = /[?#]/
+
+// File extensions that mark an enclosure URL as an image. A declared audio or
+// video type is distrusted when the URL clearly points at an image file.
+const imageExtensions = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.avif',
+  '.svg',
+  '.bmp',
+  '.ico',
+  '.tif',
+  '.tiff',
+]
+
+// File extensions that mark an enclosure URL as audio or video media.
+const mediaExtensions = [
+  '.mp3',
+  '.m4a',
+  '.m4b',
+  '.aac',
+  '.ogg',
+  '.oga',
+  '.opus',
+  '.flac',
+  '.wav',
+  '.mp4',
+  '.m4v',
+  '.mov',
+  '.webm',
+  '.mkv',
+  '.avi',
+]
+
+// How we treat enclosures:
+// - Default: the enclosure is changeable content, not identity. A swapped
+//   image is an update, not a new item.
+// - It counts as identity only when it is clearly real media (audio or
+//   video). For those (podcasts), the file is the item.
+//
+// This function answers "is the selected enclosure real media". A recognized
+// MIME type decides (audio/* or video/* is media, image/* is not); a missing
+// or unrecognized type (podcast CDNs commonly serve audio as
+// application/octet-stream) falls through to the URL file extension; no type
+// and no recognized extension means not media.
+export const isMediaEnclosure = (enclosures: Nullish<Array<Enclosure>>): boolean => {
+  const enclosure = selectEnclosure(enclosures)
+
+  if (!enclosure?.url) {
+    return false
+  }
+
+  const path = enclosure.url.split(urlPathEndRegex)[0]
+  const type = enclosure.type?.trim()
+
+  if (type) {
+    if (startsWithAnyOf(type, mediaTypePrefixes)) {
+      // An audio/video type on a URL that clearly points at an image file is
+      // contradictory; do not count the enclosure as media on a bad signal.
+      return !endsWithAnyOf(path, imageExtensions)
+    }
+
+    if (startsWithAnyOf(type, imageTypePrefixes)) {
+      return false
+    }
+  }
+
+  return endsWithAnyOf(path, mediaExtensions)
+}
+
 // Select preferred enclosure (isDefault first, then first with URL) and normalize
 // for hashing. Keeps non-tracking query params (identity can live there).
 // TODO: Improve stability by normalizing+sorting all enclosure URLs instead of
 // picking one. Current approach changes hash if feed reorders enclosures or
 // toggles isDefault between scans, causing false duplicates over time.
 export const normalizeEnclosureForHashing = (
-  enclosures: Nullish<Array<{ url?: string; isDefault?: boolean }>>,
+  enclosures: Nullish<Array<Enclosure>>,
   cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
-  if (!enclosures?.length) {
-    return
-  }
-
-  const defaultEnclosure = enclosures.find((enclosure) => enclosure.isDefault && enclosure.url)
-  const firstEnclosure = enclosures.find((enclosure) => enclosure.url)
-  const url = defaultEnclosure?.url ?? firstEnclosure?.url
+  const url = selectEnclosure(enclosures)?.url
 
   if (!url) {
     return

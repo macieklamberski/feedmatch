@@ -3,6 +3,7 @@ import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants
 import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem, Nullish } from './types.js'
 
 export {
+  isMediaEnclosure,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
   normalizeGuidFragmentForHashing,
@@ -11,6 +12,7 @@ export {
   normalizeLinkFragmentForHashing,
   normalizeLinkWithFragmentForHashing,
   normalizeTextForHashing,
+  selectEnclosure,
 } from './normalize.js'
 
 export const generateHash = (...values: Array<Nullish<string>>) => {
