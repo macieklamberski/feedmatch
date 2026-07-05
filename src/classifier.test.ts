@@ -3966,6 +3966,67 @@ describe('classifyItems', () => {
 
       expect(classifyItems(value)).toEqual(expected)
     })
+
+    it('should insert a date-bumped link match outside the default proximity window', () => {
+      const feedItem = {
+        link: 'https://example.com/post',
+        title: 'Post',
+        publishedAt: new Date('2020-01-20T00:00:00Z'),
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          {
+            ...makeMatchable({ id: 'existing-1', link: 'https://example.com/post', title: 'Post' }),
+            publishedAt: new Date('2020-01-01T00:00:00Z'),
+          },
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+          },
+        ],
+        updates: [],
+        fingerprintLevel: 'link',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should update a date-bumped link match within a custom dateProximityDays window', () => {
+      const feedItem = {
+        link: 'https://example.com/post',
+        title: 'Post',
+        publishedAt: new Date('2020-01-20T00:00:00Z'),
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          {
+            ...makeMatchable({ id: 'existing-1', link: 'https://example.com/post', title: 'Post' }),
+            publishedAt: new Date('2020-01-01T00:00:00Z'),
+          },
+        ],
+        dateProximityDays: 30,
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'link',
+          },
+        ],
+        fingerprintLevel: 'link',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
   })
 
   describe('update scenarios', () => {

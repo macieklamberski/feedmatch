@@ -342,7 +342,7 @@ export const deduplicateItemsByFingerprint = <T extends NewItem>(
 export const classifyItems = <T extends NewItem>(
   input: ClassifyItemsInput<T>,
 ): ClassifyItemsResult<T> => {
-  const { newItems, fingerprintLevel: inputLevel, cleanUrlFn } = input
+  const { newItems, fingerprintLevel: inputLevel, cleanUrlFn, dateProximityDays } = input
 
   // Coerce existing publishedAt the same way as incoming (see
   // composeIncomingItems): comparisons call .getTime() on both sides, so both
@@ -362,7 +362,7 @@ export const classifyItems = <T extends NewItem>(
   // classification. Uses raw (not deduped) incoming hashes; duplicates
   // lower uniqueness slightly, which is conservative (fewer link matches).
   const feedProfile = computeFeedProfile(existingItems, incomingItems)
-  const matchPolicy = computeMatchPolicy(feedProfile)
+  const matchPolicy = computeMatchPolicy(feedProfile, { dateProximityDays })
 
   // Pre-match: find existing items that are true updates and exclude them
   // from the level collision set. A match is "strong enough" when it's by
