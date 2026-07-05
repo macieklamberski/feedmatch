@@ -1219,6 +1219,210 @@ describe('reconcileInserts', () => {
     expect(reversed.reconciledInserts).toHaveLength(2)
     expect(reversed.reconciledUpdates).toHaveLength(0)
   })
+
+  it('should not reconcile when publishedAt is an invalid date on both sides', () => {
+    const invalidDate = new Date(Number.NaN)
+    const insert = {
+      item: makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt: invalidDate,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const existing = makeExistingItem({
+      guidHash: 'old-guid',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      publishedAt: invalidDate,
+    })
+
+    const result = reconcileInserts([insert], [existing], new Set())
+
+    expect(result.reconciledInserts).toHaveLength(1)
+    expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should not reconcile when a hash is null on one side and undefined on the other', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const insert = {
+      item: makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        summaryHash: null,
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const existing = makeExistingItem({
+      guidHash: 'old-guid',
+      linkHash: 'same-link',
+      titleHash: 'same-title',
+      contentHash: 'same-content',
+      summaryHash: undefined,
+      publishedAt,
+    })
+
+    const result = reconcileInserts([insert], [existing], new Set())
+
+    expect(result.reconciledInserts).toHaveLength(1)
+    expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  // The batches below are large enough to use the index instead of the scan,
+  // checking that both paths give the same result.
+
+  it('should reconcile a large batch of inserts to their existing items', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const inserts = Array.from({ length: 100 }, (_, index) => ({
+      item: makeIncoming({
+        guidHash: `new-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt,
+      }),
+      fingerprintHash: `fp-${index}`,
+    }))
+    const existingItems = Array.from({ length: 100 }, (_, index) => {
+      return makeExistingItem({
+        id: `existing-${index}`,
+        guidHash: `old-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt,
+      })
+    })
+
+    const result = reconcileInserts(inserts, existingItems, new Set())
+
+    expect(result.reconciledInserts).toHaveLength(0)
+    expect(result.reconciledUpdates).toHaveLength(100)
+    expect(result.reconciledUpdates[0].existingItemId).toBe('existing-0')
+    expect(result.reconciledUpdates[99].existingItemId).toBe('existing-99')
+  })
+
+  it('should not reconcile a large batch when every publishedAt is an invalid date', () => {
+    const invalidDate = new Date(Number.NaN)
+    const inserts = Array.from({ length: 100 }, (_, index) => ({
+      item: makeIncoming({
+        guidHash: `new-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt: invalidDate,
+      }),
+      fingerprintHash: `fp-${index}`,
+    }))
+    const existingItems = Array.from({ length: 100 }, (_, index) => {
+      return makeExistingItem({
+        id: `existing-${index}`,
+        guidHash: `old-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt: invalidDate,
+      })
+    })
+
+    const result = reconcileInserts(inserts, existingItems, new Set())
+
+    expect(result.reconciledInserts).toHaveLength(100)
+    expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should build the candidate index over duplicate and identifier-less existing items', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const existingItems = Array.from({ length: 100 }, (_, index) => {
+      // First two items have no guid or link and the same content, so they
+      // land in one bucket and add nothing to the owner counts.
+      if (index < 2) {
+        return makeExistingItem({
+          id: `existing-${index}`,
+          titleHash: 'shared-title',
+          contentHash: 'shared-content',
+          summaryHash: 'shared-summary',
+          publishedAt,
+        })
+      }
+
+      // The next two share a guid hash, so the second one raises its count.
+      if (index < 4) {
+        return makeExistingItem({
+          id: `existing-${index}`,
+          guidHash: 'dup-guid',
+          linkHash: `link-${index}`,
+          titleHash: `title-${index}`,
+          contentHash: `content-${index}`,
+          publishedAt,
+        })
+      }
+
+      return makeExistingItem({
+        id: `existing-${index}`,
+        guidHash: `guid-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt,
+      })
+    })
+    // Large enough to use the index. The inserts match nothing because their
+    // publishedAt differs from every existing item.
+    const inserts = Array.from({ length: 100 }, (_, index) => ({
+      item: makeIncoming({
+        guidHash: `insert-${index}`,
+        linkHash: `insert-link-${index}`,
+        titleHash: `insert-title-${index}`,
+        contentHash: `insert-content-${index}`,
+        publishedAt: new Date('2025-06-01T00:00:00Z'),
+      }),
+      fingerprintHash: `fp-${index}`,
+    }))
+
+    const result = reconcileInserts(inserts, existingItems, new Set())
+
+    expect(result.reconciledInserts).toHaveLength(100)
+    expect(result.reconciledUpdates).toHaveLength(0)
+  })
+
+  it('should keep the ambiguity guard in a large batch', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const inserts = Array.from({ length: 100 }, (_, index) => ({
+      item: makeIncoming({
+        // Insert 0 uses the guid that existing-1 owns, so its match against
+        // existing-0 is rejected as ambiguous.
+        guidHash: index === 0 ? 'old-1' : `new-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt,
+      }),
+      fingerprintHash: `fp-${index}`,
+    }))
+    const existingItems = Array.from({ length: 100 }, (_, index) => {
+      return makeExistingItem({
+        id: `existing-${index}`,
+        guidHash: `old-${index}`,
+        linkHash: `link-${index}`,
+        titleHash: `title-${index}`,
+        contentHash: `content-${index}`,
+        publishedAt,
+      })
+    })
+
+    const result = reconcileInserts(inserts, existingItems, new Set())
+
+    expect(result.reconciledInserts).toHaveLength(1)
+    expect(result.reconciledInserts[0].fingerprintHash).toBe('fp-0')
+    expect(result.reconciledUpdates).toHaveLength(99)
+  })
 })
 
 describe('classifyItems', () => {
