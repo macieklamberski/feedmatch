@@ -7640,6 +7640,90 @@ describe('classifyItems', () => {
       })
     })
   })
+
+  describe('publishedAt coercion', () => {
+    it('should not crash when publishedAt is a string and the item matches', () => {
+      const publishedAt = '2020-01-01T00:00:00Z' as unknown as Date
+      const value: ClassifyItemsInput = {
+        newItems: [{ guid: 'guid-1', title: 'Post', publishedAt }],
+        existingItems: [{ ...makeMatchable({ guid: 'guid-1', title: 'Post' }), publishedAt }],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should not report a spurious update when re-scanning an item with an invalid date', () => {
+      const publishedAt = new Date('not a date')
+      const value: ClassifyItemsInput = {
+        newItems: [{ guid: 'guid-1', title: 'Post', publishedAt }],
+        existingItems: [{ ...makeMatchable({ guid: 'guid-1', title: 'Post' }), publishedAt }],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should reconcile a guid change when both dates are invalid', () => {
+      const publishedAt = new Date('not a date')
+      const value: ClassifyItemsInput = {
+        newItems: [
+          {
+            guid: 'new-guid',
+            link: 'https://example.com/post',
+            title: 'Post',
+            content: 'Body',
+            publishedAt,
+          },
+        ],
+        existingItems: [
+          {
+            ...makeMatchable({
+              guid: 'old-guid',
+              link: 'https://example.com/post',
+              title: 'Post',
+              content: 'Body',
+            }),
+            publishedAt,
+          },
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: {
+              guid: 'new-guid',
+              link: 'https://example.com/post',
+              title: 'Post',
+              content: 'Body',
+              publishedAt: null,
+              ...computeItemHashes({
+                guid: 'new-guid',
+                link: 'https://example.com/post',
+                title: 'Post',
+                content: 'Body',
+              }),
+            },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'item-1',
+            matchedBy: 'link',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+  })
 })
 
 describe('excludeEnclosureFromIdentity', () => {

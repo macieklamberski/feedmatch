@@ -1,3 +1,4 @@
+import { coerceDate, isNullish, isValidDate } from 'trousse'
 import { hashMeta, minReconciliationFields } from './constants.js'
 import {
   buildFingerprint,
@@ -284,7 +285,19 @@ export const composeIncomingItems = <T extends NewItem>(
   items: Array<T>,
   cleanUrlFn?: CleanUrlFn,
 ): Array<IncomingItem<T>> => {
-  return items.map((item) => ({ ...item, ...computeItemHashes(item, cleanUrlFn) }))
+  return items.map((item) => {
+    const hashes = computeItemHashes(item, cleanUrlFn)
+
+    // publishedAt is typed Date, but feeds and parsers deliver date strings and
+    // Invalid Dates, and downstream comparisons call .getTime() directly. Coerce a real
+    // value to a valid Date or null so those comparisons are stable; leave a nullish date
+    // alone to keep the item's shape.
+    if (isNullish(item.publishedAt)) {
+      return { ...item, ...hashes }
+    }
+
+    return { ...item, ...hashes, publishedAt: coerceDate(item.publishedAt) ?? null }
+  })
 }
 
 // Build fingerprints for all hashed items at a given level. The fingerprint is
@@ -329,7 +342,19 @@ export const deduplicateItemsByFingerprint = <T extends NewItem>(
 export const classifyItems = <T extends NewItem>(
   input: ClassifyItemsInput<T>,
 ): ClassifyItemsResult<T> => {
-  const { newItems, existingItems, fingerprintLevel: inputLevel, cleanUrlFn } = input
+  const { newItems, fingerprintLevel: inputLevel, cleanUrlFn } = input
+
+  // Coerce existing publishedAt the same way as incoming (see
+  // composeIncomingItems): comparisons call .getTime() on both sides, so both
+  // must be a valid Date or absent for change detection and reconciliation to
+  // be stable. Absent and already-valid dates skip the copy (the common case).
+  const existingItems = input.existingItems.map((item) => {
+    if (item.publishedAt == null || isValidDate(item.publishedAt)) {
+      return item
+    }
+
+    return { ...item, publishedAt: coerceDate(item.publishedAt) }
+  })
 
   const incomingItems = composeIncomingItems(newItems, cleanUrlFn)
 
