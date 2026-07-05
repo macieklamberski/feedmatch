@@ -411,6 +411,14 @@ describe('normalizeTextForHashing', () => {
     expect(normalizeTextForHashing('Hello\t\nWorld')).toBe('hello world')
   })
 
+  it('should produce equal values for precomposed and decomposed unicode', () => {
+    const precomposed = normalizeTextForHashing('Caf\u00e9')
+    const decomposed = normalizeTextForHashing('Cafe\u0301')
+
+    expect(precomposed).toBe('caf\u00e9')
+    expect(decomposed).toBe('caf\u00e9')
+  })
+
   it('should return undefined for undefined input', () => {
     expect(normalizeTextForHashing(undefined)).toBeUndefined()
   })

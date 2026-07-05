@@ -278,8 +278,10 @@ export const normalizeWhitespace = (text: Nullish<string>): string | undefined =
 
 // Collapse whitespace and lowercase for text-based hashing (title). Lowercasing
 // keeps title matching tolerant to casing drift in feeds without guids/links.
+// NFC keeps visually identical titles with different codepoint sequences
+// (precomposed é vs e + combining acute) from hashing differently.
 export const normalizeTextForHashing = (text: Nullish<string>): string | undefined => {
-  return normalizeWhitespace(text)?.toLowerCase()
+  return normalizeWhitespace(text)?.normalize('NFC').toLowerCase()
 }
 
 // Normalize HTML content for hashing (summary, content). Keeps letter case and
