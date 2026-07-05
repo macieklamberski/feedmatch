@@ -168,6 +168,7 @@ export type ClassifyItemsInput<T extends NewItem = NewItem> = {
   existingItems: Array<ExistingItem>
   fingerprintLevel?: FingerprintLevel
   cleanUrlFn?: CleanUrlFn
+  dateProximityDays?: number
 }
 
 export type ClassifyItemsResult<T extends NewItem = NewItem> = {
