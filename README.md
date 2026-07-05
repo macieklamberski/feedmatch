@@ -57,7 +57,7 @@ const { inserts, updates } = classifyItems({
 
 | Step | Name | Description |
 | --- | --- | --- |
-| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. |
+| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. `publishedAt` is coerced to a valid `Date` or `null` (date strings parsed, invalid dates dropped), and emitted inserts/updates carry the coerced value. |
 | 2 | Classify enclosures | Enclosures are classified by content type: audio and video count as identity, while images and unclassifiable URLs are changeable content, excluded from the fingerprint unless they are the item's only identity. |
 | 3 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. |
 | 4 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
