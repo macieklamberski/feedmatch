@@ -12,6 +12,7 @@ import {
   normalizeWhitespace,
   selectEnclosure,
 } from './normalize.js'
+import type { Enclosure } from './types.js'
 
 // Stand-in for an injected cleaner (e.g. urlpurify): removes utm_ params.
 const stripUtm = (url: string): string => {
@@ -534,6 +535,12 @@ describe('selectEnclosure', () => {
     expect(selectEnclosure([])).toBeUndefined()
     expect(selectEnclosure(null)).toBeUndefined()
     expect(selectEnclosure(undefined)).toBeUndefined()
+  })
+
+  it('should skip null and undefined entries', () => {
+    const value = [null, undefined, { url: 'https://example.com/a.mp3' }] as Array<Enclosure>
+
+    expect(selectEnclosure(value)).toEqual({ url: 'https://example.com/a.mp3' })
   })
 
   it('should prefer the first media enclosure over an earlier image', () => {

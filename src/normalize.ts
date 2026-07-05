@@ -1,5 +1,5 @@
 import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
-import { endsWithAnyOf, type Nullish, startsWithAnyOf } from 'trousse'
+import { endsWithAnyOf, isPresent, type Nullish, startsWithAnyOf } from 'trousse'
 import type { CleanUrlFn, Enclosure } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
@@ -208,12 +208,17 @@ export const selectEnclosure = (enclosures: Nullish<Array<Enclosure>>): Enclosur
     return
   }
 
-  const defaultEnclosure = enclosures.find((enclosure) => enclosure.isDefault && enclosure.url)
+  // Feeds and parsers produce sparse enclosure arrays; drop the holes so the
+  // selection callbacks don't dereference null entries.
+  const presentEnclosures = enclosures.filter(isPresent)
+  const defaultEnclosure = presentEnclosures.find(
+    (enclosure) => enclosure.isDefault && enclosure.url,
+  )
 
   return (
     defaultEnclosure ??
-    enclosures.find((enclosure) => isMedia(enclosure)) ??
-    enclosures.find((enclosure) => enclosure.url)
+    presentEnclosures.find((enclosure) => isMedia(enclosure)) ??
+    presentEnclosures.find((enclosure) => enclosure.url)
   )
 }
 
