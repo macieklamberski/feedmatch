@@ -258,6 +258,21 @@ describe('resolveFingerprintLevel', () => {
 
     expect(throwing).toThrow('Invalid fingerprint level: not-a-level')
   })
+
+  it('should throw for unknown current level when no item is identifiable', () => {
+    const values = [makeHashes({ contentHash: 'c1' })]
+    // @ts-expect-error: This is for testing purposes.
+    const throwing = () => resolveFingerprintLevel(values, 'not-a-level')
+
+    expect(throwing).toThrow('Invalid fingerprint level: not-a-level')
+  })
+
+  it('should throw for unknown current level on empty batch', () => {
+    // @ts-expect-error: This is for testing purposes.
+    const throwing = () => resolveFingerprintLevel([], 'not-a-level')
+
+    expect(throwing).toThrow('Invalid fingerprint level: not-a-level')
+  })
 })
 
 describe('computeItemHashes', () => {

@@ -91,16 +91,18 @@ export const resolveFingerprintLevel = (
     }
   }
 
-  if (maxIdentifiable === 0) {
-    return currentLevel ?? 'title'
-  }
-
+  // Validate before the no-identifiable-items return so an invalid level
+  // throws instead of leaking through into the result.
   const startIndex = currentLevel
     ? fingerprintMeta.findIndex((entry) => entry.level === currentLevel)
     : 0
 
   if (startIndex === -1) {
     throw new Error(`Invalid fingerprint level: ${currentLevel}`)
+  }
+
+  if (maxIdentifiable === 0) {
+    return currentLevel ?? 'title'
   }
 
   for (let index = startIndex; index < fingerprintMeta.length; index++) {
