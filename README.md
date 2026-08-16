@@ -58,10 +58,12 @@ const { inserts, updates } = classifyItems({
 
 | Step | Name | Description |
 | --- | --- | --- |
-| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. |
-| 2 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. |
-| 3 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
-| 4 | Profile | The feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching. |
-| 5 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against existing items, with candidate filters to reject false positives. |
-| 6 | Classify | Matched items become updates when any field differs (hashes, raw title when provided, publishedAt), unmatched items become inserts. |
-| 7 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. |
+| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. `publishedAt` is coerced to a valid `Date` or `null` (date strings parsed, invalid dates dropped), and emitted inserts/updates carry the coerced value. |
+| 2 | Classify enclosures | Enclosures are classified by content type: audio and video count as identity, while images and unclassifiable URLs are changeable content, excluded from the fingerprint unless they are the item's only identity. |
+| 3 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. |
+| 4 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
+| 5 | Profile | The feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching. |
+| 6 | Screen | Match candidates must share the incoming item's fingerprint at the feed's level. Exception: a candidate agreeing on a feed-unique guid passes regardless, so edits on a stable guid become updates. |
+| 7 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against the screened existing items, with candidate filters to reject false positives. Guid matches on a trusted-guid feed are exempt from the date proximity window, so republished items with a bumped date stay updates. |
+| 8 | Classify | Matched items become updates when any field differs (hashes, raw title when provided, publishedAt), unmatched items become inserts. |
+| 9 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. |

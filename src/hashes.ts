@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
+import type { Nullish } from 'trousse'
 import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants.js'
-import type { FingerprintLevel, ItemHashes, NewItem } from './types.js'
+import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
+  isMediaEnclosure,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
   normalizeGuidFragmentForHashing,
@@ -11,9 +13,10 @@ export {
   normalizeLinkFragmentForHashing,
   normalizeLinkWithFragmentForHashing,
   normalizeTextForHashing,
+  selectEnclosure,
 } from './normalize.js'
 
-export const generateHash = (...values: Array<string | null | undefined>) => {
+export const generateHash = (...values: Array<Nullish<string>>) => {
   return createHash('sha256').update(values.join('\0')).digest('hex').slice(0, 32)
 }
 
@@ -88,16 +91,18 @@ export const resolveFingerprintLevel = (
     }
   }
 
-  if (maxIdentifiable === 0) {
-    return currentLevel ?? 'title'
-  }
-
+  // Validate before the no-identifiable-items return so an invalid level
+  // throws instead of leaking through into the result.
   const startIndex = currentLevel
     ? fingerprintMeta.findIndex((entry) => entry.level === currentLevel)
     : 0
 
   if (startIndex === -1) {
     throw new Error(`Invalid fingerprint level: ${currentLevel}`)
+  }
+
+  if (maxIdentifiable === 0) {
+    return currentLevel ?? 'title'
   }
 
   for (let index = startIndex; index < fingerprintMeta.length; index++) {
@@ -131,7 +136,10 @@ export const resolveFingerprintLevel = (
 
 // Compute all available hashes for a feed item. Returns null for fields
 // that cannot be computed (absent or empty source data).
-export const computeItemHashes = <TItem extends NewItem>(item: TItem): ItemHashes => {
+export const computeItemHashes = <TItem extends NewItem>(
+  item: TItem,
+  cleanUrlFn?: CleanUrlFn,
+): ItemHashes => {
   const hashes: ItemHashes = {
     guidHash: null,
     guidFragmentHash: null,
@@ -144,7 +152,7 @@ export const computeItemHashes = <TItem extends NewItem>(item: TItem): ItemHashe
   }
 
   for (const meta of hashMeta) {
-    const normalized = meta.normalizeFn(item)
+    const normalized = meta.normalizeFn(item, cleanUrlFn)
 
     if (normalized) {
       hashes[meta.key] = generateHash(normalized)

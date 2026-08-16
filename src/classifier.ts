@@ -1,3 +1,4 @@
+import { coerceDate, isNullish, isValidDate } from 'trousse'
 import { hashMeta, minReconciliationFields } from './constants.js'
 import {
   buildFingerprint,
@@ -6,6 +7,7 @@ import {
   resolveFingerprintLevel,
 } from './hashes.js'
 import {
+  agreesOnUniqueIdentifier,
   buildMatchIndex,
   classifyCandidateFilters,
   computeFeedProfile,
@@ -14,9 +16,12 @@ import {
   selectMatchingItem,
   updateFilters,
 } from './matching.js'
+import { isMediaEnclosure } from './normalize.js'
 import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
+  CleanUrlFn,
+  Enclosure,
   ExistingItem,
   FingerprintedItem,
   FingerprintLevel,
@@ -209,6 +214,60 @@ export const reconcileInserts = <T extends NewItem>(
   return { reconciledInserts, reconciledUpdates }
 }
 
+// How we treat enclosures:
+// - Default: the enclosure is changeable content, not identity. A swapped
+//   image is an update, not a new item. This is what fixes the duplicates.
+// - It stays part of identity only when it is clearly real media (audio or
+//   video; see isMediaEnclosure), or when guid, link, and title are all
+//   absent and the enclosure is the only thing identifying the item.
+//
+// Exclusion returns a copy with enclosureHash nulled so identity fingerprints
+// and matching ignore the enclosure. The original item keeps the real hash
+// for change detection, payloads, and reconciliation. Items whose raw
+// enclosures are unavailable are kept as-is (the caller has not opted in).
+export const excludeEnclosureFromIdentity = <
+  T extends ItemHashes & { enclosures?: Array<Enclosure> | null },
+>(
+  item: T,
+): T => {
+  if (item.enclosureHash == null || item.enclosures == null) {
+    return item
+  }
+
+  if (isMediaEnclosure(item.enclosures)) {
+    return item
+  }
+
+  if (item.guidHash == null && item.linkHash == null && item.titleHash == null) {
+    return item
+  }
+
+  return { ...item, enclosureHash: null }
+}
+
+// When the candidate has raw enclosures, its enclosure exclusion is decided from
+// their type, like for incoming items. When it has none (older stored rows),
+// reuse the decision made for the incoming item, so both sides of the comparison
+// agree.
+export const excludeCandidateEnclosure = (
+  candidate: ExistingItem,
+  isIncomingExcluded: boolean,
+): ExistingItem => {
+  if (candidate.enclosures != null) {
+    return excludeEnclosureFromIdentity(candidate)
+  }
+
+  if (!isIncomingExcluded || candidate.enclosureHash == null) {
+    return candidate
+  }
+
+  if (candidate.guidHash == null && candidate.linkHash == null && candidate.titleHash == null) {
+    return candidate
+  }
+
+  return { ...candidate, enclosureHash: null }
+}
+
 // Score an item by how many hash slots are populated, weighted by signal strength.
 export const scoreItem = (hashes: ItemHashes): number => {
   let score = 0
@@ -224,11 +283,26 @@ export const scoreItem = (hashes: ItemHashes): number => {
 
 export const composeIncomingItems = <T extends NewItem>(
   items: Array<T>,
+  cleanUrlFn?: CleanUrlFn,
 ): Array<IncomingItem<T>> => {
-  return items.map((item) => ({ ...item, ...computeItemHashes(item) }))
+  return items.map((item) => {
+    const hashes = computeItemHashes(item, cleanUrlFn)
+
+    // publishedAt is typed Date, but feeds and parsers deliver date strings and
+    // Invalid Dates, and downstream comparisons call .getTime() directly. Coerce a real
+    // value to a valid Date or null so those comparisons are stable; leave a nullish date
+    // alone to keep the item's shape.
+    if (isNullish(item.publishedAt)) {
+      return { ...item, ...hashes }
+    }
+
+    return { ...item, ...hashes, publishedAt: coerceDate(item.publishedAt) ?? null }
+  })
 }
 
-// Build fingerprints for all hashed items at a given level.
+// Build fingerprints for all hashed items at a given level. The fingerprint is
+// computed from the identity view (enclosure excluded), but the stored item
+// keeps its real hashes so payloads and change detection stay untouched.
 // Items that produce no fingerprint (no hashes in prefix) are dropped.
 export const buildFingerprints = <T extends NewItem>(
   items: Array<IncomingItem<T>>,
@@ -237,7 +311,7 @@ export const buildFingerprints = <T extends NewItem>(
   const result: Array<FingerprintedItem<T>> = []
 
   for (const item of items) {
-    const fingerprint = buildFingerprint(item, level)
+    const fingerprint = buildFingerprint(excludeEnclosureFromIdentity(item), level)
 
     if (fingerprint) {
       result.push({ ...item, fingerprint })
@@ -268,15 +342,27 @@ export const deduplicateItemsByFingerprint = <T extends NewItem>(
 export const classifyItems = <T extends NewItem>(
   input: ClassifyItemsInput<T>,
 ): ClassifyItemsResult<T> => {
-  const { newItems, existingItems, fingerprintLevel: inputLevel } = input
+  const { newItems, fingerprintLevel: inputLevel, cleanUrlFn, dateProximityDays } = input
 
-  const incomingItems = composeIncomingItems(newItems)
+  // Coerce existing publishedAt the same way as incoming (see
+  // composeIncomingItems): comparisons call .getTime() on both sides, so both
+  // must be a valid Date or absent for change detection and reconciliation to
+  // be stable. Absent and already-valid dates skip the copy (the common case).
+  const existingItems = input.existingItems.map((item) => {
+    if (item.publishedAt == null || isValidDate(item.publishedAt)) {
+      return item
+    }
+
+    return { ...item, publishedAt: coerceDate(item.publishedAt) }
+  })
+
+  const incomingItems = composeIncomingItems(newItems, cleanUrlFn)
 
   // Compute profile early — used for both pre-match exclusion and final
   // classification. Uses raw (not deduped) incoming hashes; duplicates
   // lower uniqueness slightly, which is conservative (fewer link matches).
   const feedProfile = computeFeedProfile(existingItems, incomingItems)
-  const matchPolicy = computeMatchPolicy(feedProfile)
+  const matchPolicy = computeMatchPolicy(feedProfile, { dateProximityDays })
 
   // Pre-match: find existing items that are true updates and exclude them
   // from the level collision set. A match is "strong enough" when it's by
@@ -288,9 +374,11 @@ export const classifyItems = <T extends NewItem>(
   const matchedExistingIds = new Set<ItemIdLike>()
 
   for (const incomingItem of incomingItems) {
-    const candidates = findCandidates(incomingItem)
+    const identityIncoming = excludeEnclosureFromIdentity(incomingItem)
+    const isIncomingExcluded = identityIncoming !== incomingItem
+    const candidates = findCandidates(identityIncoming)
     const result = selectMatchingItem({
-      incoming: incomingItem,
+      incoming: identityIncoming,
       candidates,
       matchPolicy,
       candidateFilters: prematchCandidateFilters,
@@ -306,8 +394,11 @@ export const classifyItems = <T extends NewItem>(
     }
 
     // Link match: only exclude when max-level fingerprints agree (true duplicate).
-    const incomingMaxKey = buildFingerprint(incomingItem, 'title')
-    const existingMaxKey = buildFingerprint(result.match, 'title')
+    const incomingMaxKey = buildFingerprint(identityIncoming, 'title')
+    const existingMaxKey = buildFingerprint(
+      excludeCandidateEnclosure(result.match, isIncomingExcluded),
+      'title',
+    )
 
     if (incomingMaxKey === existingMaxKey) {
       matchedExistingIds.add(result.match.id)
@@ -321,22 +412,26 @@ export const classifyItems = <T extends NewItem>(
   // Dedup by max-level fingerprint so identity-equivalent items (literal
   // duplicates, or same item with slightly different hash coverage) don't
   // cause false downgrades. Items with no level identity are skipped.
+  // Level resolution sees the identity view, so a feed with excluded enclosures
+  // cannot be pinned to the enclosure level by a decorative image.
   const seenKeys = new Set<string>()
-  const levelHashes = [...incomingItems, ...unmatchedExistingItems].filter((item) => {
-    const maxKey = buildFingerprint(item, 'title')
+  const levelHashes = [...incomingItems, ...unmatchedExistingItems]
+    .map((item) => excludeEnclosureFromIdentity(item))
+    .filter((item) => {
+      const maxKey = buildFingerprint(item, 'title')
 
-    if (!maxKey) {
-      return false
-    }
+      if (!maxKey) {
+        return false
+      }
 
-    if (seenKeys.has(maxKey)) {
-      return false
-    }
+      if (seenKeys.has(maxKey)) {
+        return false
+      }
 
-    seenKeys.add(maxKey)
+      seenKeys.add(maxKey)
 
-    return true
-  })
+      return true
+    })
 
   // Resolve fingerprint level: validate/downgrade if provided, compute from data otherwise.
   const resolvedLevel = resolveFingerprintLevel(levelHashes, inputLevel)
@@ -353,17 +448,31 @@ export const classifyItems = <T extends NewItem>(
   for (const fingerprintedItem of deduplicatedItems) {
     const { fingerprint, ...rest } = fingerprintedItem
     const item = rest as IncomingItem<T>
+    // Matching and fingerprint comparisons run on the identity view; the
+    // original item (real hashes) feeds change detection and the payloads.
+    const identityItem = excludeEnclosureFromIdentity(item)
+    const isIncomingExcluded = identityItem !== item
     const fingerprintHash = generateHash(fingerprint)
-    const candidates = findCandidates(item)
+    const candidates = findCandidates(identityItem)
 
     // Reject candidates whose fingerprint differs from the incoming item.
-    // This prevents matching (and merging) items that the levels consider distinct.
+    // This prevents matching (and merging) items that the levels consider
+    // distinct. Exception: when the incoming item and a candidate agree on a
+    // feed-unique guid, keep the candidate even if a volatile field changed —
+    // an edited title or rotated enclosure on a stable guid is the same item,
+    // not a new one.
     const levelFilteredCandidates = candidates.filter((candidate) => {
-      return buildFingerprint(candidate, resolvedLevel) === fingerprint
+      if (agreesOnUniqueIdentifier(item, candidate, feedProfile)) {
+        return true
+      }
+
+      const identityCandidate = excludeCandidateEnclosure(candidate, isIncomingExcluded)
+
+      return buildFingerprint(identityCandidate, resolvedLevel) === fingerprint
     })
 
     const result = selectMatchingItem({
-      incoming: item,
+      incoming: identityItem,
       candidates: levelFilteredCandidates,
       matchPolicy,
       candidateFilters: classifyCandidateFilters,

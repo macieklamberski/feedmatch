@@ -1,4 +1,6 @@
-import { defaultStrippedParams, type NormalizeOptions, normalizeUrl } from 'feedcanon'
+import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
+import { endsWithAnyOf, isPresent, type Nullish, startsWithAnyOf } from 'trousse'
+import type { CleanUrlFn, Enclosure } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
   stripProtocol: true,
@@ -7,7 +9,6 @@ const normalizeOptions: NormalizeOptions = {
   stripTrailingSlash: true,
   stripHash: true,
   sortQueryParams: true,
-  stripQueryParams: defaultStrippedParams,
   stripEmptyQuery: true,
   normalizeEncoding: true,
   normalizeUnicode: true,
@@ -23,30 +24,34 @@ const normalizeWithFragmentOptions: NormalizeOptions = {
 
 // Trim + normalize URL. Feeds often contain whitespace-only strings that
 // feedcanon returns as-is (garbage). Guard against that with a trim check.
-const safeNormalizeUrl = (value: string): string | undefined => {
+const safeNormalizeUrl = (value: string, cleanUrlFn?: CleanUrlFn): string | undefined => {
   const trimmed = value.trim()
 
   if (trimmed === '') {
     return
   }
 
-  return normalizeUrl(trimmed, normalizeOptions)
+  return normalizeUrl(cleanUrlFn ? cleanUrlFn(trimmed) : trimmed, normalizeOptions)
 }
 
 // Normalize link for hashing to prevent duplicates from URL variations like
 // http vs https, trailing slashes, www prefix, UTM params, etc.
-export const normalizeLinkForHashing = (link: string | null | undefined): string | undefined => {
+export const normalizeLinkForHashing = (
+  link: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
+): string | undefined => {
   if (!link) {
     return
   }
 
-  return safeNormalizeUrl(link)
+  return safeNormalizeUrl(link, cleanUrlFn)
 }
 
 // Normalize link preserving fragment for disambiguation. Applies same
 // normalization as normalizeLinkForHashing but keeps the fragment intact.
 export const normalizeLinkWithFragmentForHashing = (
-  link: string | null | undefined,
+  link: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!link) {
     return
@@ -58,25 +63,29 @@ export const normalizeLinkWithFragmentForHashing = (
     return
   }
 
-  return normalizeUrl(trimmed, normalizeWithFragmentOptions)
+  return normalizeUrl(cleanUrlFn ? cleanUrlFn(trimmed) : trimmed, normalizeWithFragmentOptions)
 }
 
 // Normalize link fragment for hashing. Only returns a value when link
 // contains '#' — without a fragment, normalization produces the same
 // string as linkHash, making a separate hash wasteful.
 export const normalizeLinkFragmentForHashing = (
-  link: string | null | undefined,
+  link: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!link?.includes('#')) {
     return
   }
 
-  return normalizeLinkWithFragmentForHashing(link)
+  return normalizeLinkWithFragmentForHashing(link, cleanUrlFn)
 }
 
 // Normalize GUID for hashing. 70% of GUIDs are URLs — normalize those
 // the same way as links. Non-URL GUIDs are opaque strings, just trimmed.
-export const normalizeGuidForHashing = (guid: string | null | undefined): string | undefined => {
+export const normalizeGuidForHashing = (
+  guid: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
+): string | undefined => {
   if (!guid) {
     return
   }
@@ -88,7 +97,7 @@ export const normalizeGuidForHashing = (guid: string | null | undefined): string
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return normalizeLinkForHashing(trimmed) || trimmed
+    return normalizeLinkForHashing(trimmed, cleanUrlFn) || trimmed
   }
 
   return trimmed
@@ -98,7 +107,8 @@ export const normalizeGuidForHashing = (guid: string | null | undefined): string
 // a URL containing '#'. Non-URL GUIDs don't strip fragments during
 // normalization, so the fragment is already part of guidHash.
 export const normalizeGuidFragmentForHashing = (
-  guid: string | null | undefined,
+  guid: Nullish<string>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
   if (!guid) {
     return
@@ -114,7 +124,113 @@ export const normalizeGuidFragmentForHashing = (
     return
   }
 
-  return normalizeLinkWithFragmentForHashing(guid)
+  return normalizeLinkWithFragmentForHashing(guid, cleanUrlFn)
+}
+
+// MIME type prefixes that mark an enclosure as real audio/video media.
+const mediaTypePrefixes = ['audio/', 'video/']
+
+// MIME type prefixes that mark it as a decorative image.
+const imageTypePrefixes = ['image/']
+
+// Splits a URL at the start of its query string or fragment.
+const urlPathEndRegex = /[?#]/
+
+// File extensions that mark an enclosure URL as an image. A declared audio or
+// video type is distrusted when the URL clearly points at an image file.
+const imageExtensions = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.avif',
+  '.svg',
+  '.bmp',
+  '.ico',
+  '.tif',
+  '.tiff',
+]
+
+// File extensions that mark an enclosure URL as audio or video media.
+const mediaExtensions = [
+  '.mp3',
+  '.m4a',
+  '.m4b',
+  '.aac',
+  '.ogg',
+  '.oga',
+  '.opus',
+  '.flac',
+  '.wav',
+  '.mp4',
+  '.m4v',
+  '.mov',
+  '.webm',
+  '.mkv',
+  '.avi',
+]
+
+// Whether a single enclosure is real audio/video media. A recognized MIME type
+// decides (audio/* or video/* is media, image/* is not); a missing or
+// unrecognized type (podcast CDNs commonly serve audio as
+// application/octet-stream) falls through to the URL file extension; no type
+// and no recognized extension means not media.
+const isMedia = (enclosure: Enclosure): boolean => {
+  if (!enclosure.url) {
+    return false
+  }
+
+  const path = enclosure.url.split(urlPathEndRegex)[0]
+  const type = enclosure.type?.trim()
+
+  if (type) {
+    if (startsWithAnyOf(type, mediaTypePrefixes)) {
+      // An audio/video type on a URL that clearly points at an image file is
+      // contradictory; do not count the enclosure as media on a bad signal.
+      return !endsWithAnyOf(path, imageExtensions)
+    }
+
+    if (startsWithAnyOf(type, imageTypePrefixes)) {
+      return false
+    }
+  }
+
+  return endsWithAnyOf(path, mediaExtensions)
+}
+
+// Select the preferred enclosure: the first with isDefault and a URL, else the
+// first audio/video one, else the first with a URL. Preferring media keeps an
+// image listed before the real audio/video (common in media:content groups)
+// from becoming the enclosure hash and classification target of the item.
+export const selectEnclosure = (enclosures: Nullish<Array<Enclosure>>): Enclosure | undefined => {
+  if (!enclosures?.length) {
+    return
+  }
+
+  // Feeds and parsers produce sparse enclosure arrays; drop the holes so the
+  // selection callbacks don't dereference null entries.
+  const presentEnclosures = enclosures.filter(isPresent)
+  const defaultEnclosure = presentEnclosures.find(
+    (enclosure) => enclosure.isDefault && enclosure.url,
+  )
+
+  return (
+    defaultEnclosure ??
+    presentEnclosures.find((enclosure) => isMedia(enclosure)) ??
+    presentEnclosures.find((enclosure) => enclosure.url)
+  )
+}
+
+// How we treat enclosures:
+// - Default: the enclosure is changeable content, not identity. A swapped
+//   image is an update, not a new item.
+// - It counts as identity only when it is clearly real media (audio or
+//   video). For those (podcasts), the file is the item.
+export const isMediaEnclosure = (enclosures: Nullish<Array<Enclosure>>): boolean => {
+  const enclosure = selectEnclosure(enclosures)
+
+  return enclosure != null && isMedia(enclosure)
 }
 
 // Select preferred enclosure (isDefault first, then first with URL) and normalize
@@ -123,42 +239,49 @@ export const normalizeGuidFragmentForHashing = (
 // picking one. Current approach changes hash if feed reorders enclosures or
 // toggles isDefault between scans, causing false duplicates over time.
 export const normalizeEnclosureForHashing = (
-  enclosures: Array<{ url?: string; isDefault?: boolean }> | null | undefined,
+  enclosures: Nullish<Array<Enclosure>>,
+  cleanUrlFn?: CleanUrlFn,
 ): string | undefined => {
-  if (!enclosures?.length) {
-    return
-  }
-
-  const defaultEnclosure = enclosures.find((enclosure) => enclosure.isDefault && enclosure.url)
-  const firstEnclosure = enclosures.find((enclosure) => enclosure.url)
-  const url = defaultEnclosure?.url ?? firstEnclosure?.url
+  const url = selectEnclosure(enclosures)?.url
 
   if (!url) {
     return
   }
 
-  return safeNormalizeUrl(url)
+  return safeNormalizeUrl(url, cleanUrlFn)
 }
 
-// Trim and collapse whitespace runs into single spaces, keeping letter case.
-export const normalizeWhitespace = (text: string | null | undefined): string | undefined => {
+// Matches whitespace that still needs collapsing: a whitespace character that is not a plain
+// space, or two spaces in a row.
+const needsCollapseRegex = /[^\S ]| {2}/
+const collapseRegex = /\s+/g
+
+// Trim and collapse whitespace runs into single spaces, keeping letter case. Most feed strings
+// are already clean, so the test skips the replace and its allocation for them.
+export const normalizeWhitespace = (text: Nullish<string>): string | undefined => {
   if (!text) {
     return
   }
 
-  const normalized = text.trim().replace(/\s+/g, ' ')
+  const trimmed = text.trim()
 
-  if (normalized === '') {
+  if (trimmed === '') {
     return
   }
 
-  return normalized
+  if (!needsCollapseRegex.test(trimmed)) {
+    return trimmed
+  }
+
+  return trimmed.replace(collapseRegex, ' ')
 }
 
 // Collapse whitespace and lowercase for text-based hashing (title). Lowercasing
 // keeps title matching tolerant to casing drift in feeds without guids/links.
-export const normalizeTextForHashing = (text: string | null | undefined): string | undefined => {
-  return normalizeWhitespace(text)?.toLowerCase()
+// NFC keeps visually identical titles with different codepoint sequences
+// (precomposed é vs e + combining acute) from hashing differently.
+export const normalizeTextForHashing = (text: Nullish<string>): string | undefined => {
+  return normalizeWhitespace(text)?.normalize('NFC').toLowerCase()
 }
 
 // Normalize HTML content for hashing (summary, content). Keeps letter case and
@@ -166,6 +289,6 @@ export const normalizeTextForHashing = (text: string | null | undefined): string
 // case-only edit inside an attribute (a wrongly-cased image URL that 404s on a
 // case-sensitive server). Lowercasing made such fixes hash-identical, so the
 // corrected content was never written to the existing item.
-export const normalizeHtmlForHashing = (html: string | null | undefined): string | undefined => {
+export const normalizeHtmlForHashing = (html: Nullish<string>): string | undefined => {
   return normalizeWhitespace(html)
 }

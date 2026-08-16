@@ -1,4 +1,4 @@
-import { hashMeta, signalHashKeys } from './constants.js'
+import { hashMeta, signalHashKeys, uniqueIdentifierThreshold } from './constants.js'
 import { hasStrongHash } from './hashes.js'
 import { normalizeWhitespace } from './normalize.js'
 import type {
@@ -76,10 +76,20 @@ export const computeFeedProfile = (
 // Rejects GUID/link matches when dates are too far apart. Fixes the GUID reuse
 // blind spot where feeds reuse a GUID months later for different content.
 // Allows match if either side lacks publishedAt (backward compatible).
+//
+// Guid matches on a feed with trusted (feed-unique) guids are exempt: the
+// window exists to guard guid reuse, and the uniqueness gate already screens
+// feeds that reuse guids. Without the exemption, a publisher that republishes
+// an article with a bumped date re-inserts it as a duplicate and the repeated
+// guid permanently downgrades the channel's fingerprint level.
 export const dateProximityFilter: CandidateFilter = {
   name: 'dateProximity',
   appliesTo: ['guid', 'link'],
   evaluate: (context) => {
+    if (context.matchedBy === 'guid' && context.matchPolicy.guidReliable) {
+      return { allow: true }
+    }
+
     const incomingDate = context.incoming.publishedAt
     const candidateDate = context.candidate.publishedAt
 
@@ -173,6 +183,35 @@ export const hasLinkOnly = (item: IncomingItem | ExistingItem): boolean => {
   }
 
   return !hashMeta.some((meta) => meta.isStrongHash && meta.key !== 'linkHash' && item[meta.key])
+}
+
+// True when the incoming item and a candidate share the same guid and that guid
+// is unique across the feed. A shared feed-unique guid means the same logical
+// item even when volatile fields (title, enclosure) changed, so the caller can
+// treat an edit as an update instead of inserting a duplicate.
+//
+// Only the guid qualifies. Link and enclosure are deliberately excluded:
+// distinct articles routinely share a link (hub and section feeds), so agreeing
+// on a link is not safe evidence of the same item and would merge them.
+//
+// Accepted residual: on a feed that passes the uniqueness gate, a guid reused
+// across scans for a genuinely different article (published within the date
+// proximity window) merges into the earlier item. Per-side uniqueness stats
+// cannot see the reuse (each scan holds the guid once), and no cardinality
+// check can tell the first reuse apart from an edit. Checked against every
+// production family with this shape: all were retitled edits of the same
+// article, so the merge is the desired outcome. Feeds that reuse guids
+// systematically stay far below the gate and never take this path.
+export const agreesOnUniqueIdentifier = (
+  incoming: ItemHashes,
+  candidate: ItemHashes,
+  feedProfile: FeedProfile,
+): boolean => {
+  if (incoming.guidHash == null || incoming.guidHash !== candidate.guidHash) {
+    return false
+  }
+
+  return feedProfile.guid.effective.uniquenessRate >= uniqueIdentifierThreshold
 }
 
 // In-memory filter: returns all existing items where any matchable hash matches.
@@ -436,7 +475,8 @@ export const computeMatchPolicy = (
   options?: { dateProximityDays?: number },
 ): MatchPolicy => {
   return {
-    linkReliable: feedProfile.link.effective.uniquenessRate >= 0.95,
+    guidReliable: feedProfile.guid.effective.uniquenessRate >= uniqueIdentifierThreshold,
+    linkReliable: feedProfile.link.effective.uniquenessRate >= uniqueIdentifierThreshold,
     dateProximityDays: options?.dateProximityDays ?? 7,
   }
 }
