@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/bun": "^1.3.13",
     "feedcanon": "^2.0.0-rc.1",
-    "kvalita": "^1.16.0",
+    "kvalita": "^1.17.2",
     "trousse": "^1.2.0",
     "tsdown": "^0.22.14"
   }
