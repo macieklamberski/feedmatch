@@ -1882,6 +1882,46 @@ describe('changeFilter', () => {
 
     expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
+
+  it('should update when titles differ only in letter case', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ titleHash: 'title-1', title: 'hello world' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1', title: 'Hello World' }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(true)
+  })
+
+  it('should not update when titles differ only in whitespace', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ titleHash: 'title-1', title: 'Hello World' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1', title: ' Hello   World ' }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should not update from title comparison when existing item has no title', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ titleHash: 'title-1' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1', title: 'Hello World' }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should not update when titles are equal', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ titleHash: 'title-1', title: 'Hello World' }),
+      incoming: makeIncomingItem({ titleHash: 'title-1', title: 'Hello World' }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
+  })
 })
 
 describe('applyCandidateFilters', () => {

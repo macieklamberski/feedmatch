@@ -37,6 +37,7 @@ export type IncomingItem<T extends NewItem = NewItem> = T & ItemHashes
 
 export type ExistingItem = ItemHashes & {
   id: ItemIdLike
+  title?: string | null
   publishedAt?: Date
   // Raw enclosures as stored by the caller. When present, the classifier checks
   // their type to decide whether the stored item's enclosure counts toward

@@ -1,5 +1,6 @@
 import { hashMeta, signalHashKeys, uniqueIdentifierThreshold } from './constants.js'
 import { hasStrongHash } from './hashes.js'
+import { normalizeWhitespace } from './normalize.js'
 import type {
   CandidateFilter,
   CandidateFilterContext,
@@ -110,9 +111,9 @@ export const dateProximityFilter: CandidateFilter = {
   },
 }
 
-// Updates when any hash field or publishedAt differs between existing and
-// incoming. The matching field is always equal (by definition), so this only
-// detects changes in fields below the match level.
+// Updates when any hash field, the raw title, or publishedAt differs between
+// existing and incoming. The matching field is always equal (by definition),
+// so this only detects changes in fields below the match level.
 export const changeFilter: UpdateFilter = {
   name: 'change',
   shouldUpdate: (context) => {
@@ -122,6 +123,16 @@ export const changeFilter: UpdateFilter = {
     )
 
     if (hashChanged) {
+      return true
+    }
+
+    // titleHash is lowercased for matching, so a case-only title fix never
+    // changes it. Compare raw titles when the consumer provides the stored
+    // title on the existing item.
+    const existingTitle = normalizeWhitespace(context.existing.title)
+    const incomingTitle = normalizeWhitespace(context.incoming.title)
+
+    if (existingTitle != null && incomingTitle != null && existingTitle !== incomingTitle) {
       return true
     }
 

@@ -1541,6 +1541,50 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    it('should update when title differs only in letter case and existing item carries its title', () => {
+      const value: ClassifyItemsInput = {
+        newItems: [{ guid: 'guid-1', title: 'Hello World' }],
+        existingItems: [
+          {
+            ...makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'hello world' }),
+            title: 'hello world',
+          },
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: {
+              guid: 'guid-1',
+              title: 'Hello World',
+              ...computeItemHashes({ guid: 'guid-1', title: 'Hello World' }),
+            },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'guid',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
+    it('should not update when title differs only in letter case and existing item has no title', () => {
+      const value: ClassifyItemsInput = {
+        newItems: [{ guid: 'guid-1', title: 'Hello World' }],
+        existingItems: [makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'hello world' })],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     it('should handle mix of inserts, updates, and skips', () => {
       const value: ClassifyItemsInput = {
         newItems: [
