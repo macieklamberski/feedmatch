@@ -112,7 +112,9 @@ export const dateProximityFilter: CandidateFilter = {
 
 // Updates when any hash field or publishedAt differs between existing and
 // incoming. The matching field is always equal (by definition), so this only
-// detects changes in fields below the match level.
+// detects changes in fields below the match level. A missing incoming date is
+// not a change: hosts store a fallback date on insert, and comparing against it
+// rewrote every item of an <updated>-only feed on every scan.
 export const changeFilter: UpdateFilter = {
   name: 'change',
   shouldUpdate: (context) => {
@@ -125,7 +127,11 @@ export const changeFilter: UpdateFilter = {
       return true
     }
 
-    return context.existing.publishedAt?.getTime() !== context.incoming.publishedAt?.getTime()
+    if (context.incoming.publishedAt == null) {
+      return false
+    }
+
+    return context.existing.publishedAt?.getTime() !== context.incoming.publishedAt.getTime()
   },
 }
 

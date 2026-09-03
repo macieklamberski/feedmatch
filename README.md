@@ -64,5 +64,5 @@ const { inserts, updates } = classifyItems({
 | 5 | Profile | The feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching. |
 | 6 | Screen | Match candidates must share the incoming item's fingerprint at the feed's level. Exception: a candidate agreeing on a feed-unique guid passes regardless, so edits on a stable guid become updates. |
 | 7 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against the screened existing items, with candidate filters to reject false positives. Guid matches on a trusted-guid feed are exempt from the date proximity window, so republished items with a bumped date stay updates. |
-| 8 | Classify | Matched items become updates when any field differs (hashes, publishedAt), unmatched items become inserts. |
+| 8 | Classify | Matched items become updates when any hash differs, or when the incoming item carries a publishedAt that differs from the stored one; unmatched items become inserts. |
 | 9 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. |

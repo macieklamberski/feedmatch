@@ -4067,6 +4067,33 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    // Use case: an Atom feed with only <updated> never carries publishedAt, while the stored
+    // item has the date the host filled in on insert.
+    it('should not update when the incoming item has no publishedAt and nothing else changed', () => {
+      const feedItem = {
+        guid: 'urn:uuid:6f12b0e0-a63a-11f1-962e-c054b014e66b',
+        link: 'https://example.com/sports/post-1',
+        title: 'Post Title',
+        summary: '<p>Same summary</p>',
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          {
+            ...makeMatchable({ id: 'existing-1', ...feedItem }),
+            publishedAt: new Date('2026-09-01T19:58:52Z'),
+          },
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     // URL-type GUIDs share the same guidHash (fragment stripped) but
     // differ in guidFragmentHash. The changeFilter should detect this.
     it('should update when only GUID fragment changes', () => {
