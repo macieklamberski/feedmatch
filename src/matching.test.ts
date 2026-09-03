@@ -1832,14 +1832,26 @@ describe('changeFilter', () => {
     expect(changeFilter.shouldUpdate(value)).toBe(true)
   })
 
-  it('should update when publishedAt goes from a value to undefined', () => {
+  // Use case: a feed with only <updated> never sends publishedAt, while the stored row
+  // carries the fallback date the host wrote on insert.
+  it('should not update when the incoming item has no publishedAt', () => {
     const value: UpdateFilterContext = {
       existing: makeExistingItem({ publishedAt: new Date('2024-01-01') }),
       incoming: makeIncomingItem(),
       matchedBy: 'guid',
     }
 
-    expect(changeFilter.shouldUpdate(value)).toBe(true)
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
+  })
+
+  it('should not update when the incoming item has a null publishedAt', () => {
+    const value: UpdateFilterContext = {
+      existing: makeExistingItem({ publishedAt: new Date('2024-01-01') }),
+      incoming: makeIncomingItem({ publishedAt: null }),
+      matchedBy: 'guid',
+    }
+
+    expect(changeFilter.shouldUpdate(value)).toBe(false)
   })
 
   it('should not update when publishedAt matches and all hashes match', () => {
