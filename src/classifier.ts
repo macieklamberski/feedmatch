@@ -138,6 +138,46 @@ export const hasAmbiguousIdentity = (
   return false
 }
 
+type ReconciliationCandidate = { existing: ExistingItem; result: MatchResult }
+
+// Rows that all share the incoming link and its content are copies of one post, left behind by
+// scans that could not reconcile them, so the most recent one takes the merge. Without a link in
+// common the text is all that separates two posts, and those candidates are left to phase 2.
+const narrowToLatestCopy = (
+  candidates: Array<ReconciliationCandidate>,
+): Array<ReconciliationCandidate> => {
+  if (candidates.length < 2 || candidates.some(({ result }) => result.matchedBy !== 'link')) {
+    return candidates
+  }
+
+  let latest = candidates[0]
+
+  for (const candidate of candidates.slice(1)) {
+    if (isLaterCopy(candidate.existing, latest.existing)) {
+      latest = candidate
+    }
+  }
+
+  return [latest]
+}
+
+// Copies of one post can share a date when only the guid rotates, so the id breaks the tie. Ids
+// grow with insertion, which makes the higher one the newer copy.
+const isLaterCopy = (candidate: ExistingItem, latest: ExistingItem): boolean => {
+  const time = candidate.publishedAt?.getTime() ?? Number.NEGATIVE_INFINITY
+  const latestTime = latest.publishedAt?.getTime() ?? Number.NEGATIVE_INFINITY
+
+  if (time !== latestTime) {
+    return time > latestTime
+  }
+
+  if (typeof candidate.id === 'number' && typeof latest.id === 'number') {
+    return candidate.id > latest.id
+  }
+
+  return String(candidate.id) > String(latest.id)
+}
+
 // Reclassify inserts that are identical to an existing item except for guid
 // or link. Handles feeds with unstable identifiers that the fingerprint
 // system cannot match. Treats ambiguous matches (multiple candidates for one
@@ -148,13 +188,10 @@ export const reconcileInserts = <T extends NewItem>(
   claimedExistingIds: Set<ItemIdLike>,
 ): { reconciledInserts: Array<InsertAction<T>>; reconciledUpdates: Array<UpdateAction<T>> } => {
   // Phase 1: collect all eligible candidates for each insert.
-  const candidatesByInsert = new Map<
-    number,
-    Array<{ existing: ExistingItem; result: MatchResult }>
-  >()
+  const candidatesByInsert = new Map<number, Array<ReconciliationCandidate>>()
 
   for (let i = 0; i < inserts.length; i++) {
-    const candidates: Array<{ existing: ExistingItem; result: MatchResult }> = []
+    const candidates: Array<ReconciliationCandidate> = []
 
     for (const existing of existingItems) {
       if (claimedExistingIds.has(existing.id)) {
@@ -174,7 +211,7 @@ export const reconcileInserts = <T extends NewItem>(
       candidates.push({ existing, result })
     }
 
-    candidatesByInsert.set(i, candidates)
+    candidatesByInsert.set(i, narrowToLatestCopy(candidates))
   }
 
   // Phase 2: resolve — only reconcile when both insert and target are

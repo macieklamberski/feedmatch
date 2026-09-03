@@ -1037,7 +1037,52 @@ describe('reconcileInserts', () => {
     expect(result.reconciledUpdates).toHaveLength(0)
   })
 
-  it('should not reconcile when insert has multiple matching existing items (ambiguous)', () => {
+  // Use case: a feed that re-dates a guide every week under a new guid left several copies of
+  // it in the window before reconciliation could catch them.
+  it('should reconcile into the most recent copy when several link matches qualify', () => {
+    const insert = {
+      item: makeIncoming({
+        guidHash: 'new-guid',
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt: new Date('2024-01-22T00:00:00Z'),
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const copies = [
+      { id: 'existing-1', guidHash: 'old-1', publishedAt: new Date('2024-01-01T00:00:00Z') },
+      { id: 'existing-2', guidHash: 'old-2', publishedAt: new Date('2024-01-15T00:00:00Z') },
+      { id: 'existing-3', guidHash: 'old-3', publishedAt: new Date('2024-01-08T00:00:00Z') },
+    ].map((copy) => {
+      return makeExistingItem({
+        ...copy,
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+      })
+    })
+
+    const result = reconcileInserts([insert], copies, new Set())
+
+    const expected: ReturnType<typeof reconcileInserts<IncomingItem>> = {
+      reconciledInserts: [],
+      reconciledUpdates: [
+        {
+          item: insert.item,
+          fingerprintHash: 'fp-1',
+          existingItemId: 'existing-2',
+          matchedBy: 'link',
+        },
+      ],
+    }
+
+    expect(result).toEqual(expected)
+  })
+
+  // Copies share a date when only the guid rotates; serial ids grow with insertion, so the
+  // higher one is the newer copy and the comparison must be numeric, not lexicographic.
+  it('should break a date tie between copies by the higher numeric id', () => {
     const publishedAt = new Date('2024-01-01T00:00:00Z')
     const insert = {
       item: makeIncoming({
@@ -1049,24 +1094,58 @@ describe('reconcileInserts', () => {
       }),
       fingerprintHash: 'fp-1',
     }
-    const existing1 = makeExistingItem({
-      id: 'existing-1',
-      guidHash: 'old-1',
-      linkHash: 'same-link',
-      titleHash: 'same-title',
-      contentHash: 'same-content',
-      publishedAt,
-    })
-    const existing2 = makeExistingItem({
-      id: 'existing-2',
-      guidHash: 'old-2',
-      linkHash: 'same-link',
-      titleHash: 'same-title',
-      contentHash: 'same-content',
-      publishedAt,
+    const copies = [10, 9, 11].map((id) => {
+      return makeExistingItem({
+        id,
+        guidHash: `old-${id}`,
+        linkHash: 'same-link',
+        titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt,
+      })
     })
 
-    const result = reconcileInserts([insert], [existing1, existing2], new Set())
+    const result = reconcileInserts([insert], copies, new Set())
+
+    const expected: ReturnType<typeof reconcileInserts<IncomingItem>> = {
+      reconciledInserts: [],
+      reconciledUpdates: [
+        {
+          item: insert.item,
+          fingerprintHash: 'fp-1',
+          existingItemId: 11,
+          matchedBy: 'link',
+        },
+      ],
+    }
+
+    expect(result).toEqual(expected)
+  })
+
+  it('should not reconcile when several text-only matches qualify', () => {
+    const publishedAt = new Date('2024-01-01T00:00:00Z')
+    const insert = {
+      item: makeIncoming({
+        guidHash: null,
+        linkHash: 'new-link',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+        publishedAt,
+      }),
+      fingerprintHash: 'fp-1',
+    }
+    const copies = ['existing-1', 'existing-2'].map((id) => {
+      return makeExistingItem({
+        id,
+        guidHash: null,
+        linkHash: `old-link-${id}`,
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+        publishedAt,
+      })
+    })
+
+    const result = reconcileInserts([insert], copies, new Set())
 
     expect(result.reconciledInserts).toHaveLength(1)
     expect(result.reconciledUpdates).toHaveLength(0)
@@ -1201,10 +1280,20 @@ describe('reconcileInserts', () => {
     const forward = reconcileInserts([insert], [existing1, existing2], new Set())
     const reversed = reconcileInserts([insert], [existing2, existing1], new Set())
 
-    expect(forward.reconciledInserts).toHaveLength(1)
-    expect(forward.reconciledUpdates).toHaveLength(0)
-    expect(reversed.reconciledInserts).toHaveLength(1)
-    expect(reversed.reconciledUpdates).toHaveLength(0)
+    const expected: ReturnType<typeof reconcileInserts<IncomingItem>> = {
+      reconciledInserts: [],
+      reconciledUpdates: [
+        {
+          item: insert.item,
+          fingerprintHash: 'fp-1',
+          existingItemId: 'existing-2',
+          matchedBy: 'link',
+        },
+      ],
+    }
+
+    expect(forward).toEqual(expected)
+    expect(reversed).toEqual(expected)
   })
 
   it('should produce same result regardless of insert order', () => {
@@ -6516,44 +6605,45 @@ describe('classifyItems', () => {
         expect(classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when multiple existing items could match (ambiguous)', () => {
-        const publishedAt = new Date('2024-01-01T00:00:00Z')
+      it('should update the most recent copy when several stored copies match by link', () => {
         const feedItem = {
-          guid: 'new-guid',
-          link: 'https://example.com/post',
-          title: 'Post Title',
+          guid: 'tag:example.com,2024-01-22:/guides/rates',
+          link: 'https://example.com/guides/rates',
+          title: 'Mortgage Rates',
           content: '<p>Content</p>',
-          publishedAt,
+          publishedAt: new Date('2024-01-22T00:00:00Z'),
         }
         const value: ClassifyItemsInput = {
           newItems: [feedItem],
           existingItems: [
             makeExisting({
               id: 'existing-1',
-              guid: 'old-guid-1',
-              link: 'https://example.com/post',
-              title: 'Post Title',
+              guid: 'tag:example.com,2024-01-08:/guides/rates',
+              link: 'https://example.com/guides/rates',
+              title: 'Mortgage Rates',
               content: '<p>Content</p>',
-              publishedAt,
+              publishedAt: new Date('2024-01-08T00:00:00Z'),
             }),
             makeExisting({
               id: 'existing-2',
-              guid: 'old-guid-2',
-              link: 'https://example.com/post',
-              title: 'Post Title',
+              guid: 'tag:example.com,2024-01-15:/guides/rates',
+              link: 'https://example.com/guides/rates',
+              title: 'Mortgage Rates',
               content: '<p>Content</p>',
-              publishedAt,
+              publishedAt: new Date('2024-01-15T00:00:00Z'),
             }),
           ],
         }
         const expected: ClassifyItemsResult = {
-          inserts: [
+          inserts: [],
+          updates: [
             {
               item: { ...feedItem, ...computeItemHashes(feedItem) },
               fingerprintHash: expect.stringMatching(hashRegex),
+              existingItemId: 'existing-2',
+              matchedBy: 'link',
             },
           ],
-          updates: [],
           fingerprintLevel: 'guid',
         }
 
