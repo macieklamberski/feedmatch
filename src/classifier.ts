@@ -178,10 +178,26 @@ const isLaterCopy = (candidate: ExistingItem, latest: ExistingItem): boolean => 
   return String(candidate.id) > String(latest.id)
 }
 
+// Two incoming copies of one post have no ids yet, so the fingerprint breaks a date tie.
+const isNewerInsert = <T extends NewItem>(
+  candidate: InsertAction<T>,
+  newest: InsertAction<T>,
+): boolean => {
+  const time = candidate.item.publishedAt?.getTime() ?? Number.NEGATIVE_INFINITY
+  const newestTime = newest.item.publishedAt?.getTime() ?? Number.NEGATIVE_INFINITY
+
+  if (time !== newestTime) {
+    return time > newestTime
+  }
+
+  return candidate.fingerprintHash > newest.fingerprintHash
+}
+
 // Reclassify inserts that are identical to an existing item except for guid
 // or link. Handles feeds with unstable identifiers that the fingerprint
-// system cannot match. Treats ambiguous matches (multiple candidates for one
-// insert, or multiple inserts targeting the same existing item) as non-matches.
+// system cannot match. Several candidates for one insert, or several inserts
+// for one row, are treated as non-matches unless they all share the link, in
+// which case they are copies of one post and the newest wins.
 export const reconcileInserts = <T extends NewItem>(
   inserts: Array<InsertAction<T>>,
   existingItems: Array<ExistingItem>,
@@ -227,10 +243,45 @@ export const reconcileInserts = <T extends NewItem>(
     }
   }
 
+  // Several inserts aimed at one row through a link match are copies of that post inside the
+  // batch, the way a feed lists a re-dated guide twice. The newest carries the merge and the
+  // rest are dropped, since they would store nothing the newest does not.
+  const droppedInserts = new Set<number>()
+
+  for (const [targetId, indexes] of insertsByTarget) {
+    if (indexes.length < 2) {
+      continue
+    }
+
+    const isAllByLink = indexes.every((index) => {
+      return candidatesByInsert.get(index)?.[0]?.result.matchedBy === 'link'
+    })
+
+    if (!isAllByLink) {
+      continue
+    }
+
+    const newest = indexes.reduce((best, index) => {
+      return isNewerInsert(inserts[index], inserts[best]) ? index : best
+    })
+
+    for (const index of indexes) {
+      if (index !== newest) {
+        droppedInserts.add(index)
+      }
+    }
+
+    insertsByTarget.set(targetId, [newest])
+  }
+
   const reconciledInserts: Array<InsertAction<T>> = []
   const reconciledUpdates: Array<UpdateAction<T>> = []
 
   for (let i = 0; i < inserts.length; i++) {
+    if (droppedInserts.has(i)) {
+      continue
+    }
+
     const candidates = candidatesByInsert.get(i) ?? []
 
     if (candidates.length !== 1) {
