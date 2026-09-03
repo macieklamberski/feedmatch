@@ -37,11 +37,15 @@ import type {
 const contentHashKeys = hashMeta.filter((meta) => meta.isContent).map((meta) => meta.key)
 
 // Find an existing item where guid or link differs but all content fields
-// match (title, content, summary, enclosure, and publishedAt).
+// match (title, content, summary, enclosure).
 //
 // Two cases:
 // 1. GUID changed, link matches (non-null) → merge, update the guid.
 // 2. Both GUIDs null, link differs → merge, update the link.
+//
+// publishedAt must agree only for case 2 and the domain migration below, where the text is
+// the only evidence. A shared link with byte-identical text is the same post whatever the
+// date says, and some feeds stamp every item with the render time.
 export const findReconciliationCandidate = (
   incoming: IncomingItem,
   existing: ExistingItem,
@@ -67,19 +71,21 @@ export const findReconciliationCandidate = (
     return
   }
 
-  const incomingDate = incoming.publishedAt?.getTime()
-  const existingDate = existing.publishedAt?.getTime()
-
-  if (incomingDate !== existingDate) {
-    return
-  }
-
   const isGuidMatch = incoming.guidHash === existing.guidHash
   const isLinkMatch = incoming.linkHash === existing.linkHash
 
   // Case 1: GUID differs, link is the same.
   if (!isGuidMatch && isLinkMatch && incoming.linkHash != null) {
     return { match: existing, matchedBy: 'link' }
+  }
+
+  // A side without a date has nothing to compare.
+  if (
+    incoming.publishedAt != null &&
+    existing.publishedAt != null &&
+    incoming.publishedAt.getTime() !== existing.publishedAt.getTime()
+  ) {
+    return
   }
 
   // Case 2: No GUID on either side, link differs but all content fields

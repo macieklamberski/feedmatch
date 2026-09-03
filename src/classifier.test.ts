@@ -379,17 +379,19 @@ describe('findReconciliationCandidate', () => {
       expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
     })
 
-    it('should return undefined when publishedAt differs', () => {
+    it('should return undefined when publishedAt differs and only the text matches', () => {
       const incoming = makeIncoming({
-        guidHash: 'new-guid',
-        linkHash: 'same-link',
+        guidHash: null,
+        linkHash: 'new-link',
         titleHash: 'same-title',
+        summaryHash: 'same-summary',
         publishedAt: new Date('2024-01-02T00:00:00Z'),
       })
       const existing = makeExistingItem({
-        guidHash: 'old-guid',
-        linkHash: 'same-link',
+        guidHash: null,
+        linkHash: 'old-link',
         titleHash: 'same-title',
+        summaryHash: 'same-summary',
         publishedAt: new Date('2024-01-01T00:00:00Z'),
       })
 
@@ -477,20 +479,43 @@ describe('findReconciliationCandidate', () => {
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
 
-    it('should not match when one publishedAt is undefined and the other has a value', () => {
+    it('should return link match when publishedAt differs but link and content match', () => {
       const incoming = makeIncoming({
         guidHash: 'new-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
-        publishedAt: new Date('2024-01-01T00:00:00Z'),
+        contentHash: 'same-content',
+        publishedAt: new Date('2024-01-02T00:00:00Z'),
       })
       const existing = makeExistingItem({
         guidHash: 'old-guid',
         linkHash: 'same-link',
         titleHash: 'same-title',
+        contentHash: 'same-content',
+        publishedAt: new Date('2024-01-01T00:00:00Z'),
       })
+      const expected: MatchResult = { match: existing, matchedBy: 'link' }
 
-      expect(findReconciliationCandidate(incoming, existing)).toBeUndefined()
+      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
+    })
+
+    it('should return reconciled match when one publishedAt is missing and the text matches', () => {
+      const incoming = makeIncoming({
+        guidHash: null,
+        linkHash: 'new-link',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+        publishedAt: new Date('2024-01-01T00:00:00Z'),
+      })
+      const existing = makeExistingItem({
+        guidHash: null,
+        linkHash: 'old-link',
+        titleHash: 'same-title',
+        summaryHash: 'same-summary',
+      })
+      const expected: MatchResult = { match: existing, matchedBy: 'reconciled' }
+
+      expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
 
     it('should not match when GUID differs but link is null on both sides (no anchor)', () => {
@@ -588,17 +613,19 @@ describe('findReconciliationCandidate', () => {
       expect(findReconciliationCandidate(incoming, existing)).toEqual(expected)
     })
 
-    it('should not match when publishedAt differs by milliseconds', () => {
+    it('should not match when publishedAt differs by milliseconds and only the text matches', () => {
       const incoming = makeIncoming({
-        guidHash: 'new-guid',
-        linkHash: 'same-link',
+        guidHash: null,
+        linkHash: 'new-link',
         titleHash: 'same-title',
+        summaryHash: 'same-summary',
         publishedAt: new Date('2024-01-01T00:00:00.001Z'),
       })
       const existing = makeExistingItem({
-        guidHash: 'old-guid',
-        linkHash: 'same-link',
+        guidHash: null,
+        linkHash: 'old-link',
         titleHash: 'same-title',
+        summaryHash: 'same-summary',
         publishedAt: new Date('2024-01-01T00:00:00.000Z'),
       })
 
@@ -1224,8 +1251,8 @@ describe('reconcileInserts', () => {
     const invalidDate = new Date(Number.NaN)
     const insert = {
       item: makeIncoming({
-        guidHash: 'new-guid',
-        linkHash: 'same-link',
+        guidHash: null,
+        linkHash: 'new-link',
         titleHash: 'same-title',
         contentHash: 'same-content',
         publishedAt: invalidDate,
@@ -1233,8 +1260,8 @@ describe('reconcileInserts', () => {
       fingerprintHash: 'fp-1',
     }
     const existing = makeExistingItem({
-      guidHash: 'old-guid',
-      linkHash: 'same-link',
+      guidHash: null,
+      linkHash: 'old-link',
       titleHash: 'same-title',
       contentHash: 'same-content',
       publishedAt: invalidDate,
@@ -1312,8 +1339,8 @@ describe('reconcileInserts', () => {
     const invalidDate = new Date(Number.NaN)
     const inserts = Array.from({ length: 100 }, (_, index) => ({
       item: makeIncoming({
-        guidHash: `new-${index}`,
-        linkHash: `link-${index}`,
+        guidHash: null,
+        linkHash: `new-link-${index}`,
         titleHash: `title-${index}`,
         contentHash: `content-${index}`,
         publishedAt: invalidDate,
@@ -1323,8 +1350,8 @@ describe('reconcileInserts', () => {
     const existingItems = Array.from({ length: 100 }, (_, index) => {
       return makeExistingItem({
         id: `existing-${index}`,
-        guidHash: `old-${index}`,
-        linkHash: `link-${index}`,
+        guidHash: null,
+        linkHash: `old-link-${index}`,
         titleHash: `title-${index}`,
         contentHash: `content-${index}`,
         publishedAt: invalidDate,
@@ -4094,6 +4121,41 @@ describe('classifyItems', () => {
       expect(classifyItems(value)).toEqual(expected)
     })
 
+    // A feed that mints a new guid and a new date on every render, while the link and the
+    // text stay the same, is the same post each time.
+    it('should update by link when the guid and the date change but the link and content match', () => {
+      const feedItem = {
+        guid: '1788412984019 - 500',
+        link: 'https://example.com/observe/post-500.html',
+        title: 'Observation 534',
+        content: '<p>Same content</p>',
+        publishedAt: new Date('2026-09-03T05:23:04Z'),
+      }
+      const value: ClassifyItemsInput = {
+        newItems: [feedItem],
+        existingItems: [
+          {
+            ...makeMatchable({ id: 'existing-1', ...feedItem, guid: '1788409384019 - 500' }),
+            publishedAt: new Date('2026-09-03T04:23:04Z'),
+          },
+        ],
+      }
+      const expected: ClassifyItemsResult = {
+        inserts: [],
+        updates: [
+          {
+            item: { ...feedItem, ...computeItemHashes(feedItem) },
+            fingerprintHash: expect.stringMatching(hashRegex),
+            existingItemId: 'existing-1',
+            matchedBy: 'link',
+          },
+        ],
+        fingerprintLevel: 'guid',
+      }
+
+      expect(classifyItems(value)).toEqual(expected)
+    })
+
     // URL-type GUIDs share the same guidHash (fragment stripped) but
     // differ in guidFragmentHash. The changeFilter should detect this.
     it('should update when only GUID fragment changes', () => {
@@ -6173,10 +6235,9 @@ describe('classifyItems', () => {
         expect(classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when content matches but publishedAt differs', () => {
+      it('should not reconcile when only the text matches and publishedAt differs', () => {
         const feedItem = {
-          guid: 'new-guid',
-          link: 'https://example.com/post',
+          link: 'https://example.com/post-2',
           title: 'Post Title',
           content: '<p>Content</p>',
           publishedAt: new Date('2024-01-02T00:00:00Z'),
@@ -6186,8 +6247,7 @@ describe('classifyItems', () => {
           existingItems: [
             makeExisting({
               id: 'existing-1',
-              guid: 'old-guid',
-              link: 'https://example.com/post',
+              link: 'https://example.com/post-1',
               title: 'Post Title',
               content: '<p>Content</p>',
               publishedAt: new Date('2024-01-01T00:00:00Z'),
@@ -6202,7 +6262,7 @@ describe('classifyItems', () => {
             },
           ],
           updates: [],
-          fingerprintLevel: 'guid',
+          fingerprintLevel: 'link',
         }
 
         expect(classifyItems(value)).toEqual(expected)
