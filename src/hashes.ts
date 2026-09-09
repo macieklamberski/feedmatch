@@ -24,8 +24,8 @@ export const hasStrongHash = (hashes: ItemHashes): boolean => {
   return hashMeta.some((meta) => meta.isStrongHash && hashes[meta.key])
 }
 
-// Build a tagged fingerprint using the level prefix up to and including
-// the given level. Returns undefined when no hashes exist in the prefix.
+// Build a tagged fingerprint using the level prefix up to and including the given level. Returns
+// undefined when no hashes exist in the prefix.
 export const buildFingerprint = (
   hashes: ItemHashes,
   level: FingerprintLevel,
@@ -39,22 +39,19 @@ export const buildFingerprint = (
   return prefix.map((entry) => `${entry.tag}:${hashes[entry.key] ?? ''}`).join('|')
 }
 
-// Compute the optimal fingerprint level for a set of item hashes. Finds the
-// strongest level where buildFingerprint produces zero collisions and full
-// coverage (every identifiable item produces a fingerprint). When a
-// currentLevel is provided and is valid it is returned unchanged; if it
-// collides or loses coverage, only weaker levels are considered (fast
-// downgrade, never upgrades).
+// Compute the optimal fingerprint level for a set of item hashes. Finds the strongest level where
+// buildFingerprint produces zero collisions and full coverage (every identifiable item produces a
+// fingerprint). When a currentLevel is provided and is valid it is returned unchanged; if it
+// collides or loses coverage, only weaker levels are considered (fast downgrade, never upgrades).
 export const resolveFingerprintLevel = (
   allItemHashes: Array<ItemHashes>,
   currentLevel?: FingerprintLevel,
 ): FingerprintLevel => {
   const maxLevelIndex = fingerprintMeta.length - 1
 
-  // Precompute fingerprints for every item at every level in one pass.
-  // Each entry is built incrementally by extending the prefix string,
-  // producing the same output as buildFingerprint but without repeated
-  // Map lookups, .some() checks, or .map().join() per level.
+  // Precompute fingerprints for every item at every level in one pass. Each entry is built
+  // incrementally by extending the prefix string, producing the same output as buildFingerprint but
+  // without repeated Map lookups, .some() checks, or .map().join() per level.
   const allFingerprints: Array<Array<string | undefined>> = []
 
   for (const hashes of allItemHashes) {
@@ -81,8 +78,8 @@ export const resolveFingerprintLevel = (
     allFingerprints.push(perLevel)
   }
 
-  // Count items identifiable at max level (title). A valid level must identify
-  // the same number — otherwise some items become unidentifiable.
+  // Count items identifiable at max level (title). A valid level must identify the same number:
+  // otherwise some items become unidentifiable.
   let maxIdentifiable = 0
 
   for (const fingerprints of allFingerprints) {
@@ -91,8 +88,8 @@ export const resolveFingerprintLevel = (
     }
   }
 
-  // Validate before the no-identifiable-items return so an invalid level
-  // throws instead of leaking through into the result.
+  // Validate before the no-identifiable-items return so an invalid level throws instead of leaking
+  // through into the result.
   const startIndex = currentLevel
     ? fingerprintMeta.findIndex((entry) => entry.level === currentLevel)
     : 0
@@ -130,12 +127,12 @@ export const resolveFingerprintLevel = (
     }
   }
 
-  // Even title collides — return weakest possible level.
+  // Even title collides: return weakest possible level.
   return 'title'
 }
 
-// Compute all available hashes for a feed item. Returns null for fields
-// that cannot be computed (absent or empty source data).
+// Compute all available hashes for a feed item. Returns null for fields that cannot be computed
+// (absent or empty source data).
 export const computeItemHashes = <TItem extends NewItem>(
   item: TItem,
   cleanUrlFn?: CleanUrlFn,
