@@ -5380,9 +5380,13 @@ describe('classifyItems', () => {
     }
     const result = classifyItems(value)
 
+    const updatedItemIds = result.updates
+      .map((update) => update.existingItemId)
+      .sort((a, b) => String(a).localeCompare(String(b)))
+
     expect(result.inserts).toHaveLength(0)
     expect(result.updates).toHaveLength(2)
-    expect(result.updates.map((u) => u.existingItemId).sort()).toEqual(['existing-a', 'existing-b'])
+    expect(updatedItemIds).toEqual(['existing-a', 'existing-b'])
     expect(result.fingerprintLevel).toBe('enclosure')
   })
 
