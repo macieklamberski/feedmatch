@@ -90,12 +90,4 @@ const { inserts, updates } = await classifyItems({
 
 Return the `id` of one of the candidates, or nothing to keep the insert. The function can be sync or async. A match comes back as an update with `matchedBy: 'fallback'`.
 
-Feedmatch narrows the candidates before calling the function:
-
-- Existing items that an earlier step already matched are left out.
-- So are items published more than `fallbackWindowDays` away from the incoming one. The default is 2.
-- Items without `publishedAt` are left out too, and an incoming item without one skips the function.
-
-When no candidates are left, the function is not called. When two incoming items pick the same candidate, both stay inserts.
-
-Existing items carry only hashes, so the function loads the stored titles and content itself, as `loadItems` does above.
+The candidates are the existing items that no earlier step matched and that were published within `fallbackWindowDays` of the incoming item (default: 2). Items without `publishedAt` are never candidates, and an incoming item without one skips the function. When two incoming items pick the same candidate, both stay inserts.
