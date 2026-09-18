@@ -19,7 +19,7 @@ npm install feedmatch
 ```typescript
 import { classifyItems } from 'feedmatch'
 
-const { inserts, updates } = classifyItems({
+const { inserts, updates } = await classifyItems({
   newItems: [
     {
       guid: 'https://example.com/post/1',
@@ -50,7 +50,8 @@ const { inserts, updates } = classifyItems({
 
 // Updates - items matched to an existing item.
 // updates[0].existingItemId - the ID of the matched existing item.
-// updates[0].matchedBy - how it was matched: 'guid', 'link', 'enclosure', or 'title'.
+// updates[0].matchedBy - how it was matched: 'guid', 'link', 'enclosure', 'title',
+// 'reconciled', or 'fallback'.
 ```
 
 ## How It Works
@@ -66,3 +67,31 @@ const { inserts, updates } = classifyItems({
 | 7 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against the screened existing items, with candidate filters to reject false positives. Guid matches on a trusted-guid feed are exempt from the date proximity window, so republished items with a bumped date stay updates. |
 | 8 | Classify | Matched items become updates when any hash differs, or when the incoming item carries a publishedAt that differs from the stored one; unmatched items become inserts. |
 | 9 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. A shared link needs no date agreement; a match on text alone does, when both sides carry a date. Several stored copies that all match by link narrow to the most recent one. |
+| 10 | Fallback | Optional. Remaining inserts are offered to your `fallbackMatchFn` together with nearby existing items, so you can plug in any matching logic. |
+
+## Fallback Matching
+
+The built-in steps only match on exact hashes. When an item comes back with a new guid, a new link and an edited title, they see a new item. `fallbackMatchFn` lets you decide those cases yourself, with fuzzy text comparison, an AI classifier or any other logic.
+
+```typescript
+const { inserts, updates } = await classifyItems({
+  newItems,
+  existingItems,
+  fallbackWindowDays: 2,
+  fallbackMatchFn: async ({ incoming, candidates }) => {
+    const stored = await loadItems(candidates.map((candidate) => candidate.id))
+    const match = stored.find((item) => isSameArticle(incoming, item))
+
+    return match?.id
+  },
+})
+```
+
+The function runs once for each insert left after reconciliation. It receives the incoming item and the existing items that no earlier step matched and that were published within `fallbackWindowDays` of it (default: 2). Return the `id` of the matching candidate, or nothing to keep the insert. It can be sync or async.
+
+- Existing items carry only hashes, so load the stored text for the candidates on your side.
+- Items without `publishedAt` are skipped, on both sides.
+- The function is not called when there are no candidates.
+- An id that is not among the candidates is ignored.
+- When two inserts pick the same existing item, both stay inserts.
+- Matches are returned as updates with `matchedBy: 'fallback'`.

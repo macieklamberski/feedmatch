@@ -8,6 +8,7 @@ import {
   excludeEnclosureFromIdentity,
   findReconciliationCandidate,
   hasAmbiguousIdentity,
+  matchFallbackInserts,
   reconcileInserts,
   scoreItem,
 } from './classifier.js'
@@ -16,9 +17,11 @@ import type {
   ClassifyItemsInput,
   ClassifyItemsResult,
   ExistingItem,
+  FallbackMatchContext,
   FingerprintedItem,
   FingerprintLevel,
   IncomingItem,
+  InsertAction,
   ItemHashes,
   MatchResult,
   NewItem,
@@ -1541,9 +1544,234 @@ describe('reconcileInserts', () => {
   })
 })
 
+describe('matchFallbackInserts', () => {
+  const makeInsert = (guid: string, publishedAt?: Date): InsertAction => {
+    return {
+      item: makeIncoming({ guidHash: guid, publishedAt }),
+      fingerprintHash: `fp-${guid}`,
+    }
+  }
+
+  const makeCandidate = (id: string, publishedAt?: Date): ExistingItem => {
+    return makeExistingItem({ id, guidHash: `guid-${id}`, publishedAt })
+  }
+
+  describe('happy paths', () => {
+    it('should turn an insert into a fallback update when fallbackMatchFn returns a candidate id', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-02T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+      const expected: Awaited<ReturnType<typeof matchFallbackInserts>> = {
+        fallbackInserts: [],
+        fallbackUpdates: [
+          {
+            item: insert.item,
+            fingerprintHash: 'fp-new-guid',
+            existingItemId: 'existing-1',
+            matchedBy: 'fallback',
+          },
+        ],
+      }
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: async () => 'existing-1',
+        fallbackWindowDays: 2,
+      })
+
+      expect(result).toEqual(expected)
+    })
+
+    it('should accept a synchronous fallbackMatchFn', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => 'existing-1',
+        fallbackWindowDays: 2,
+      })
+
+      expect(result.fallbackUpdates).toHaveLength(1)
+    })
+
+    it('should offer only unclaimed existing items published within the window', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-10T00:00:00Z'))
+      const inWindow = makeCandidate('in-window', new Date('2024-01-08T00:00:00Z'))
+      const outOfWindow = makeCandidate('out-of-window', new Date('2024-01-07T23:59:59Z'))
+      const claimed = makeCandidate('claimed', new Date('2024-01-10T00:00:00Z'))
+      const contexts: Array<FallbackMatchContext> = []
+
+      await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [inWindow, outOfWindow, claimed],
+        claimedExistingIds: new Set(['claimed']),
+        fallbackMatchFn: (context) => {
+          contexts.push(context)
+        },
+        fallbackWindowDays: 2,
+      })
+
+      expect(contexts).toEqual([{ incoming: insert.item, candidates: [inWindow] }])
+    })
+  })
+
+  describe('sad paths', () => {
+    it('should keep the insert when fallbackMatchFn returns nothing', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => undefined,
+        fallbackWindowDays: 2,
+      })
+
+      expect(result).toEqual({ fallbackInserts: [insert], fallbackUpdates: [] })
+    })
+
+    it('should keep the insert when fallbackMatchFn returns an id outside the candidates', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-10T00:00:00Z'))
+      const inWindow = makeCandidate('in-window', new Date('2024-01-10T00:00:00Z'))
+      const outOfWindow = makeCandidate('out-of-window', new Date('2023-01-01T00:00:00Z'))
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [inWindow, outOfWindow],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => 'out-of-window',
+        fallbackWindowDays: 2,
+      })
+
+      expect(result).toEqual({ fallbackInserts: [insert], fallbackUpdates: [] })
+    })
+
+    it('should propagate an error thrown by fallbackMatchFn', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+
+      const result = matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => {
+          throw new Error('Classifier unavailable')
+        },
+        fallbackWindowDays: 2,
+      })
+
+      await expect(result).rejects.toThrow('Classifier unavailable')
+    })
+  })
+
+  describe('edge cases', () => {
+    it('should not call fallbackMatchFn when no candidate is within the window', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-10T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+      let callCount = 0
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => {
+          callCount++
+
+          return 'existing-1'
+        },
+        fallbackWindowDays: 2,
+      })
+
+      expect(callCount).toBe(0)
+      expect(result).toEqual({ fallbackInserts: [insert], fallbackUpdates: [] })
+    })
+
+    it('should not call fallbackMatchFn for an insert without publishedAt', async () => {
+      const insert = makeInsert('new-guid')
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+      let callCount = 0
+
+      await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => {
+          callCount++
+
+          return 'existing-1'
+        },
+        fallbackWindowDays: 2,
+      })
+
+      expect(callCount).toBe(0)
+    })
+
+    it('should not offer existing items without publishedAt', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const dated = makeCandidate('dated', new Date('2024-01-01T00:00:00Z'))
+      const dateless = makeCandidate('dateless')
+      const contexts: Array<FallbackMatchContext> = []
+
+      await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [dated, dateless],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: (context) => {
+          contexts.push(context)
+        },
+        fallbackWindowDays: 2,
+      })
+
+      expect(contexts).toEqual([{ incoming: insert.item, candidates: [dated] }])
+    })
+
+    it('should not offer an existing item when the insert guid belongs to another existing item', async () => {
+      const insert = makeInsert('guid-owner', new Date('2024-01-01T00:00:00Z'))
+      const owner = makeCandidate('owner', new Date('2023-01-01T00:00:00Z'))
+      const other = makeCandidate('other', new Date('2024-01-01T00:00:00Z'))
+      let callCount = 0
+
+      await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [owner, other],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => {
+          callCount++
+
+          return 'other'
+        },
+        fallbackWindowDays: 2,
+      })
+
+      expect(callCount).toBe(0)
+    })
+
+    it('should keep both inserts when they match the same existing item', async () => {
+      const first = makeInsert('new-guid-1', new Date('2024-01-01T00:00:00Z'))
+      const second = makeInsert('new-guid-2', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+
+      const result = await matchFallbackInserts({
+        inserts: [first, second],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => 'existing-1',
+        fallbackWindowDays: 2,
+      })
+
+      expect(result).toEqual({ fallbackInserts: [first, second], fallbackUpdates: [] })
+    })
+  })
+})
+
 describe('classifyItems', () => {
   describe('basic classification', () => {
-    it('should insert all items when no existing items', () => {
+    it('should insert all items when no existing items', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           { guid: 'guid-1', title: 'Post 1' },
@@ -1574,10 +1802,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when item matches existing by guid and content changed', () => {
+    it('should update when item matches existing by guid and content changed', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Updated Title', content: 'New content' }],
         existingItems: [
@@ -1611,14 +1839,14 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Regression: a publisher fixed the letter case of an image URL inside the
     // item body. The lowercased summary hash made both versions hash-identical,
     // so the correction was classified as a no-op and never reached the
     // existing item.
-    it('should update when summary differs only in letter case', () => {
+    it('should update when summary differs only in letter case', async () => {
       const storedSummary = '<p><img src="https://example.com/posts/my-image.png"></p>'
       const correctedSummary = '<p><img src="https://example.com/posts/My-Image.png"></p>'
       const value: ClassifyItemsInput = {
@@ -1654,10 +1882,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should handle mix of inserts, updates, and skips', () => {
+    it('should handle mix of inserts, updates, and skips', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           { guid: 'guid-1', title: 'Unchanged Title' },
@@ -1705,10 +1933,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should omit matched items with no changes', () => {
+    it('should omit matched items with no changes', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Same Title', content: 'Same content' }],
         existingItems: [
@@ -1726,10 +1954,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should skip update when existing null hashes match incoming undefined hashes', () => {
+    it('should skip update when existing null hashes match incoming undefined hashes', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Post Title' }],
         existingItems: [
@@ -1746,12 +1974,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // When GUID is the identifier, fields below it (like link) are
     // effectively content and should trigger an update when they change.
-    it('should update when only link differs but content is identical', () => {
+    it('should update when only link differs but content is identical', async () => {
       const feedItem = {
         guid: 'guid-1',
         link: 'https://example.com/new',
@@ -1783,10 +2011,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should produce same classification regardless of feed item order', () => {
+    it('should produce same classification regardless of feed item order', async () => {
       const insertItem = { guid: 'guid-new', title: 'New Post' }
       const updateItem = { guid: 'guid-2', title: 'Changed Title', content: 'New content' }
       const skipItem = { guid: 'guid-1', title: 'Unchanged' }
@@ -1803,11 +2031,11 @@ describe('classifyItems', () => {
           content: 'Old content',
         }),
       ]
-      const forward = classifyItems({
+      const forward = await classifyItems({
         newItems: [insertItem, updateItem, skipItem],
         existingItems,
       })
-      const reversed = classifyItems({
+      const reversed = await classifyItems({
         newItems: [skipItem, updateItem, insertItem],
         existingItems,
       })
@@ -1816,7 +2044,7 @@ describe('classifyItems', () => {
       expect(forward.updates).toEqual(reversed.updates)
     })
 
-    it('should preserve extra fields in output', () => {
+    it('should preserve extra fields in output', async () => {
       const feedItem = { guid: 'guid-1', title: 'Post', customField: 'extra' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -1833,10 +2061,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should filter out items with no identity', () => {
+    it('should filter out items with no identity', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ content: 'Only content, no identifiable fields' }],
         existingItems: [],
@@ -1847,10 +2075,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should return empty output for empty feed', () => {
+    it('should return empty output for empty feed', async () => {
       const value: ClassifyItemsInput = {
         newItems: [],
         existingItems: [],
@@ -1861,10 +2089,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should filter unidentifiable items without affecting level', () => {
+    it('should filter unidentifiable items without affecting level', async () => {
       const feedItem1 = { guid: 'guid-1', title: 'Post 1' }
       const feedItem2 = { content: 'Only content' }
       const feedItem3 = { guid: 'guid-2', title: 'Post 2' }
@@ -1887,24 +2115,23 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should throw when fingerprintLevel is invalid at runtime', () => {
+    it('should throw when fingerprintLevel is invalid at runtime', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Post' }],
         existingItems: [],
         // @ts-expect-error: This is for testing purposes.
         fingerprintLevel: 'not-a-level',
       }
-      const throwing = () => classifyItems(value)
 
-      expect(throwing).toThrow()
+      await expect(classifyItems(value)).rejects.toThrow()
     })
   })
 
   describe('deduplication', () => {
-    it('should deduplicate duplicate new items into single insert', () => {
+    it('should deduplicate duplicate new items into single insert', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           { guid: 'guid-1', title: 'Post' },
@@ -1927,10 +2154,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not downgrade level due to duplicate new items', () => {
+    it('should not downgrade level due to duplicate new items', async () => {
       const feedItem = { guid: 'guid-1', title: 'Post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem, feedItem],
@@ -1948,10 +2175,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should dedup all-identical items to single insert', () => {
+    it('should dedup all-identical items to single insert', async () => {
       const feedItem = { link: 'https://example.com/post', title: 'Post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem, feedItem, feedItem, feedItem, feedItem],
@@ -1968,10 +2195,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should collapse title-only items with same title to single insert', () => {
+    it('should collapse title-only items with same title to single insert', async () => {
       const feedItemA = { title: 'Same Title', content: 'Content A' }
       const feedItemB = { title: 'Same Title', content: 'Content B' }
       const value: ClassifyItemsInput = {
@@ -1989,10 +2216,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should collapse items with same guid and title but different content to single insert', () => {
+    it('should collapse items with same guid and title but different content to single insert', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           {
@@ -2038,10 +2265,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should collapse no-guid items with same link and title but different content to single insert', () => {
+    it('should collapse no-guid items with same link and title but different content to single insert', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           { link: 'https://example.com/post', title: 'Post', content: 'Version 1' },
@@ -2070,10 +2297,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should dedup batch duplicates and skip already-existing items in same pass', () => {
+    it('should dedup batch duplicates and skip already-existing items in same pass', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           { guid: 'guid-1', title: 'Title A' },
@@ -2106,10 +2333,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should keep richer duplicate and produce update when it matches existing', () => {
+    it('should keep richer duplicate and produce update when it matches existing', async () => {
       const feedItemRich = { guid: 'guid-1', title: 'Post Title', content: 'New content' }
       const feedItemPoor = { guid: 'guid-1', title: 'Post Title' }
       const value: ClassifyItemsInput = {
@@ -2136,10 +2363,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should dedup two items whose links normalize to the same value', () => {
+    it('should dedup two items whose links normalize to the same value', async () => {
       const feedItemA = { link: 'https://example.com/post?utm_source=rss', title: 'Post' }
       const feedItemB = { link: 'http://www.example.com/post/', title: 'Post' }
       const value: ClassifyItemsInput = {
@@ -2158,12 +2385,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('level computation', () => {
-    it('should downgrade fingerprintLevel when collisions exist at input level', () => {
+    it('should downgrade fingerprintLevel when collisions exist at input level', async () => {
       const feedItemA = { link: 'https://example.com/shared', title: 'Post A' }
       const feedItemB = { link: 'https://example.com/shared', title: 'Post B' }
       const value: ClassifyItemsInput = {
@@ -2186,10 +2413,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should preserve fingerprintLevel when level is stable', () => {
+    it('should preserve fingerprintLevel when level is stable', async () => {
       const feedItem1 = { guid: 'guid-1', title: 'Post 1' }
       const feedItem2 = { guid: 'guid-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -2212,10 +2439,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should produce distinct fingerprintHashes for hub new items with shared link and level=title', () => {
+    it('should produce distinct fingerprintHashes for hub new items with shared link and level=title', async () => {
       const feedItemA = { link: 'https://example.com/hub', title: 'Article A' }
       const feedItemB = { link: 'https://example.com/hub', title: 'Article B' }
       const value: ClassifyItemsInput = {
@@ -2238,13 +2465,13 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result).toEqual(expected)
       expect(result.inserts[0].fingerprintHash).not.toBe(result.inserts[1].fingerprintHash)
     })
 
-    it('should downgrade level when new item collides with existing item', () => {
+    it('should downgrade level when new item collides with existing item', async () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -2273,10 +2500,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade level on hub onset with single existing item', () => {
+    it('should downgrade level on hub onset with single existing item', async () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -2300,10 +2527,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should pick link when some items lack guid', () => {
+    it('should pick link when some items lack guid', async () => {
       const feedItem1 = { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' }
       const feedItem2 = { link: 'https://example.com/post-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -2325,10 +2552,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade from link to linkFragment when fragments resolve collision', () => {
+    it('should downgrade from link to linkFragment when fragments resolve collision', async () => {
       const feedItemA = { link: 'https://example.com/page#section-a', title: 'Section A' }
       const feedItemB = { link: 'https://example.com/page#section-b', title: 'Section B' }
       const value: ClassifyItemsInput = {
@@ -2351,10 +2578,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'linkFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade guid to guidFragment when guid fragments differ', () => {
+    it('should downgrade guid to guidFragment when guid fragments differ', async () => {
       const feedItemA = { guid: 'https://example.com/post#v1', title: 'Version 1' }
       const feedItemB = { guid: 'https://example.com/post#v2', title: 'Version 2' }
       const value: ClassifyItemsInput = {
@@ -2377,10 +2604,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guidFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade guid to enclosure when guid collides without fragments', () => {
+    it('should downgrade guid to enclosure when guid collides without fragments', async () => {
       const feedItemA = {
         guid: 'shared-guid',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -2411,10 +2638,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should prefer enclosure over title when link collides and enclosure resolves', () => {
+    it('should prefer enclosure over title when link collides and enclosure resolves', async () => {
       const feedItemA = {
         link: 'https://example.com/shared',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -2445,10 +2672,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not upgrade level when fingerprintLevel is already deeper', () => {
+    it('should not upgrade level when fingerprintLevel is already deeper', async () => {
       const feedItem1 = { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' }
       const feedItem2 = { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -2471,10 +2698,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade guid to link when guid collides but links differ', () => {
+    it('should downgrade guid to link when guid collides but links differ', async () => {
       const feedItemA = { guid: 'shared-guid', link: 'https://example.com/post-1', title: 'Post 1' }
       const feedItemB = { guid: 'shared-guid', link: 'https://example.com/post-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -2497,10 +2724,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade guid to title when guid and link both collide', () => {
+    it('should downgrade guid to title when guid and link both collide', async () => {
       const feedItemA = {
         guid: 'shared-guid',
         link: 'https://example.com/shared-link',
@@ -2531,10 +2758,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade guid to title when guid collides and no links exist', () => {
+    it('should downgrade guid to title when guid collides and no links exist', async () => {
       const feedItemA = { guid: 'shared-guid', title: 'Post 1' }
       const feedItemB = { guid: 'shared-guid', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -2557,10 +2784,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not change fingerprintLevel when feed and existing are both empty', () => {
+    it('should not change fingerprintLevel when feed and existing are both empty', async () => {
       const value: ClassifyItemsInput = {
         newItems: [],
         existingItems: [],
@@ -2572,10 +2799,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not change fingerprintLevel when only unidentifiable items arrive with existing history', () => {
+    it('should not change fingerprintLevel when only unidentifiable items arrive with existing history', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ content: 'Only content, no identifiable fields' }],
         existingItems: [
@@ -2593,10 +2820,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade fingerprintLevel when feed is empty but existing items collide', () => {
+    it('should downgrade fingerprintLevel when feed is empty but existing items collide', async () => {
       const value: ClassifyItemsInput = {
         newItems: [],
         existingItems: [
@@ -2619,10 +2846,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should produce collision-free fingerprintHashes after level downgrade', () => {
+    it('should produce collision-free fingerprintHashes after level downgrade', async () => {
       const feedItem1 = { link: 'https://example.com/page#s1', title: 'Section 1' }
       const feedItem2 = { link: 'https://example.com/page#s2', title: 'Section 2' }
       const feedItem3 = { link: 'https://example.com/page#s3', title: 'Section 3' }
@@ -2632,7 +2859,7 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
       const fingerprintHashes = result.inserts.map((item) => item.fingerprintHash)
 
       expect(result.fingerprintLevel).toBe('linkFragment')
@@ -2640,7 +2867,7 @@ describe('classifyItems', () => {
       expect(new Set(fingerprintHashes).size).toBe(3)
     })
 
-    it('should downgrade guid to link when new items lack guids', () => {
+    it('should downgrade guid to link when new items lack guids', async () => {
       const feedItemA = { link: 'https://example.com/post-1', title: 'Post 1' }
       const feedItemB = { link: 'https://example.com/post-2', title: 'Post 2' }
       const value: ClassifyItemsInput = {
@@ -2663,10 +2890,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade link to enclosure when new items lack guids and links', () => {
+    it('should downgrade link to enclosure when new items lack guids and links', async () => {
       const feedItemA = {
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
         title: 'Episode 1',
@@ -2695,10 +2922,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade enclosure to title when new items lack guids links and enclosures', () => {
+    it('should downgrade enclosure to title when new items lack guids links and enclosures', async () => {
       const feedItemA = { title: 'Post 1', content: 'Content 1' }
       const feedItemB = { title: 'Post 2', content: 'Content 2' }
       const value: ClassifyItemsInput = {
@@ -2721,10 +2948,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade past linkFragment to title when fragments are identical', () => {
+    it('should downgrade past linkFragment to title when fragments are identical', async () => {
       const feedItemA = { link: 'https://example.com/page#comments', title: 'Post A' }
       const feedItemB = { link: 'https://example.com/page#comments', title: 'Post B' }
       const value: ClassifyItemsInput = {
@@ -2747,10 +2974,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade past guidFragment when guid fragments are identical', () => {
+    it('should downgrade past guidFragment when guid fragments are identical', async () => {
       const feedItemA = {
         guid: 'https://example.com/post#comments',
         link: 'https://example.com/post-a',
@@ -2781,10 +3008,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade to title when guid and enclosure both collide', () => {
+    it('should downgrade to title when guid and enclosure both collide', async () => {
       const feedItemA = {
         guid: 'shared-guid',
         enclosures: [{ url: 'https://example.com/logo.jpg' }],
@@ -2815,10 +3042,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should cascade from guid past multiple levels to linkFragment', () => {
+    it('should cascade from guid past multiple levels to linkFragment', async () => {
       const feedItemA = {
         guid: 'shared-guid',
         link: 'https://example.com/page#section-a',
@@ -2849,10 +3076,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'linkFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should prefer guidFragment over linkFragment when both could resolve', () => {
+    it('should prefer guidFragment over linkFragment when both could resolve', async () => {
       const feedItemA = {
         guid: 'https://example.com/post#v1',
         link: 'https://example.com/page#section-a',
@@ -2883,10 +3110,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guidFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should auto-compute level from existing items when feed is empty and no fingerprintLevel provided', () => {
+    it('should auto-compute level from existing items when feed is empty and no fingerprintLevel provided', async () => {
       const value: ClassifyItemsInput = {
         newItems: [],
         existingItems: [
@@ -2908,12 +3135,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('matching and gating', () => {
-    it('should match via guid when channel has no link hashes', () => {
+    it('should match via guid when channel has no link hashes', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Updated', content: 'New content' }],
         existingItems: [
@@ -2943,10 +3170,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should match via enclosure on low-uniqueness channel', () => {
+    it('should match via enclosure on low-uniqueness channel', async () => {
       const feedItem = {
         link: 'https://example.com/shared',
         enclosures: [{ url: 'https://example.com/episode.mp3' }],
@@ -2981,10 +3208,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should skip link matching on low-uniqueness channel when item has guid', () => {
+    it('should skip link matching on low-uniqueness channel when item has guid', async () => {
       const feedItem = { guid: 'guid-new', link: 'https://example.com/shared', title: 'New Post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3012,10 +3239,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert two items when links differ only by fragment', () => {
+    it('should insert two items when links differ only by fragment', async () => {
       const feedItemA = { link: 'https://example.com/page#Earth2', title: 'Earth2' }
       const feedItemB = { link: 'https://example.com/page#LimeVPN', title: 'LimeVPN' }
       const value: ClassifyItemsInput = {
@@ -3037,10 +3264,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'linkFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert hub feed item instead of merging when level prevents it', () => {
+    it('should insert hub feed item instead of merging when level prevents it', async () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3069,10 +3296,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when level active and fingerprint matches', () => {
+    it('should update when level active and fingerprint matches', async () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post Title',
@@ -3103,10 +3330,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via enclosure when level is enclosure', () => {
+    it('should update via enclosure when level is enclosure', async () => {
       const feedItem = {
         link: 'https://example.com/shared',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -3143,10 +3370,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert link-only item with changed title when level active', () => {
+    it('should insert link-only item with changed title when level active', async () => {
       const feedItem = { link: 'https://example.com/post', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3170,10 +3397,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when fragment added and level active', () => {
+    it('should insert when fragment added and level active', async () => {
       const feedItem = { link: 'https://example.com/post#comments', title: 'Post Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3197,10 +3424,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'linkFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when fragment differs and level is linkFragment', () => {
+    it('should insert when fragment differs and level is linkFragment', async () => {
       const feedItem = { link: 'https://example.com/post#comments', title: 'Post Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3224,10 +3451,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'linkFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not merge hub items even without level', () => {
+    it('should not merge hub items even without level', async () => {
       const feedItem = { link: 'https://example.com/shared', title: 'Article C' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3255,10 +3482,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update by guid when the title changes and level is title', () => {
+    it('should update by guid when the title changes and level is title', async () => {
       const feedItem = { guid: 'guid-1', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3284,10 +3511,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when guid matches despite different enclosures', () => {
+    it('should update when guid matches despite different enclosures', async () => {
       const feedItem = {
         guid: 'guid-1',
         enclosures: [{ url: 'https://example.com/new.mp3' }],
@@ -3318,10 +3545,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when level is title and title matches', () => {
+    it('should update via guid when level is title and title matches', async () => {
       const feedItem = { guid: 'guid-1', title: 'Same Title', content: 'New content' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3348,10 +3575,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not hide guid collisions in existing items', () => {
+    it('should not hide guid collisions in existing items', async () => {
       const feedItem = { guid: 'shared-guid', title: 'Article A Updated' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3380,10 +3607,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when guid matches despite different enclosures without fingerprintLevel', () => {
+    it('should update when guid matches despite different enclosures without fingerprintLevel', async () => {
       const feedItem = {
         guid: 'guid-1',
         enclosures: [{ url: 'https://example.com/new.mp3' }],
@@ -3413,10 +3640,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update only the level-matching existing item on hub channel', () => {
+    it('should update only the level-matching existing item on hub channel', async () => {
       const feedItem = {
         link: 'https://example.com/shared',
         title: 'Article C',
@@ -3453,10 +3680,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update title-only item when content changes', () => {
+    it('should update title-only item when content changes', async () => {
       const feedItem = { title: 'Post Title', content: 'New content' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3481,10 +3708,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid appears on existing item under level', () => {
+    it('should insert when guid appears on existing item under level', async () => {
       const feedItem = {
         guid: 'guid-1',
         link: 'https://example.com/post',
@@ -3514,10 +3741,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when guid disappears from existing item under level', () => {
+    it('should insert when guid disappears from existing item under level', async () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post Title',
@@ -3547,10 +3774,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when link match is blocked by enclosure conflict', () => {
+    it('should insert when link match is blocked by enclosure conflict', async () => {
       const feedItem = {
         link: 'https://example.com/show',
         enclosures: [{ url: 'https://example.com/ep2.mp3' }],
@@ -3579,10 +3806,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when link match blocked by enclosure conflict on high-uniqueness channel', () => {
+    it('should insert when link match blocked by enclosure conflict on high-uniqueness channel', async () => {
       const fillerItems = Array.from({ length: 19 }, (_, index) => {
         return makeMatchable({
           id: `filler-${index}`,
@@ -3618,10 +3845,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when title-only item has ambiguous match against multiple existing items', () => {
+    it('should insert when title-only item has ambiguous match against multiple existing items', async () => {
       const feedItem = { title: 'Shared Title', content: 'New content' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3649,10 +3876,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when enclosure-only item has ambiguous match against multiple existing items', () => {
+    it('should insert when enclosure-only item has ambiguous match against multiple existing items', async () => {
       const feedItem = {
         enclosures: [{ url: 'https://example.com/shared.mp3' }],
         title: 'New Title',
@@ -3685,10 +3912,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should match by enclosure instead of link when batch duplicates lower uniqueness', () => {
+    it('should match by enclosure instead of link when batch duplicates lower uniqueness', async () => {
       const existingItem = {
         id: 'existing-1',
         link: 'https://example.com/ep',
@@ -3729,10 +3956,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should match by guid when guid and link point to different existing items', () => {
+    it('should match by guid when guid and link point to different existing items', async () => {
       const feedItem = { guid: 'G1', link: 'https://example.com/L1', title: 'Updated' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3764,10 +3991,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert link-only item with missing title due to level collision', () => {
+    it('should insert link-only item with missing title due to level collision', async () => {
       const feedItem = { link: 'https://example.com/post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -3791,10 +4018,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should treat linkUniquenessRate exactly 0.95 as high-uniqueness', () => {
+    it('should treat linkUniquenessRate exactly 0.95 as high-uniqueness', async () => {
       const targetExisting = makeMatchable({
         id: 'target',
         link: 'https://example.com/target',
@@ -3845,10 +4072,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should treat linkUniquenessRate below 0.95 as low-uniqueness', () => {
+    it('should treat linkUniquenessRate below 0.95 as low-uniqueness', async () => {
       const targetExisting = makeMatchable({
         id: 'target',
         link: 'https://example.com/target',
@@ -3905,10 +4132,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should match via link when link uniqueness is high', () => {
+    it('should match via link when link uniqueness is high', async () => {
       const targetExisting = makeMatchable({
         id: 'target',
         link: 'https://example.com/target',
@@ -3947,10 +4174,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should match via enclosure when raw duplicates reduce link uniqueness', () => {
+    it('should match via enclosure when raw duplicates reduce link uniqueness', async () => {
       const targetExisting = makeMatchable({
         id: 'target',
         link: 'https://example.com/target',
@@ -4000,10 +4227,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update the guid-matched item when guid and link signals point to different existing items', () => {
+    it('should update the guid-matched item when guid and link signals point to different existing items', async () => {
       // Incoming shares guid with item a and (coincidentally) link with item b.
       // Guid is authoritative and unique, so this is item a with a changed link;
       // inserting instead would create a second row with guid g1 (a duplicate).
@@ -4043,10 +4270,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update a republished item when trusted guid and link match despite far-apart dates', () => {
+    it('should update a republished item when trusted guid and link match despite far-apart dates', async () => {
       const feedItem = {
         guid: 'guid-1',
         link: 'https://example.com/post-1',
@@ -4080,10 +4307,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert a date-bumped link match outside the default proximity window', () => {
+    it('should insert a date-bumped link match outside the default proximity window', async () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post',
@@ -4109,10 +4336,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update a date-bumped link match within a custom dateProximityDays window', () => {
+    it('should update a date-bumped link match within a custom dateProximityDays window', async () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post',
@@ -4141,14 +4368,14 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('update scenarios', () => {
     // When GUID is the identifier, fields below it (like link) are
     // effectively content and should trigger an update when they change.
-    it('should update when GUID matches but link changes and content is the same', () => {
+    it('should update when GUID matches but link changes and content is the same', async () => {
       const feedItem = {
         guid: 'same-guid',
         link: 'https://new-domain.com/post',
@@ -4180,12 +4407,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Use case: an Atom feed with only <updated> never carries publishedAt, while the stored
     // item has the date the host filled in on insert.
-    it('should not update when the incoming item has no publishedAt and nothing else changed', () => {
+    it('should not update when the incoming item has no publishedAt and nothing else changed', async () => {
       const feedItem = {
         guid: 'urn:uuid:6f12b0e0-a63a-11f1-962e-c054b014e66b',
         link: 'https://example.com/sports/post-1',
@@ -4207,12 +4434,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // A feed that mints a new guid and a new date on every render, while the link and the
     // text stay the same, is the same post each time.
-    it('should update by link when the guid and the date change but the link and content match', () => {
+    it('should update by link when the guid and the date change but the link and content match', async () => {
       const feedItem = {
         guid: '1788412984019 - 500',
         link: 'https://example.com/observe/post-500.html',
@@ -4242,12 +4469,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // URL-type GUIDs share the same guidHash (fragment stripped) but
     // differ in guidFragmentHash. The changeFilter should detect this.
-    it('should update when only GUID fragment changes', () => {
+    it('should update when only GUID fragment changes', async () => {
       const feedItem = {
         guid: 'https://example.com/post#v2',
         link: 'https://example.com/post',
@@ -4277,10 +4504,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should match by link when all items share a guid across scans', () => {
+    it('should match by link when all items share a guid across scans', async () => {
       const feedItemA = {
         guid: 'shared-guid',
         link: 'https://example.com/post-1',
@@ -4332,7 +4559,7 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Real-world: Some media sites use URL-format GUIDs with a rotating
@@ -4340,7 +4567,7 @@ describe('classifyItems', () => {
     // stays the same so guidHash (fragment-stripped) is identical. The item
     // should match by guidHash and changeFilter should detect the
     // guidFragmentHash difference, producing an update (not an insert).
-    it('should update when URL-format GUID fragment rotates but base stays the same', () => {
+    it('should update when URL-format GUID fragment rotates but base stays the same', async () => {
       const feedItem = {
         guid: 'https://www.example.com/news/10628994#5',
         link: 'https://www.example.com/news/10628994',
@@ -4371,10 +4598,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via link on high-uniqueness channel without explicit fingerprintLevel', () => {
+    it('should update via link on high-uniqueness channel without explicit fingerprintLevel', async () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post Title',
@@ -4404,10 +4631,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when only summary changes', () => {
+    it('should update when only summary changes', async () => {
       const feedItem = {
         guid: 'guid-1',
         title: 'Post Title',
@@ -4437,10 +4664,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when enclosure is added to existing item', () => {
+    it('should update via guid when enclosure is added to existing item', async () => {
       const feedItem = {
         guid: 'guid-1',
         title: 'Podcast Episode',
@@ -4469,10 +4696,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via link-only item on low-uniqueness channel', () => {
+    it('should update via link-only item on low-uniqueness channel', async () => {
       const feedItem = {
         link: 'https://example.com/post',
         title: 'Post Title',
@@ -4508,10 +4735,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update multiple existing items on hub channel in single batch', () => {
+    it('should update multiple existing items on hub channel in single batch', async () => {
       const feedItemA = {
         link: 'https://example.com/hub',
         title: 'Article A',
@@ -4559,10 +4786,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should auto-compute title level and update correct hub item without explicit fingerprintLevel', () => {
+    it('should auto-compute title level and update correct hub item without explicit fingerprintLevel', async () => {
       const feedItem = {
         link: 'https://example.com/hub',
         title: 'Article B',
@@ -4598,10 +4825,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade to enclosure and update correct item when guid collision disambiguated by enclosure', () => {
+    it('should downgrade to enclosure and update correct item when guid collision disambiguated by enclosure', async () => {
       const feedItem = {
         guid: 'shared-guid',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -4641,10 +4868,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade to guidFragment and update correct item when guid fragments disambiguate', () => {
+    it('should downgrade to guidFragment and update correct item when guid fragments disambiguate', async () => {
       const feedItem = {
         guid: 'https://example.com/post#v1',
         title: 'Version 1',
@@ -4681,10 +4908,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guidFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade to linkFragment and update correct item when link fragments disambiguate on high-uniqueness channel', () => {
+    it('should downgrade to linkFragment and update correct item when link fragments disambiguate on high-uniqueness channel', async () => {
       const base = 'https://example.com/page'
       const feedItem = { link: `${base}#s1`, title: 'Section 1', content: 'New content' }
       const filler = Array.from({ length: 19 }, (_, index) =>
@@ -4726,10 +4953,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'linkFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade to link and update correct item when guid collision narrowed by link', () => {
+    it('should downgrade to link and update correct item when guid collision narrowed by link', async () => {
       const feedItem = {
         guid: 'shared-guid',
         link: 'https://example.com/post-1',
@@ -4769,10 +4996,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when only title changes', () => {
+    it('should update via guid when only title changes', async () => {
       const feedItem = {
         guid: 'guid-1',
         title: 'New Title',
@@ -4802,10 +5029,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when guid+link match but enclosure changed (CDN migration)', () => {
+    it('should update when guid+link match but enclosure changed (CDN migration)', async () => {
       const feedItems = [
         {
           guid: 'guid-1',
@@ -4863,10 +5090,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when guid+link match but enclosure and title changed', () => {
+    it('should update when guid+link match but enclosure and title changed', async () => {
       const feedItem = {
         guid: 'guid-1',
         link: 'https://example.com/post-1',
@@ -4901,12 +5128,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('level and pre-match interactions', () => {
-    it('should prevent level downgrade when pre-match excludes enclosure-matched existing item', () => {
+    it('should prevent level downgrade when pre-match excludes enclosure-matched existing item', async () => {
       const feedItem = {
         link: 'https://example.com/show',
         enclosures: [{ url: 'https://example.com/ep1.mp3' }],
@@ -4943,10 +5170,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should keep fingerprintLevel guidFragment when guid fragments resolve collision', () => {
+    it('should keep fingerprintLevel guidFragment when guid fragments resolve collision', async () => {
       const feedItemA = { guid: 'https://example.com/post#v1', title: 'Version 1' }
       const feedItemB = { guid: 'https://example.com/post#v2', title: 'Version 2' }
       const value: ClassifyItemsInput = {
@@ -4969,10 +5196,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guidFragment',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade from enclosure to title when enclosures collide', () => {
+    it('should downgrade from enclosure to title when enclosures collide', async () => {
       const feedItemA = {
         link: 'https://example.com/shared',
         enclosures: [{ url: 'https://example.com/logo.jpg' }],
@@ -5003,10 +5230,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not downgrade level when existing item matches incoming exactly', () => {
+    it('should not downgrade level when existing item matches incoming exactly', async () => {
       const feedItem = { link: 'https://example.com/post', title: 'Same Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -5025,10 +5252,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not downgrade level when guid match resolves the collision', () => {
+    it('should not downgrade level when guid match resolves the collision', async () => {
       const feedItem = { guid: 'guid-1', link: 'https://example.com/post', title: 'New Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -5055,10 +5282,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should downgrade level on hub onset but still update the matching item', () => {
+    it('should downgrade level on hub onset but still update the matching item', async () => {
       const feedItemUpdate = {
         link: 'https://example.com/shared',
         title: 'Article A',
@@ -5095,12 +5322,12 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('real-world edge cases', () => {
-    it('should treat whitespace-only guid and title as no identity', () => {
+    it('should treat whitespace-only guid and title as no identity', async () => {
       const value: ClassifyItemsInput = {
         newItems: [{ guid: '   ', title: '   ', content: 'Some content' }],
         existingItems: [],
@@ -5111,10 +5338,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update a linkblog post whose guid and link point to an external site', () => {
+    it('should update a linkblog post whose guid and link point to an external site', async () => {
       const feedItem = {
         guid: 'https://example.org/some-article/',
         link: 'https://example.org/some-article/',
@@ -5146,10 +5373,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should prefer isDefault enclosure over positional first for matching', () => {
+    it('should prefer isDefault enclosure over positional first for matching', async () => {
       const feedItem = {
         guid: 'guid-1',
         title: 'Episode',
@@ -5187,10 +5414,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when feed item shares no fields with existing item', () => {
+    it('should insert when feed item shares no fields with existing item', async () => {
       const feedItem = { guid: 'guid-new', title: 'New Post' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -5213,10 +5440,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when guid is reused with different enclosure (trusts GUID per RSS spec)', () => {
+    it('should update when guid is reused with different enclosure (trusts GUID per RSS spec)', async () => {
       const feedItem = {
         guid: 'shared-guid',
         enclosures: [{ url: 'https://example.com/new-episode.mp3' }],
@@ -5246,10 +5473,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when link disappears from feed item between scans', () => {
+    it('should update via guid when link disappears from feed item between scans', async () => {
       const feedItem = {
         guid: 'guid-1',
         title: 'Post Title',
@@ -5280,10 +5507,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when enclosure is removed from feed item between scans', () => {
+    it('should update via guid when enclosure is removed from feed item between scans', async () => {
       const feedItem = {
         guid: 'guid-1',
         title: 'Episode',
@@ -5314,10 +5541,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should merge a far-apart guid reuse on a trusted-guid feed (accepted residual)', () => {
+    it('should merge a far-apart guid reuse on a trusted-guid feed (accepted residual)', async () => {
       // On a feed whose guids pass the uniqueness gate, the date proximity
       // window no longer guards guid reuse: a guid reappearing months later is
       // treated as a republished edit and merged. Every measured production
@@ -5358,10 +5585,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should work with numeric existing item IDs', () => {
+    it('should work with numeric existing item IDs', async () => {
       const feedItem = { guid: 'guid-1', title: 'Updated', content: 'New content' }
       const existingItem: ExistingItem = {
         id: 42,
@@ -5371,13 +5598,13 @@ describe('classifyItems', () => {
         newItems: [feedItem],
         existingItems: [existingItem],
       }
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result.updates).toHaveLength(1)
       expect(result.updates[0].existingItemId).toBe(42)
     })
 
-    it('should insert when guid changes but title stays the same', () => {
+    it('should insert when guid changes but title stays the same', async () => {
       const feedItem = { guid: 'new-guid', title: 'Same Title', content: 'New content' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -5401,10 +5628,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when incoming loses content', () => {
+    it('should update via guid when incoming loses content', async () => {
       const feedItem = { guid: 'guid-1', title: 'Post Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -5430,10 +5657,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update via guid when incoming loses summary', () => {
+    it('should update via guid when incoming loses summary', async () => {
       const feedItem = { guid: 'guid-1', title: 'Post Title' }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
@@ -5459,10 +5686,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert when link match is ambiguous on high-uniqueness channel', () => {
+    it('should insert when link match is ambiguous on high-uniqueness channel', async () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
       const filler = Array.from({ length: 19 }, (_, index) =>
         makeMatchable({
@@ -5498,10 +5725,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when isDefault enclosure toggle changes selected enclosure (trusts GUID)', () => {
+    it('should update when isDefault enclosure toggle changes selected enclosure (trusts GUID)', async () => {
       const feedItem = {
         guid: 'G',
         enclosures: [
@@ -5539,10 +5766,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert a retitled item that shares only a placeholder image enclosure', () => {
+    it('should insert a retitled item that shares only a placeholder image enclosure', async () => {
       // A shared decorative image (a site logo) is not evidence of identity,
       // so a guid-less link-less item with a different title is a new item.
       const feedItem = {
@@ -5572,14 +5799,14 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Real-world: Some broken CMS feeds use the blog index
     // URL as the GUID for every item. All items share one GUID, but have
     // different links and titles. The fingerprint level should downgrade from
     // guid to link since guid is useless for disambiguation.
-    it('should downgrade to link when all items share a single GUID', () => {
+    it('should downgrade to link when all items share a single GUID', async () => {
       const sharedGuid = 'https://example.com/blog//'
       const feedItemA = {
         guid: sharedGuid,
@@ -5620,14 +5847,14 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Real-world: Extension of the broken CMS pattern above — same feed, but
     // now existing items from a prior scan are present. The single shared GUID
     // forces downgrade to link-level fingerprinting, and items should match
     // existing items by link to produce updates.
-    it('should downgrade and match by link when all items share a single GUID with existing items', () => {
+    it('should downgrade and match by link when all items share a single GUID with existing items', async () => {
       const sharedGuid = 'https://example.com/blog//'
       const feedItemA = {
         guid: sharedGuid,
@@ -5680,14 +5907,14 @@ describe('classifyItems', () => {
         fingerprintLevel: 'link',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Real-world: Many podcast feeds set <link> to the show homepage for every
     // episode instead of an episode-specific URL. Each episode has a unique
     // GUID but all share one link. GUID matching should still work since GUIDs
     // are unique — the low link uniqueness only affects link-based strategies.
-    it('should match by guid when all items share a single link', () => {
+    it('should match by guid when all items share a single link', async () => {
       const sharedLink = 'https://example.com/show'
       const feedItemA = {
         guid: 'episode-100',
@@ -5740,14 +5967,14 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Real-world: 644 channels (22%) where GUID and link are the identical
     // string (e.g., guid="https://example.com/post", link="https://example.com/post").
     // guidHash and linkHash end up identical. Matching should still work since
     // the GUID strategy runs first and finds a unique match.
-    it('should match when guid and link are identical strings', () => {
+    it('should match when guid and link are identical strings', async () => {
       const url = 'https://example.com/post-1'
       const feedItem = { guid: url, link: url, title: 'Post 1', content: 'New content' }
       const value: ClassifyItemsInput = {
@@ -5775,7 +6002,7 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
     // Real-world: Some video podcast feeds have no GUIDs and no links. Items
@@ -5783,7 +6010,7 @@ describe('classifyItems', () => {
     // enclosure URLs, so enclosure
     // is the disambiguating signal. The fingerprint level should downgrade
     // to enclosure and items should match existing items correctly.
-    it('should match by enclosure when items have no guid and no link', () => {
+    it('should match by enclosure when items have no guid and no link', async () => {
       const feedItemA = {
         title: 'Find Freedom',
         summary: 'Updated sermon notes A',
@@ -5811,7 +6038,7 @@ describe('classifyItems', () => {
           }),
         ],
       }
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       const updatedItemIds = result.updates
         .map((update) => update.existingItemId)
@@ -5827,7 +6054,7 @@ describe('classifyItems', () => {
     // Within a single scan, multiple items share the same link (thread URL) and
     // title (thread title) but have unique GUIDs and different summaries. These
     // are distinct items, not duplicates.
-    it('should treat forum replies sharing link and title as distinct items', () => {
+    it('should treat forum replies sharing link and title as distinct items', async () => {
       const threadLink = 'https://forum.example.com/t/shutdown-option-missing/45754'
       const threadTitle = 'Application Launcher is Missing Shutdown Option'
       const replyA = {
@@ -5853,7 +6080,7 @@ describe('classifyItems', () => {
         existingItems: [],
         fingerprintLevel: 'guid',
       }
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result.inserts).toHaveLength(3)
       expect(result.updates).toHaveLength(0)
@@ -5862,8 +6089,8 @@ describe('classifyItems', () => {
   })
 
   describe('multi-scan replay', () => {
-    it('should downgrade level on hub onset across scans', () => {
-      const scan1 = classifyItems({
+    it('should downgrade level on hub onset across scans', async () => {
+      const scan1 = await classifyItems({
         newItems: [{ link: 'https://example.com/hub', title: 'Article A' }],
         existingItems: [],
       })
@@ -5871,7 +6098,7 @@ describe('classifyItems', () => {
       expect(scan1.fingerprintLevel).toBe('link')
       expect(scan1.inserts).toHaveLength(1)
 
-      const scan2 = classifyItems({
+      const scan2 = await classifyItems({
         newItems: [
           { link: 'https://example.com/hub', title: 'Article A', content: 'Updated' },
           { link: 'https://example.com/hub', title: 'Article B' },
@@ -5891,8 +6118,8 @@ describe('classifyItems', () => {
       expect(scan2.updates).toHaveLength(1)
     })
 
-    it('should not upgrade level when collisions disappear in subsequent scan', () => {
-      const scan3 = classifyItems({
+    it('should not upgrade level when collisions disappear in subsequent scan', async () => {
+      const scan3 = await classifyItems({
         newItems: [{ link: 'https://example.com/unique-new', title: 'New Post' }],
         existingItems: [
           makeMatchable({
@@ -5912,8 +6139,8 @@ describe('classifyItems', () => {
       expect(scan3.fingerprintLevel).toBe('title')
     })
 
-    it('should downgrade level when guid is recycled in later scan', () => {
-      const scan1 = classifyItems({
+    it('should downgrade level when guid is recycled in later scan', async () => {
+      const scan1 = await classifyItems({
         newItems: [
           { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' },
           { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2' },
@@ -5924,7 +6151,7 @@ describe('classifyItems', () => {
       expect(scan1.fingerprintLevel).toBe('guid')
       expect(scan1.inserts).toHaveLength(2)
 
-      const scan2 = classifyItems({
+      const scan2 = await classifyItems({
         newItems: [
           { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Updated' },
           { guid: 'guid-1', link: 'https://example.com/post-new', title: 'New' },
@@ -5954,8 +6181,8 @@ describe('classifyItems', () => {
     // Real-world: News liveblog feeds have items with a stable GUID and link,
     // but the title changes every scan as the headline is updated. Each scan
     // should produce an update because the title hash differs.
-    it('should produce update on each scan when liveblog title keeps changing', () => {
-      const scan1 = classifyItems({
+    it('should produce update on each scan when liveblog title keeps changing', async () => {
+      const scan1 = await classifyItems({
         newItems: [
           {
             guid: 'liveblog-monday-110',
@@ -5972,7 +6199,7 @@ describe('classifyItems', () => {
         return { id: 'liveblog-1', ...insert.item }
       })
 
-      const scan2 = classifyItems({
+      const scan2 = await classifyItems({
         newItems: [
           {
             guid: 'liveblog-monday-110',
@@ -5989,7 +6216,7 @@ describe('classifyItems', () => {
 
       const afterScan2: Array<ExistingItem> = [{ id: 'liveblog-1', ...scan2.updates[0].item }]
 
-      const scan3 = classifyItems({
+      const scan3 = await classifyItems({
         newItems: [
           {
             guid: 'liveblog-monday-110',
@@ -6006,8 +6233,53 @@ describe('classifyItems', () => {
     })
   })
 
+  describe('fallback matching', () => {
+    it('should offer unmatched inserts to fallbackMatchFn and skip claimed existing items', async () => {
+      const matched = makeMatchable({ id: 'matched', guid: 'guid-1', title: 'First post' })
+      const unmatched = makeMatchable({ id: 'unmatched', guid: 'guid-2', title: 'Second post' })
+      const publishedAt = new Date('2024-01-01T00:00:00Z')
+      const value: ClassifyItemsInput = {
+        newItems: [
+          { guid: 'guid-1', title: 'First post, edited', publishedAt },
+          { guid: 'guid-3', title: 'Second post, renamed', publishedAt },
+        ],
+        existingItems: [
+          { ...matched, publishedAt },
+          { ...unmatched, publishedAt },
+        ],
+        fallbackMatchFn: ({ candidates }) => candidates[0].id,
+      }
+
+      const result = await classifyItems(value)
+      const summary = result.updates.map((update) => [update.existingItemId, update.matchedBy])
+
+      expect(result.inserts).toEqual([])
+      expect(summary).toEqual([
+        ['matched', 'guid'],
+        ['unmatched', 'fallback'],
+      ])
+    })
+
+    it('should default the window to 2 days and widen it with fallbackWindowDays', async () => {
+      const existing = makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'Old title' })
+      const value: ClassifyItemsInput = {
+        newItems: [
+          { guid: 'guid-2', title: 'New title', publishedAt: new Date('2024-01-04T00:00:00Z') },
+        ],
+        existingItems: [{ ...existing, publishedAt: new Date('2024-01-01T00:00:00Z') }],
+        fallbackMatchFn: () => 'existing-1',
+      }
+
+      const narrow = await classifyItems(value)
+      const wide = await classifyItems({ ...value, fallbackWindowDays: 7 })
+
+      expect(narrow.updates).toHaveLength(0)
+      expect(wide.updates).toHaveLength(1)
+    })
+  })
+
   describe('invariants', () => {
-    it('should produce unique fingerprintHashes across inserts and updates', () => {
+    it('should produce unique fingerprintHashes across inserts and updates', async () => {
       const value: ClassifyItemsInput = {
         newItems: [
           { guid: 'guid-1', title: 'Updated', content: 'New' },
@@ -6024,7 +6296,7 @@ describe('classifyItems', () => {
         ],
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
       const allHashes = [...result.inserts, ...result.updates].map((item) => {
         return item.fingerprintHash
       })
@@ -6033,7 +6305,7 @@ describe('classifyItems', () => {
       expect(new Set(allHashes).size).toBe(allHashes.length)
     })
 
-    it('should not target same existing item in multiple updates', () => {
+    it('should not target same existing item in multiple updates', async () => {
       const feedItemA = {
         link: 'https://example.com/hub',
         title: 'Article A',
@@ -6074,7 +6346,7 @@ describe('classifyItems', () => {
         fingerprintLevel: 'title',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
       const targetIds = result.updates.map((update) => {
         return update.existingItemId
       })
@@ -6092,21 +6364,24 @@ describe('classifyItems', () => {
       'title',
     ]
 
-    it.each(levels)('should never resolve fingerprintLevel stronger than input %s', (level) => {
-      const feedItems = [
-        { guid: 'guid-1', link: 'https://example.com/p1', title: 'Post 1' },
-        { guid: 'guid-2', link: 'https://example.com/p2', title: 'Post 2' },
-      ]
-      const result = classifyItems({
-        newItems: feedItems,
-        existingItems: [],
-        fingerprintLevel: level,
-      })
+    it.each(levels)(
+      'should never resolve fingerprintLevel stronger than input %s',
+      async (level) => {
+        const feedItems = [
+          { guid: 'guid-1', link: 'https://example.com/p1', title: 'Post 1' },
+          { guid: 'guid-2', link: 'https://example.com/p2', title: 'Post 2' },
+        ]
+        const result = await classifyItems({
+          newItems: feedItems,
+          existingItems: [],
+          fingerprintLevel: level,
+        })
 
-      expect(result.fingerprintLevel).toBe(level)
-    })
+        expect(result.fingerprintLevel).toBe(level)
+      },
+    )
 
-    it('should produce same result regardless of existing item order', () => {
+    it('should produce same result regardless of existing item order', async () => {
       const feedItem = {
         guid: 'guid-2',
         link: 'https://example.com/post-2',
@@ -6132,11 +6407,11 @@ describe('classifyItems', () => {
         newItems: [feedItem],
         fingerprintLevel: 'guid',
       }
-      const resultForward = classifyItems({
+      const resultForward = await classifyItems({
         ...base,
         existingItems: [existingA, existingB],
       })
-      const resultReversed = classifyItems({
+      const resultReversed = await classifyItems({
         ...base,
         existingItems: [existingB, existingA],
       })
@@ -6154,7 +6429,7 @@ describe('classifyItems', () => {
     }
 
     describe('happy paths', () => {
-      it('should reclassify insert as update when guid differs but link + content + publishedAt match', () => {
+      it('should reclassify insert as update when guid differs but link + content + publishedAt match', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'new-guid',
@@ -6191,10 +6466,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reclassify insert as update when both GUIDs are null and link differs but content matches', () => {
+      it('should reclassify insert as update when both GUIDs are null and link differs but content matches', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           link: 'https://new-domain.com/post',
@@ -6227,10 +6502,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'link',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reconcile multiple inserts against different existing items', () => {
+      it('should reconcile multiple inserts against different existing items', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'new-guid-1',
@@ -6286,12 +6561,12 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
     })
 
     describe('sad paths', () => {
-      it('should not reconcile when publishedAt differs', () => {
+      it('should not reconcile when publishedAt differs', async () => {
         const feedItem = {
           guid: 'new-guid',
           link: 'https://example.com/post',
@@ -6321,10 +6596,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when only the text matches and publishedAt differs', () => {
+      it('should not reconcile when only the text matches and publishedAt differs', async () => {
         const feedItem = {
           link: 'https://example.com/post-2',
           title: 'Post Title',
@@ -6354,10 +6629,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'link',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when both GUIDs are null and link differs but content differs', () => {
+      it('should not reconcile when both GUIDs are null and link differs but content differs', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           link: 'https://new-domain.com/post',
@@ -6386,10 +6661,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'link',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when both guid and link differ', () => {
+      it('should not reconcile when both guid and link differ', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'new-guid',
@@ -6420,10 +6695,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when existing item is already targeted by another update', () => {
+      it('should not reconcile when existing item is already targeted by another update', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'same-guid',
@@ -6467,10 +6742,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile when no existing items exist', () => {
+      it('should not reconcile when no existing items exist', async () => {
         const feedItem = {
           guid: 'guid-1',
           link: 'https://example.com/post',
@@ -6492,12 +6767,12 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
     })
 
     describe('edge cases', () => {
-      it('should not match when one side has null content hash and the other has a value', () => {
+      it('should not match when one side has null content hash and the other has a value', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'new-guid',
@@ -6529,10 +6804,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reconcile item with enclosures when all content hashes match', () => {
+      it('should reconcile item with enclosures when all content hashes match', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'new-guid',
@@ -6567,14 +6842,14 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
       // Real-world: 89,524 items have only a title (no summary, no content,
       // no enclosure). With minReconciliationFields=2, a title-only match
       // should never reconcile — one matching content field is below the
       // threshold, preventing false merges on generic titles like "Newsletter".
-      it('should not reconcile title-only item even when title matches perfectly', () => {
+      it('should not reconcile title-only item even when title matches perfectly', async () => {
         const feedItem = {
           guid: 'new-guid',
           link: 'https://example.com/post',
@@ -6602,10 +6877,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should update the most recent copy when several stored copies match by link', () => {
+      it('should update the most recent copy when several stored copies match by link', async () => {
         const feedItem = {
           guid: 'tag:example.com,2024-01-22:/guides/rates',
           link: 'https://example.com/guides/rates',
@@ -6647,12 +6922,12 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
     })
 
     describe('real-world patterns', () => {
-      it('should handle alternating GUIDs across scans (guid A → B → A)', () => {
+      it('should handle alternating GUIDs across scans (guid A → B → A)', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItemA: NewItem = {
           guid: 'guid-a',
@@ -6670,7 +6945,7 @@ describe('classifyItems', () => {
         }
 
         // Scan 1: item with guid A inserted.
-        const scan1 = classifyItems({
+        const scan1 = await classifyItems({
           newItems: [feedItemA],
           existingItems: [],
         })
@@ -6693,7 +6968,7 @@ describe('classifyItems', () => {
           id: 'item-1',
           publishedAt,
         }
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [feedItemB],
           existingItems: [afterScan1],
         })
@@ -6718,7 +6993,7 @@ describe('classifyItems', () => {
           id: 'item-1',
           publishedAt,
         }
-        const scan3 = classifyItems({
+        const scan3 = await classifyItems({
           newItems: [feedItemA],
           existingItems: [afterScan2],
         })
@@ -6738,7 +7013,7 @@ describe('classifyItems', () => {
         expect(scan3).toEqual(expectedScan3)
       })
 
-      it('should not merge distinct linkblog posts that each have guid == link to external sites', () => {
+      it('should not merge distinct linkblog posts that each have guid == link to external sites', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const incomingPost = {
           guid: 'https://example.net/article-x/',
@@ -6771,10 +7046,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reconcile a linkblog post whose external URL migrated to a new host', () => {
+      it('should reconcile a linkblog post whose external URL migrated to a new host', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'https://new-host.com/post/',
@@ -6809,10 +7084,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should handle partial GUID instability (some stable, some change)', () => {
+      it('should handle partial GUID instability (some stable, some change)', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const stableItem = {
           guid: 'stable-guid',
@@ -6870,10 +7145,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should handle GUID removed from feed (becomes null)', () => {
+      it('should handle GUID removed from feed (becomes null)', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           link: 'https://example.com/post',
@@ -6910,10 +7185,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'link',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should handle all GUIDs changing with mixed content changes', () => {
+      it('should handle all GUIDs changing with mixed content changes', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'new-guid-1',
@@ -6993,12 +7268,12 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
       // Simulates feeds with random hex GUIDs regenerated on every build.
       // All other fields stay stable across 3 consecutive scans.
-      it('should handle random hex GUIDs across 3 consecutive scans', () => {
+      it('should handle random hex GUIDs across 3 consecutive scans', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const post1 = {
           link: 'https://example.com/post-1',
@@ -7020,7 +7295,7 @@ describe('classifyItems', () => {
         }
 
         // Scan 1: first fetch, all items inserted.
-        const scan1 = classifyItems({
+        const scan1 = await classifyItems({
           newItems: [
             { guid: 'a1b2c3d4e5f6', ...post1 },
             { guid: 'b2c3d4e5f6a1', ...post2 },
@@ -7040,7 +7315,7 @@ describe('classifyItems', () => {
         }))
 
         // Scan 2: all GUIDs regenerated. Reconciliation catches all 3.
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [
             { guid: 'f6e5d4c3b2a1', ...post1 },
             { guid: 'e5d4c3b2a1f6', ...post2 },
@@ -7062,7 +7337,7 @@ describe('classifyItems', () => {
         }))
 
         // Scan 3: yet another set of random GUIDs. Still reconciles.
-        const scan3 = classifyItems({
+        const scan3 = await classifyItems({
           newItems: [
             { guid: '111111111111', ...post1 },
             { guid: '222222222222', ...post2 },
@@ -7077,7 +7352,7 @@ describe('classifyItems', () => {
         expect(scan3.updates.every((u) => u.matchedBy === 'link')).toBe(true)
       })
 
-      it('should not reconcile when two inserts target the same existing item (ambiguous)', () => {
+      it('should not reconcile when two inserts target the same existing item (ambiguous)', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'new-guid-1',
@@ -7123,10 +7398,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reconcile when both GUIDs are null and link differs but content matches', () => {
+      it('should reconcile when both GUIDs are null and link differs but content matches', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           link: 'https://example.com/new-link',
@@ -7159,12 +7434,12 @@ describe('classifyItems', () => {
           fingerprintLevel: 'link',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should update stale publishedAt so later reconciliation succeeds', () => {
+      it('should update stale publishedAt so later reconciliation succeeds', async () => {
         // Scan 1: item stored.
-        const scan1 = classifyItems({
+        const scan1 = await classifyItems({
           newItems: [
             {
               guid: 'guid-1',
@@ -7182,7 +7457,7 @@ describe('classifyItems', () => {
         })
 
         // Scan 2: same hashes, only publishedAt changes → should update.
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [
             {
               guid: 'guid-1',
@@ -7205,7 +7480,7 @@ describe('classifyItems', () => {
 
         // Scan 3: GUID becomes unstable, link/content same, publishedAt
         // matches scan 2 → reconciliation should work.
-        const scan3 = classifyItems({
+        const scan3 = await classifyItems({
           newItems: [
             {
               guid: 'guid-new',
@@ -7225,7 +7500,7 @@ describe('classifyItems', () => {
         expect(scan3.updates[0].matchedBy).toBe('link')
       })
 
-      it('should not reconcile when new guid conflicts with another existing item', () => {
+      it('should not reconcile when new guid conflicts with another existing item', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'guid-new',
@@ -7273,10 +7548,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile Case 2 when incoming link belongs to another existing item', () => {
+      it('should not reconcile Case 2 when incoming link belongs to another existing item', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           link: 'https://example.com/post-2',
@@ -7317,10 +7592,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'title',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not trigger Case 2 when incoming has GUID but existing does not', () => {
+      it('should not trigger Case 2 when incoming has GUID but existing does not', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'has-guid',
@@ -7355,10 +7630,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'link',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile insert when existing item is targeted by a link-change update', () => {
+      it('should not reconcile insert when existing item is targeted by a link-change update', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'same-guid',
@@ -7409,10 +7684,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile insert when existing item is claimed by a no-op match', () => {
+      it('should not reconcile insert when existing item is claimed by a no-op match', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem1 = {
           guid: 'same-guid',
@@ -7456,10 +7731,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reconcile when both GUID and link change but guid==link on both sides (domain migration)', () => {
+      it('should reconcile when both GUID and link change but guid==link on both sides (domain migration)', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'https://new-domain.com/post',
@@ -7494,10 +7769,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should not reconcile domain migration when guid != link', () => {
+      it('should not reconcile domain migration when guid != link', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const feedItem = {
           guid: 'https://new-domain.com/?p=123',
@@ -7530,10 +7805,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should handle GUIDs disappearing then reappearing across 3 scans', () => {
+      it('should handle GUIDs disappearing then reappearing across 3 scans', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const post = {
           guid: 'original-guid',
@@ -7544,14 +7819,14 @@ describe('classifyItems', () => {
         }
 
         // Scan 1: item with GUID.
-        const scan1 = classifyItems({ newItems: [post], existingItems: [] })
+        const scan1 = await classifyItems({ newItems: [post], existingItems: [] })
 
         expect(scan1.inserts).toHaveLength(1)
 
         const afterScan1: ExistingItem = { ...scan1.inserts[0].item, id: 'item-1' }
 
         // Scan 2: GUID removed. Reconciliation catches it by link.
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [{ ...post, guid: null }],
           existingItems: [afterScan1],
           fingerprintLevel: scan1.fingerprintLevel,
@@ -7564,7 +7839,7 @@ describe('classifyItems', () => {
         const afterScan2: ExistingItem = { ...scan2.updates[0].item, id: 'item-1' }
 
         // Scan 3: GUID reappears. Reconciliation catches it again by link.
-        const scan3 = classifyItems({
+        const scan3 = await classifyItems({
           newItems: [post],
           existingItems: [afterScan2],
           fingerprintLevel: scan2.fingerprintLevel,
@@ -7575,11 +7850,11 @@ describe('classifyItems', () => {
         expect(scan3.updates[0].matchedBy).toBe('link')
       })
 
-      it('should handle link-only feed that adds GUIDs on scan 2', () => {
+      it('should handle link-only feed that adds GUIDs on scan 2', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
 
         // Scan 1: no GUIDs, link-only items.
-        const scan1 = classifyItems({
+        const scan1 = await classifyItems({
           newItems: [
             {
               link: 'https://example.com/post-1',
@@ -7605,7 +7880,7 @@ describe('classifyItems', () => {
         }))
 
         // Scan 2: GUIDs appear. Link still matches, reconciliation catches it.
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [
             {
               guid: 'guid-1',
@@ -7630,7 +7905,7 @@ describe('classifyItems', () => {
         expect(scan2.updates).toHaveLength(2)
       })
 
-      it('should handle growing feed with changing GUIDs on existing items', () => {
+      it('should handle growing feed with changing GUIDs on existing items', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const post1 = {
           link: 'https://example.com/post-1',
@@ -7664,7 +7939,7 @@ describe('classifyItems', () => {
         }
 
         // Scan 1: 3 items inserted.
-        const scan1 = classifyItems({
+        const scan1 = await classifyItems({
           newItems: [
             { guid: 'guid-1', ...post1 },
             { guid: 'guid-2', ...post2 },
@@ -7681,7 +7956,7 @@ describe('classifyItems', () => {
         }))
 
         // Scan 2: 3 old items with new GUIDs + 2 genuinely new items.
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [
             { guid: 'new-guid-1', ...post1 },
             { guid: 'new-guid-2', ...post2 },
@@ -7698,7 +7973,7 @@ describe('classifyItems', () => {
         expect(scan2.inserts).toHaveLength(2)
       })
 
-      it('should handle shrinking feed with changing GUIDs on remaining items', () => {
+      it('should handle shrinking feed with changing GUIDs on remaining items', async () => {
         const publishedAt = new Date('2024-01-01T00:00:00Z')
         const post1 = {
           link: 'https://example.com/post-1',
@@ -7732,7 +8007,7 @@ describe('classifyItems', () => {
         }
 
         // Scan 1: 5 items inserted.
-        const scan1 = classifyItems({
+        const scan1 = await classifyItems({
           newItems: [
             { guid: 'guid-1', ...post1 },
             { guid: 'guid-2', ...post2 },
@@ -7752,7 +8027,7 @@ describe('classifyItems', () => {
 
         // Scan 2: only 3 items remain, all with new GUIDs.
         // The 2 removed items stay in existingItems but have no match.
-        const scan2 = classifyItems({
+        const scan2 = await classifyItems({
           newItems: [
             { guid: 'new-guid-1', ...post1 },
             { guid: 'new-guid-3', ...post3 },
@@ -7772,7 +8047,7 @@ describe('classifyItems', () => {
       // between www/non-www or staging domains. The GUID doesn't start with
       // http, so it's treated as an opaque string — each variant hashes
       // differently. Link stays stable, all content matches.
-      it('should reconcile when non-URL GUID embeds a varying domain', () => {
+      it('should reconcile when non-URL GUID embeds a varying domain', async () => {
         const publishedAt = new Date('2024-06-15T10:00:00Z')
         const feedItem = {
           guid: '650 at https://example.com/en',
@@ -7809,10 +8084,10 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        expect(classifyItems(value)).toEqual(expected)
+        expect(await classifyItems(value)).toEqual(expected)
       })
 
-      it('should reconcile multiple items when domain migrates and guid==link', () => {
+      it('should reconcile multiple items when domain migrates and guid==link', async () => {
         const feedItems = [
           {
             guid: 'https://new-domain.com/post-1',
@@ -7867,7 +8142,7 @@ describe('classifyItems', () => {
           fingerprintLevel: 'guid',
         }
 
-        const result = classifyItems(value)
+        const result = await classifyItems(value)
 
         expect(result.inserts).toHaveLength(0)
         expect(result.updates).toHaveLength(3)
@@ -7880,7 +8155,7 @@ describe('classifyItems', () => {
   })
 
   describe('publishedAt coercion', () => {
-    it('should not crash when publishedAt is a string and the item matches', () => {
+    it('should not crash when publishedAt is a string and the item matches', async () => {
       const publishedAt = '2020-01-01T00:00:00Z' as unknown as Date
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Post', publishedAt }],
@@ -7892,10 +8167,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should not report a spurious update when re-scanning an item with an invalid date', () => {
+    it('should not report a spurious update when re-scanning an item with an invalid date', async () => {
       const publishedAt = new Date('not a date')
       const value: ClassifyItemsInput = {
         newItems: [{ guid: 'guid-1', title: 'Post', publishedAt }],
@@ -7907,10 +8182,10 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should reconcile a guid change when both dates are invalid', () => {
+    it('should reconcile a guid change when both dates are invalid', async () => {
       const publishedAt = new Date('not a date')
       const value: ClassifyItemsInput = {
         newItems: [
@@ -7959,7 +8234,7 @@ describe('classifyItems', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 })
@@ -8046,7 +8321,7 @@ describe('excludeCandidateEnclosure', () => {
 })
 
 describe('classifyItems enclosure exclusion', () => {
-  it('should update by link when a thumbnail is swapped on a link-stable item', () => {
+  it('should update by link when a thumbnail is swapped on a link-stable item', async () => {
     const feedItem = {
       link: 'https://example.com/post',
       title: 'Post Title',
@@ -8077,10 +8352,10 @@ describe('classifyItems enclosure exclusion', () => {
       fingerprintLevel: 'title',
     }
 
-    expect(classifyItems(value)).toEqual(expected)
+    expect(await classifyItems(value)).toEqual(expected)
   })
 
-  it('should update by title when a thumbnail is swapped on a link-less item', () => {
+  it('should update by title when a thumbnail is swapped on a link-less item', async () => {
     const feedItem = {
       title: 'Stable Title',
       enclosures: [{ url: 'https://example.com/new-thumb.jpg' }],
@@ -8108,10 +8383,10 @@ describe('classifyItems enclosure exclusion', () => {
       fingerprintLevel: 'title',
     }
 
-    expect(classifyItems(value)).toEqual(expected)
+    expect(await classifyItems(value)).toEqual(expected)
   })
 
-  it('should keep image items sharing a link distinct by title', () => {
+  it('should keep image items sharing a link distinct by title', async () => {
     const feedItemA = {
       link: 'https://example.com/hub',
       title: 'Article A',
@@ -8127,7 +8402,7 @@ describe('classifyItems enclosure exclusion', () => {
       existingItems: [],
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.updates).toEqual([])
     expect(result.inserts).toHaveLength(2)
@@ -8135,11 +8410,11 @@ describe('classifyItems enclosure exclusion', () => {
     expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
   })
 
-  it('should still insert and match an item identified only by its image enclosure', () => {
+  it('should still insert and match an item identified only by its image enclosure', async () => {
     const original = { enclosures: [{ url: 'https://example.com/only.jpg' }], content: 'Old' }
     const edited = { enclosures: [{ url: 'https://example.com/only.jpg' }], content: 'New' }
-    const scanOne = classifyItems({ newItems: [original], existingItems: [] })
-    const scanTwo = classifyItems({
+    const scanOne = await classifyItems({ newItems: [original], existingItems: [] })
+    const scanTwo = await classifyItems({
       newItems: [edited],
       existingItems: [makeMatchable({ id: 'existing-1', ...original })],
       fingerprintLevel: scanOne.fingerprintLevel,
@@ -8151,7 +8426,7 @@ describe('classifyItems enclosure exclusion', () => {
     expect(scanTwo.updates[0]?.matchedBy).toBe('enclosure')
   })
 
-  it('should update by enclosure when a podcast title is edited', () => {
+  it('should update by enclosure when a podcast title is edited', async () => {
     const feedItem = {
       title: 'Episode 12 (remastered)',
       enclosures: [{ url: 'https://example.com/ep12.mp3', type: 'audio/mpeg' }],
@@ -8167,14 +8442,14 @@ describe('classifyItems enclosure exclusion', () => {
       ],
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.inserts).toEqual([])
     expect(result.updates).toHaveLength(1)
     expect(result.updates[0]?.matchedBy).toBe('enclosure')
   })
 
-  it('should keep podcast episodes with identical titles distinct by audio', () => {
+  it('should keep podcast episodes with identical titles distinct by audio', async () => {
     const feedItemA = {
       title: 'Weekly Update',
       enclosures: [{ url: 'https://example.com/ep1.mp3', type: 'audio/mpeg' }],
@@ -8188,7 +8463,7 @@ describe('classifyItems enclosure exclusion', () => {
       existingItems: [],
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.updates).toEqual([])
     expect(result.inserts).toHaveLength(2)
@@ -8196,7 +8471,7 @@ describe('classifyItems enclosure exclusion', () => {
     expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
   })
 
-  it('should treat a replaced audio file on the same link and title as a new item', () => {
+  it('should treat a replaced audio file on the same link and title as a new item', async () => {
     const feedItem = {
       link: 'https://example.com/episode',
       title: 'Episode',
@@ -8215,13 +8490,13 @@ describe('classifyItems enclosure exclusion', () => {
       fingerprintLevel: 'enclosure',
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.updates).toEqual([])
     expect(result.inserts).toHaveLength(1)
   })
 
-  it('should insert a duplicate for an edited title on a stable image (accepted residual)', () => {
+  it('should insert a duplicate for an edited title on a stable image (accepted residual)', async () => {
     // Without the image in identity, a guid-less link-less retitled item has
     // nothing tying it to its previous row. Previously the shared image
     // rescued this case; the trade is documented and accepted.
@@ -8240,13 +8515,13 @@ describe('classifyItems enclosure exclusion', () => {
       ],
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.updates).toEqual([])
     expect(result.inserts).toHaveLength(1)
   })
 
-  it('should update an item with excluded enclosure against an existing item without raw enclosures', () => {
+  it('should update an item with excluded enclosure against an existing item without raw enclosures', async () => {
     // The caller has not yet stored raw enclosures on existing items, so the
     // candidate reuses the exclusion decision made for the incoming item.
     const original = {
@@ -8266,14 +8541,14 @@ describe('classifyItems enclosure exclusion', () => {
       fingerprintLevel: 'title',
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.inserts).toEqual([])
     expect(result.updates).toHaveLength(1)
     expect(result.updates[0]?.existingItemId).toBe('existing-1')
   })
 
-  it('should update within a same-guid family when only the image changed', () => {
+  it('should update within a same-guid family when only the image changed', async () => {
     const feedItem = {
       guid: 'shared-guid',
       link: 'https://example.com/post-a',
@@ -8300,14 +8575,14 @@ describe('classifyItems enclosure exclusion', () => {
       ],
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.inserts).toEqual([])
     expect(result.updates).toHaveLength(1)
     expect(result.updates[0]?.existingItemId).toBe('existing-a')
   })
 
-  it('should keep the enclosure-bearing variant when in-batch duplicates collapse', () => {
+  it('should keep the enclosure-bearing variant when in-batch duplicates collapse', async () => {
     const withEnclosure = {
       link: 'https://example.com/post',
       title: 'Post Title',
@@ -8322,13 +8597,13 @@ describe('classifyItems enclosure exclusion', () => {
       existingItems: [],
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.inserts).toHaveLength(1)
     expect(result.inserts[0]?.item.enclosureHash).not.toBeNull()
   })
 
-  it('should update on an image swap when publishedAt is set on both sides', () => {
+  it('should update on an image swap when publishedAt is set on both sides', async () => {
     const publishedAt = new Date('2026-06-30T12:00:00Z')
     const feedItem = {
       link: 'https://example.com/post',
@@ -8352,7 +8627,7 @@ describe('classifyItems enclosure exclusion', () => {
       fingerprintLevel: 'title',
     }
 
-    const result = classifyItems(value)
+    const result = await classifyItems(value)
 
     expect(result.inserts).toEqual([])
     expect(result.updates).toHaveLength(1)

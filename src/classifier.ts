@@ -23,6 +23,7 @@ import type {
   CleanUrlFn,
   Enclosure,
   ExistingItem,
+  FallbackMatchFn,
   FingerprintedItem,
   FingerprintLevel,
   IncomingItem,
@@ -309,6 +310,87 @@ export const excludeCandidateEnclosure = (
   return { ...candidate, enclosureHash: null }
 }
 
+// Offer each remaining insert to fallbackMatchFn along with the unclaimed existing items published
+// within the window. Items without publishedAt are skipped on both sides. Same one-to-one rule as
+// reconcileInserts.
+export const matchFallbackInserts = async <T extends NewItem>(context: {
+  inserts: Array<InsertAction<T>>
+  existingItems: Array<ExistingItem>
+  claimedExistingIds: Set<ItemIdLike>
+  fallbackMatchFn: FallbackMatchFn<T>
+  fallbackWindowDays: number
+}): Promise<{
+  fallbackInserts: Array<InsertAction<T>>
+  fallbackUpdates: Array<UpdateAction<T>>
+}> => {
+  const windowMs = context.fallbackWindowDays * 24 * 60 * 60 * 1000
+
+  const findFallbackMatch = async (insert: InsertAction<T>): Promise<ItemIdLike | undefined> => {
+    const incomingTime = insert.item.publishedAt?.getTime()
+
+    if (incomingTime == null) {
+      return
+    }
+
+    const candidates = context.existingItems.filter((existing) => {
+      const existingTime = existing.publishedAt?.getTime()
+
+      if (existingTime == null || context.claimedExistingIds.has(existing.id)) {
+        return false
+      }
+
+      if (Math.abs(incomingTime - existingTime) > windowMs) {
+        return false
+      }
+
+      return !hasAmbiguousIdentity(insert.item, existing, context.existingItems)
+    })
+
+    if (candidates.length === 0) {
+      return
+    }
+
+    const matchedId = await context.fallbackMatchFn({ incoming: insert.item, candidates })
+
+    // An id outside the offered candidates would bypass the guards above.
+    if (!candidates.some((candidate) => candidate.id === matchedId)) {
+      return
+    }
+
+    return matchedId
+  }
+
+  const matchedIds = await Promise.all(context.inserts.map(findFallbackMatch))
+  const insertCountByTarget = new Map<ItemIdLike, number>()
+
+  for (const matchedId of matchedIds) {
+    if (matchedId != null) {
+      insertCountByTarget.set(matchedId, (insertCountByTarget.get(matchedId) ?? 0) + 1)
+    }
+  }
+
+  const fallbackInserts: Array<InsertAction<T>> = []
+  const fallbackUpdates: Array<UpdateAction<T>> = []
+
+  for (let i = 0; i < context.inserts.length; i++) {
+    const matchedId = matchedIds[i]
+
+    if (matchedId == null || insertCountByTarget.get(matchedId) !== 1) {
+      fallbackInserts.push(context.inserts[i])
+      continue
+    }
+
+    fallbackUpdates.push({
+      item: context.inserts[i].item,
+      fingerprintHash: context.inserts[i].fingerprintHash,
+      existingItemId: matchedId,
+      matchedBy: 'fallback',
+    })
+  }
+
+  return { fallbackInserts, fallbackUpdates }
+}
+
 // Score an item by how many hash slots are populated, weighted by signal strength.
 export const scoreItem = (hashes: ItemHashes): number => {
   let score = 0
@@ -379,9 +461,9 @@ export const deduplicateItemsByFingerprint = <T extends NewItem>(
 
 // Classify new items against existing items into inserts/updates. Uses level-based fingerprinting
 // with auto-computed level when not provided.
-export const classifyItems = <T extends NewItem>(
+export const classifyItems = async <T extends NewItem>(
   input: ClassifyItemsInput<T>,
-): ClassifyItemsResult<T> => {
+): Promise<ClassifyItemsResult<T>> => {
   const { newItems, fingerprintLevel: inputLevel, cleanUrlFn, dateProximityDays } = input
 
   // Coerce existing publishedAt the same way as incoming (see composeIncomingItems): comparisons
@@ -549,9 +631,29 @@ export const classifyItems = <T extends NewItem>(
     claimedExistingIds,
   )
 
-  return {
+  if (!input.fallbackMatchFn) {
+    return {
+      inserts: reconciledInserts,
+      updates: [...updates, ...reconciledUpdates],
+      fingerprintLevel: resolvedLevel,
+    }
+  }
+
+  for (const update of reconciledUpdates) {
+    claimedExistingIds.add(update.existingItemId)
+  }
+
+  const { fallbackInserts, fallbackUpdates } = await matchFallbackInserts({
     inserts: reconciledInserts,
-    updates: [...updates, ...reconciledUpdates],
+    existingItems,
+    claimedExistingIds,
+    fallbackMatchFn: input.fallbackMatchFn,
+    fallbackWindowDays: input.fallbackWindowDays ?? 2,
+  })
+
+  return {
+    inserts: fallbackInserts,
+    updates: [...updates, ...reconciledUpdates, ...fallbackUpdates],
     fingerprintLevel: resolvedLevel,
   }
 }
