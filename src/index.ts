@@ -27,7 +27,6 @@ export type {
   ExistingItem,
   FallbackMatchContext,
   FallbackMatchFn,
-  FallbackMatchResult,
   FingerprintedItem,
   FingerprintLevel,
   IncomingItem,

@@ -1,3 +1,4 @@
+import type { MaybePromise, Nullish } from 'trousse'
 import type { fingerprintLevels, HashMetaMatchableEntry } from './constants.js'
 
 export type CleanUrlFn = (url: string) => string
@@ -168,11 +169,9 @@ export type FallbackMatchContext<T extends NewItem = NewItem> = {
   candidates: Array<ExistingItem>
 }
 
-export type FallbackMatchResult = ItemIdLike | undefined
-
 export type FallbackMatchFn<T extends NewItem = NewItem> = (
   context: FallbackMatchContext<T>,
-) => FallbackMatchResult | Promise<FallbackMatchResult>
+) => MaybePromise<Nullish<ItemIdLike>>
 
 export type ClassifyItemsInput<T extends NewItem = NewItem> = {
   newItems: Array<T>

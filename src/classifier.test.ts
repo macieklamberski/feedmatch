@@ -1598,6 +1598,36 @@ describe('matchFallbackInserts', () => {
       expect(result.fallbackUpdates).toHaveLength(1)
     })
 
+    it('should match a numeric id returned as a string and keep the stored id', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeExistingItem({
+        id: 42,
+        guidHash: 'old-guid',
+        publishedAt: new Date('2024-01-01T00:00:00Z'),
+      })
+      const expected: Awaited<ReturnType<typeof matchFallbackInserts>> = {
+        fallbackInserts: [],
+        fallbackUpdates: [
+          {
+            item: insert.item,
+            fingerprintHash: 'fp-new-guid',
+            existingItemId: 42,
+            matchedBy: 'fallback',
+          },
+        ],
+      }
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => '42',
+        fallbackWindowDays: 2,
+      })
+
+      expect(result).toEqual(expected)
+    })
+
     it('should offer only unclaimed existing items published within the window', async () => {
       const insert = makeInsert('new-guid', new Date('2024-01-10T00:00:00Z'))
       const inWindow = makeCandidate('in-window', new Date('2024-01-08T00:00:00Z'))
@@ -1629,6 +1659,21 @@ describe('matchFallbackInserts', () => {
         existingItems: [existing],
         claimedExistingIds: new Set(),
         fallbackMatchFn: () => undefined,
+        fallbackWindowDays: 2,
+      })
+
+      expect(result).toEqual({ fallbackInserts: [insert], fallbackUpdates: [] })
+    })
+
+    it('should keep the insert when fallbackMatchFn returns null', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+
+      const result = await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => null,
         fallbackWindowDays: 2,
       })
 
@@ -1691,6 +1736,26 @@ describe('matchFallbackInserts', () => {
       expect(result).toEqual({ fallbackInserts: [insert], fallbackUpdates: [] })
     })
 
+    it('should not call fallbackMatchFn when fallbackWindowDays is NaN', async () => {
+      const insert = makeInsert('new-guid', new Date('2024-01-01T00:00:00Z'))
+      const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
+      let callCount = 0
+
+      await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [existing],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => {
+          callCount++
+
+          return 'existing-1'
+        },
+        fallbackWindowDays: Number.NaN,
+      })
+
+      expect(callCount).toBe(0)
+    })
+
     it('should not call fallbackMatchFn for an insert without publishedAt', async () => {
       const insert = makeInsert('new-guid')
       const existing = makeCandidate('existing-1', new Date('2024-01-01T00:00:00Z'))
@@ -1734,6 +1799,42 @@ describe('matchFallbackInserts', () => {
       const insert = makeInsert('guid-owner', new Date('2024-01-01T00:00:00Z'))
       const owner = makeCandidate('owner', new Date('2023-01-01T00:00:00Z'))
       const other = makeCandidate('other', new Date('2024-01-01T00:00:00Z'))
+      let callCount = 0
+
+      await matchFallbackInserts({
+        inserts: [insert],
+        existingItems: [owner, other],
+        claimedExistingIds: new Set(),
+        fallbackMatchFn: () => {
+          callCount++
+
+          return 'other'
+        },
+        fallbackWindowDays: 2,
+      })
+
+      expect(callCount).toBe(0)
+    })
+
+    it('should not offer an existing item when the insert link belongs to another existing item', async () => {
+      const insert: InsertAction = {
+        item: makeIncoming({
+          guidHash: 'new-guid',
+          linkHash: 'link-owner',
+          publishedAt: new Date('2024-01-01T00:00:00Z'),
+        }),
+        fingerprintHash: 'fp-new-guid',
+      }
+      const owner = makeExistingItem({
+        id: 'owner',
+        linkHash: 'link-owner',
+        publishedAt: new Date('2023-01-01T00:00:00Z'),
+      })
+      const other = makeExistingItem({
+        id: 'other',
+        linkHash: 'link-other',
+        publishedAt: new Date('2024-01-01T00:00:00Z'),
+      })
       let callCount = 0
 
       await matchFallbackInserts({

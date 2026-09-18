@@ -332,6 +332,12 @@ export const matchFallbackInserts = async <T extends NewItem>(context: {
       return
     }
 
+    // Same rule as hasAmbiguousIdentity. Calling it per candidate rescans existingItems each time,
+    // which is cubic on a feed that changed every guid and link.
+    const { guidHash, linkHash } = insert.item
+    const isGuidOwned = context.existingItems.some((existing) => existing.guidHash === guidHash)
+    const isLinkOwned = context.existingItems.some((existing) => existing.linkHash === linkHash)
+
     const candidates = context.existingItems.filter((existing) => {
       const existingTime = existing.publishedAt?.getTime()
 
@@ -339,11 +345,20 @@ export const matchFallbackInserts = async <T extends NewItem>(context: {
         return false
       }
 
-      if (Math.abs(incomingTime - existingTime) > windowMs) {
+      // Negated so that a NaN window or date excludes the item.
+      if (!(Math.abs(incomingTime - existingTime) <= windowMs)) {
         return false
       }
 
-      return !hasAmbiguousIdentity(insert.item, existing, context.existingItems)
+      if (guidHash != null && isGuidOwned && existing.guidHash !== guidHash) {
+        return false
+      }
+
+      if (linkHash != null && isLinkOwned && existing.linkHash !== linkHash) {
+        return false
+      }
+
+      return true
     })
 
     if (candidates.length === 0) {
@@ -352,12 +367,15 @@ export const matchFallbackInserts = async <T extends NewItem>(context: {
 
     const matchedId = await context.fallbackMatchFn({ incoming: insert.item, candidates })
 
-    // An id outside the offered candidates would bypass the guards above.
-    if (!candidates.some((candidate) => candidate.id === matchedId)) {
+    if (isNullish(matchedId)) {
       return
     }
 
-    return matchedId
+    // A numeric id often comes back as a string, so ids are compared as strings. An id outside the
+    // offered candidates would bypass the guards above.
+    const matched = candidates.find((candidate) => String(candidate.id) === String(matchedId))
+
+    return matched?.id
   }
 
   const matchedIds = await Promise.all(context.inserts.map(findFallbackMatch))
