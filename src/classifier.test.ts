@@ -6260,6 +6260,40 @@ describe('classifyItems', () => {
       ])
     })
 
+    it('should not offer an existing item that reconciliation already claimed', async () => {
+      const publishedAt = new Date('2024-01-01T00:00:00Z')
+      const reconciled = makeMatchable({
+        id: 'reconciled',
+        guid: 'old-guid',
+        link: 'https://example.com/post-1',
+        title: 'First post',
+        content: '<p>First post body</p>',
+      })
+      const candidateIds: Array<Array<ExistingItem['id']>> = []
+      const value: ClassifyItemsInput = {
+        newItems: [
+          {
+            guid: 'new-guid',
+            link: 'https://example.com/post-1',
+            title: 'First post',
+            content: '<p>First post body</p>',
+            publishedAt,
+          },
+          { guid: 'other-guid', title: 'Second post', publishedAt },
+        ],
+        existingItems: [{ ...reconciled, publishedAt }],
+        fallbackMatchFn: ({ candidates }) => {
+          candidateIds.push(candidates.map((candidate) => candidate.id))
+        },
+      }
+
+      const result = await classifyItems(value)
+      const summary = result.updates.map((update) => [update.existingItemId, update.matchedBy])
+
+      expect(summary).toEqual([['reconciled', 'link']])
+      expect(candidateIds).toEqual([])
+    })
+
     it('should default the window to 2 days and widen it with fallbackWindowDays', async () => {
       const existing = makeMatchable({ id: 'existing-1', guid: 'guid-1', title: 'Old title' })
       const value: ClassifyItemsInput = {
