@@ -71,13 +71,14 @@ const { inserts, updates } = await classifyItems({
 
 ## Fallback Matching
 
-The built-in steps only match on exact hashes. When an item comes back with a new guid, a new link and an edited title, they see a new item. `fallbackMatchFn` lets you decide those cases yourself, with fuzzy text comparison, an AI classifier or any other logic.
+Feedmatch matches items by comparing hashes, so a field has to be identical to count. An item republished with a new guid, a new link and a reworded title shares nothing with its stored copy, and comes out as an insert.
+
+`fallbackMatchFn` covers those cases. It gets each item that is about to become an insert, together with the existing items it could be, and returns the one it matches. How it decides is up to the function: fuzzy text comparison, an AI classifier, a rule written for one feed.
 
 ```typescript
 const { inserts, updates } = await classifyItems({
   newItems,
   existingItems,
-  fallbackWindowDays: 2,
   fallbackMatchFn: async ({ incoming, candidates }) => {
     const stored = await loadItems(candidates.map((candidate) => candidate.id))
     const match = stored.find((item) => isSameArticle(incoming, item))
@@ -87,11 +88,14 @@ const { inserts, updates } = await classifyItems({
 })
 ```
 
-The function runs once for each insert left after reconciliation. It receives the incoming item and the existing items that no earlier step matched and that were published within `fallbackWindowDays` of it (default: 2). Return the `id` of the matching candidate, or nothing to keep the insert. It can be sync or async.
+Return the `id` of one of the candidates, or nothing to keep the insert. The function can be sync or async. A match comes back as an update with `matchedBy: 'fallback'`.
 
-- Existing items carry only hashes, so load the stored text for the candidates on your side.
-- Items without `publishedAt` are skipped, on both sides.
-- The function is not called when there are no candidates.
-- An id that is not among the candidates is ignored.
-- When two inserts pick the same existing item, both stay inserts.
-- Matches are returned as updates with `matchedBy: 'fallback'`.
+Feedmatch narrows the candidates before calling the function:
+
+- Existing items that an earlier step already matched are left out.
+- So are items published more than `fallbackWindowDays` away from the incoming one. The default is 2.
+- Items without `publishedAt` are left out too, and an incoming item without one skips the function.
+
+When no candidates are left, the function is not called. When two incoming items pick the same candidate, both stay inserts.
+
+Existing items carry only hashes, so the function loads the stored titles and content itself, as `loadItems` does above.
