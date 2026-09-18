@@ -88,6 +88,8 @@ const { inserts, updates } = await classifyItems({
 })
 ```
 
-Return the `id` of one of the candidates, or nothing to keep the insert. The function can be sync or async. A match comes back as an update with `matchedBy: 'fallback'`.
+Return the `id` of one of the candidates, or nothing to keep the insert. The function can be sync or async. A match comes back as an update with `matchedBy: 'fallback'`. When the function throws, `classifyItems` rejects, so catch inside the function to keep the insert.
 
-The candidates are the existing items that no earlier step matched and that were published within `fallbackWindowDays` of the incoming item (default: 2). Items without `publishedAt` are never candidates, and an incoming item without one skips the function. When two incoming items pick the same candidate, both stay inserts.
+The candidates are the existing items that no earlier step matched and that were published within `fallbackWindowDays` of the incoming item (default: 2). An existing item is not a candidate when the incoming guid or link already belongs to a different existing item. Items without `publishedAt` are never candidates, and an incoming item without one skips the function. When two incoming items pick the same candidate, both stay inserts.
+
+Pass existing items that share no hash with the incoming ones too, for example the most recent rows by date. A list loaded by hash lookup never contains the item the function is looking for.
