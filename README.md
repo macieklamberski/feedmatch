@@ -92,4 +92,4 @@ Return the `id` of one of the candidates, or nothing to keep the insert. The fun
 
 The candidates are the existing items that no earlier step matched and that were published within `fallbackWindowDays` of the incoming item (default: 2). An existing item is not a candidate when the incoming guid or link already belongs to a different existing item. Items without `publishedAt` are never candidates, and an incoming item without one skips the function. When two incoming items pick the same candidate, both stay inserts.
 
-Pass existing items that share no hash with the incoming ones too, for example the most recent rows by date. A list loaded by hash lookup never contains the item the function is looking for.
+Pass existing items that share no hash with the incoming ones too, for example the most recent rows by date. A list loaded by looking up the incoming guid, link or title hashes will miss the item the function is looking for.
