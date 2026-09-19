@@ -68,7 +68,7 @@ const { inserts, updates } = classifyItems({
 
 | Step | Name | Description |
 | --- | --- | --- |
-| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. `publishedAt` is coerced to a valid `Date` or `null` (date strings parsed, invalid dates dropped), and emitted inserts/updates carry the coerced value. |
+| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. `publishedAt` is typed as a `Date`. A date string or an invalid date that gets past the types is still handled, on incoming and existing items alike: strings are parsed and invalid dates are dropped. Emitted inserts/updates carry the coerced value, which is `null` for a dropped date. |
 | 2 | Profile | The feed is profiled for how often each signal (guid, link, enclosure, title) is present and how many of its values are distinct. Guids and links are each trusted only when at least 95% of their values are distinct. |
 | 3 | Classify enclosures | Enclosures are classified by content type, falling back to the URL's file extension when the type is missing or unrecognized: audio and video count as identity, while images and unclassifiable URLs are changeable content, excluded from the fingerprint unless they are the item's only identity. |
 | 4 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. An item with no guid, link, enclosure or title has no fingerprint and is dropped from the result. |
