@@ -63,6 +63,8 @@ const { inserts, updates } = await classifyItems({
 | `fingerprintLevel` | The level fingerprints are built at: `guid`, `guidFragment`, `link`, `linkFragment`, `enclosure` or `title`, from strongest to weakest. Left out, it is computed from the items as the strongest level at which no two items collide and none is left without a fingerprint. Passed in, it is kept while it still holds and otherwise moved to a weaker level, never to a stronger one. The result returns the level used, so store it per feed and pass it back in on the next scan. |
 | `cleanUrlFn` | Called with every link, enclosure URL and guid that starts with `http://` or `https://`, before it is normalized and hashed. Use it to strip tracking parameters, for example. Stored hashes depend on it, so pass the same function on every scan. |
 | `dateProximityDays` | How far apart two `publishedAt` dates can be for a guid or link match to count. Defaults to 7. It stops a feed that reuses a guid or link for a different item from merging the two. A match counts when either side has no date. |
+| `fallbackMatchFn` | Decides whether an item that is about to become an insert is one of the existing items. See [Fallback Matching](#fallback-matching). |
+| `fallbackWindowDays` | How far apart two `publishedAt` dates can be for an existing item to be offered to `fallbackMatchFn`. Defaults to 2. |
 
 ## How It Works
 
