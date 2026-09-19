@@ -42,7 +42,7 @@ const toExisting = (item: NewItem, id: string): ExistingItem => {
 
 describe('classifyItems duplicate resilience (e2e)', () => {
   describe('same guid, volatile field changed → update not insert', () => {
-    it('should update an item whose headline was edited while guid and date are stable', () => {
+    it('should update an item whose headline was edited while guid and date are stable', async () => {
       const original: NewItem = {
         guid: 'https://example.com/microsoft-job-cuts',
         link: 'https://example.com/microsoft-job-cuts',
@@ -72,10 +72,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update an item whose enclosure url rotated while guid and date are stable', () => {
+    it('should update an item whose enclosure url rotated while guid and date are stable', async () => {
       const original: NewItem = {
         guid: 'https://example.com/episode-1',
         title: 'Europe scorching heat is gradually moving east',
@@ -104,10 +104,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update when both title and enclosure change on a stable guid', () => {
+    it('should update when both title and enclosure change on a stable guid', async () => {
       const original: NewItem = {
         guid: 'https://example.com/episode-2',
         title: 'Old headline',
@@ -138,10 +138,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should never re-insert across repeated scans as the enclosure keeps rotating', () => {
+    it('should never re-insert across repeated scans as the enclosure keeps rotating', async () => {
       const base: NewItem = {
         guid: 'https://example.com/episode-3',
         title: 'Weekly episode',
@@ -180,7 +180,7 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      const scanTwo = classifyItems({
+      const scanTwo = await classifyItems({
         newItems: [scanTwoItem],
         existingItems: [
           toExisting(
@@ -190,7 +190,7 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         ],
         fingerprintLevel: 'enclosure',
       })
-      const scanThree = classifyItems({
+      const scanThree = await classifyItems({
         newItems: [scanThreeItem],
         existingItems: [toExisting(scanTwoItem, 'e1')],
         fingerprintLevel: 'enclosure',
@@ -205,7 +205,7 @@ describe('classifyItems duplicate resilience (e2e)', () => {
     // Without a guid, a same-link item with a changed title is indistinguishable
     // from a distinct hub article, so it must not be merged. Handling stable-link
     // or stable-enclosure no-guid feeds is deferred (needs field normalisation).
-    it('should insert a guidless same-link item whose title changed', () => {
+    it('should insert a guidless same-link item whose title changed', async () => {
       const original: NewItem = {
         link: 'https://example.com/post',
         title: 'Original title',
@@ -228,12 +228,12 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('false-merge protection (distinct items must stay separate)', () => {
-    it('should keep two different-guid articles that share a link as separate items', () => {
+    it('should keep two different-guid articles that share a link as separate items', async () => {
       const incoming: NewItem = {
         guid: 'https://example.com/story-x',
         link: 'https://example.com/shared',
@@ -266,10 +266,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should reconcile a guid rewrite when link and all content are identical', () => {
+    it('should reconcile a guid rewrite when link and all content are identical', async () => {
       // Boundary case: same link + identical title/summary/date, only the guid
       // changed. This is one article whose guid was rewritten, so reconciliation
       // correctly merges it. The distinct-article guard above differs only in
@@ -299,10 +299,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should keep distinct hub items that share a link but differ in title', () => {
+    it('should keep distinct hub items that share a link but differ in title', async () => {
       const articleA: NewItem = {
         link: 'https://example.com/hub',
         title: 'Article A',
@@ -332,13 +332,13 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result).toEqual(expected)
       expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
     })
 
-    it('should keep distinct releases that reuse a single degenerate guid', () => {
+    it('should keep distinct releases that reuse a single degenerate guid', async () => {
       // Passes because a 2-item batch sharing one guid reads as 0.5 guid
       // uniqueness, below the bypass gate. It does not generalize to a reused
       // guid inside a mostly-unique feed; that case is the accepted residual
@@ -373,13 +373,13 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result).toEqual(expected)
       expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
     })
 
-    it('should merge a cross-scan guid reuse on a mostly-unique feed (accepted residual)', () => {
+    it('should merge a cross-scan guid reuse on a mostly-unique feed (accepted residual)', async () => {
       // A guid reused across scans for a different article, published within
       // the date proximity window, on a feed whose guids are otherwise unique:
       // the bypass cannot distinguish this from a retitled edit, so it merges.
@@ -426,12 +426,12 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('republished items (date-bumped edits)', () => {
-    it('should update a republished article whose date was bumped beyond the proximity window', () => {
+    it('should update a republished article whose date was bumped beyond the proximity window', async () => {
       // Publishers refresh old articles with a new pubDate. Before the trusted
       // guid exemption this re-inserted the article and the repeated guid
       // permanently downgraded the channel level; the level staying at guid is
@@ -465,10 +465,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'guid',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should keep far-apart releases distinct on a degenerate-guid feed', () => {
+    it('should keep far-apart releases distinct on a degenerate-guid feed', async () => {
       // A feed that reuses one guid for genuinely different releases sits far
       // below the uniqueness gate, so the date window still applies and the
       // new release inserts instead of merging into an old one.
@@ -502,12 +502,12 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('level recovery and mixed feeds', () => {
-    it('should classify clean unique guids by guid even when the channel was stuck at title', () => {
+    it('should classify clean unique guids by guid even when the channel was stuck at title', async () => {
       const postOne: NewItem = { guid: 'guid-1', title: 'Post 1 original', publishedAt }
       const postOneEdited: NewItem = { guid: 'guid-1', title: 'Post 1 edited', publishedAt }
       const postTwo: NewItem = { guid: 'guid-2', title: 'Post 2', publishedAt: olderPublishedAt }
@@ -530,10 +530,10 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should insert distinct items in a mixed feed where some lack a guid', () => {
+    it('should insert distinct items in a mixed feed where some lack a guid', async () => {
       const postOne: NewItem = {
         guid: 'guid-1',
         link: 'https://example.com/p1',
@@ -564,7 +564,7 @@ describe('classifyItems duplicate resilience (e2e)', () => {
         fingerprintLevel: 'link',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result).toEqual(expected)
       expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
@@ -574,7 +574,7 @@ describe('classifyItems duplicate resilience (e2e)', () => {
 
 describe('classifyItems enclosure masking (e2e)', () => {
   describe('image enclosures leave identity', () => {
-    it('should update a guid-less article whose thumbnail was genuinely replaced', () => {
+    it('should update a guid-less article whose thumbnail was genuinely replaced', async () => {
       const original: NewItem = {
         link: 'https://example.com/article',
         title: 'Article Title',
@@ -603,10 +603,10 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should update an item whose image token rotates on every scan', () => {
+    it('should update an item whose image token rotates on every scan', async () => {
       const base: NewItem = {
         link: 'https://example.com/statuses/158669251454354',
         title: 'Status Post',
@@ -645,7 +645,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      const scanTwo = classifyItems({
+      const scanTwo = await classifyItems({
         newItems: [scanTwoItem],
         existingItems: [
           toExisting(
@@ -658,7 +658,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
         ],
         fingerprintLevel: 'enclosure',
       })
-      const scanThree = classifyItems({
+      const scanThree = await classifyItems({
         newItems: [scanThreeItem],
         existingItems: [toExisting(scanTwoItem, 'e1')],
         fingerprintLevel: 'enclosure',
@@ -668,7 +668,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
       expect(scanThree).toEqual(expectedScanThree)
     })
 
-    it('should update a link-less item by title when its thumbnail is swapped', () => {
+    it('should update a link-less item by title when its thumbnail is swapped', async () => {
       const original: NewItem = {
         title: 'Stable Headline',
         enclosures: [{ url: 'https://images.example.com/photo-1607823477653' }],
@@ -696,10 +696,10 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should handle a mixed aggregator feed in one scan', () => {
+    it('should handle a mixed aggregator feed in one scan', async () => {
       // One feed carrying a typeless article image (swapped), a stable video
       // url, and a typeless audio item: the image item updates, the video item
       // is an unchanged no-op, the new audio episode inserts.
@@ -748,10 +748,10 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should never accumulate duplicates across repeated image swaps', () => {
+    it('should never accumulate duplicates across repeated image swaps', async () => {
       const base: NewItem = {
         link: 'https://example.com/post',
         title: 'Post',
@@ -780,7 +780,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
           fingerprintLevel: 'title',
         }
 
-        const result = classifyItems({
+        const result = await classifyItems({
           newItems: [incoming],
           existingItems: [existing],
           fingerprintLevel: 'title',
@@ -792,7 +792,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
       }
     })
 
-    it('should stabilize across the fingerprint convention change (self-heal)', () => {
+    it('should stabilize across the fingerprint convention change (self-heal)', async () => {
       // Scan 1 matched and updated the stored fingerprint to the masked value;
       // scan 2 with unchanged content is a no-op rather than another rewrite.
       const item: NewItem = {
@@ -812,12 +812,12 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('media enclosures stay identity', () => {
-    it('should update a podcast episode whose title was edited', () => {
+    it('should update a podcast episode whose title was edited', async () => {
       const original: NewItem = {
         title: 'Episode 12',
         enclosures: [{ url: 'https://cdn.example.com/ep12.mp3', type: 'audio/mpeg' }],
@@ -842,10 +842,10 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should keep same-title podcast episodes distinct by their audio', () => {
+    it('should keep same-title podcast episodes distinct by their audio', async () => {
       const episodeOne: NewItem = {
         title: 'Weekly Update',
         enclosures: [{ url: 'https://cdn.example.com/ep1.mp3', type: 'audio/mpeg' }],
@@ -875,13 +875,13 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result).toEqual(expected)
       expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
     })
 
-    it('should protect an octet-stream podcast through the extension fallback', () => {
+    it('should protect an octet-stream podcast through the extension fallback', async () => {
       const original: NewItem = {
         title: 'Episode 5',
         enclosures: [{ url: 'https://cdn.example.com/ep5.mp3', type: 'application/octet-stream' }],
@@ -906,10 +906,10 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
 
-    it('should still update a guid feed whose media enclosure rotates', () => {
+    it('should still update a guid feed whose media enclosure rotates', async () => {
       const original: NewItem = {
         guid: 'https://example.com/episode-1',
         title: 'Episode 1',
@@ -938,12 +938,12 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'enclosure',
       }
 
-      expect(classifyItems(value)).toEqual(expected)
+      expect(await classifyItems(value)).toEqual(expected)
     })
   })
 
   describe('distinct items stay separate', () => {
-    it('should keep distinct articles sharing a link with image enclosures separate', () => {
+    it('should keep distinct articles sharing a link with image enclosures separate', async () => {
       const articleA: NewItem = {
         link: 'https://example.com/hub',
         title: 'Article A',
@@ -975,7 +975,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
         fingerprintLevel: 'title',
       }
 
-      const result = classifyItems(value)
+      const result = await classifyItems(value)
 
       expect(result).toEqual(expected)
       expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)

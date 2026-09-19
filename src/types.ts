@@ -1,3 +1,4 @@
+import type { MaybePromise, Nullish } from 'trousse'
 import type { fingerprintLevels, HashMetaMatchableEntry } from './constants.js'
 
 export type CleanUrlFn = (url: string) => string
@@ -92,7 +93,7 @@ export type FeedProfile = { [Key in MatchSignal]: FeedProfileSignal }
 // so are excluded.
 export type MatchSignal = HashMetaMatchableEntry['level']
 
-export type MatchedBy = MatchSignal | 'reconciled'
+export type MatchedBy = MatchSignal | 'reconciled' | 'fallback'
 
 export type MatchResult = {
   match: ExistingItem
@@ -163,12 +164,23 @@ export type UpdateFilter = {
   shouldUpdate: (context: UpdateFilterContext) => boolean
 }
 
+export type FallbackMatchContext<T extends NewItem = NewItem> = {
+  incoming: IncomingItem<T>
+  candidates: Array<ExistingItem>
+}
+
+export type FallbackMatchFn<T extends NewItem = NewItem> = (
+  context: FallbackMatchContext<T>,
+) => MaybePromise<Nullish<ItemIdLike>>
+
 export type ClassifyItemsInput<T extends NewItem = NewItem> = {
   newItems: Array<T>
   existingItems: Array<ExistingItem>
   fingerprintLevel?: FingerprintLevel
   cleanUrlFn?: CleanUrlFn
   dateProximityDays?: number
+  fallbackMatchFn?: FallbackMatchFn<T>
+  fallbackWindowDays?: number
 }
 
 export type ClassifyItemsResult<T extends NewItem = NewItem> = {
