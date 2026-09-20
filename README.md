@@ -53,14 +53,8 @@ const { inserts, updates } = classifyItems({
 // updates[0].matchedBy - how it was matched: 'guid', 'link', 'enclosure', 'title',
 // or 'reconciled'.
 
-// The result also returns fingerprintLevel, the level used for this scan. See Options.
+// The result also returns fingerprintLevel, the level used for this scan.
 ```
-
-## Options
-
-| Option | Description |
-| --- | --- |
-| `fingerprintLevel` | The level fingerprints are built at: `guid`, `guidFragment`, `link`, `linkFragment`, `enclosure` or `title`, from strongest to weakest. Left out, it is computed from the items as the strongest level at which no two items collide and none is left without a fingerprint. Passed in, it is kept while it still holds and otherwise moved to a weaker level, never to a stronger one. The result returns the level used, so store it per feed and pass it back in on the next scan. |
 
 ## How It Works
 
@@ -71,6 +65,6 @@ const { inserts, updates } = classifyItems({
 | 3 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. An item with no guid, link, enclosure or title has no fingerprint and is dropped from the result. |
 | 4 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
 | 5 | Screen | Match candidates must share the incoming item's fingerprint at the feed's level. |
-| 6 | Match | Each incoming item is run through a strategy chain against the screened existing items, with candidate filters to reject false positives. When links are trusted the chain is guid → link → enclosure → title. Otherwise it is guid → enclosure → link → title, and link is tried only for items that have neither a guid nor an enclosure. Title is tried only for items that have no guid, link or enclosure. |
+| 6 | Match | Each incoming item is run through a strategy chain against the screened existing items, with candidate filters to reject false positives: guid → link → enclosure → title when links are trusted, guid → enclosure → link → title otherwise. |
 | 7 | Classify | Matched items become updates when any field differs (hashes, publishedAt), unmatched items become inserts. |
 | 8 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. |
