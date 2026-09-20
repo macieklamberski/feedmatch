@@ -38,10 +38,10 @@ export type IncomingItem<T extends NewItem = NewItem> = T & ItemHashes
 export type ExistingItem = ItemHashes & {
   id: ItemIdLike
   publishedAt?: Date
-  // Raw enclosures as stored by the caller. When present, the classifier checks
-  // their type to decide whether the stored item's enclosure counts toward
-  // identity or is excluded from it. When absent, there is no type to check, so
-  // the stored item reuses the decision made for the incoming item.
+  // Raw enclosures as stored by the caller. When present, the classifier checks their type to
+  // decide whether the stored item's enclosure counts toward identity or is excluded from it. When
+  // absent, there is no type to check, so the stored item reuses the decision made for the incoming
+  // item.
   enclosures?: Array<Enclosure> | null
 }
 
@@ -87,9 +87,9 @@ export type FeedProfileSignal = {
 
 export type FeedProfile = { [Key in MatchSignal]: FeedProfileSignal }
 
-// The matchable signals, derived from hashMeta so the set stays in sync: the
-// level of every matchable hash (guid, link, enclosure, title). Fragments and
-// content hashes are not matchable and so are excluded.
+// The matchable signals, derived from hashMeta so the set stays in sync: the level of every
+// matchable hash (guid, link, enclosure, title). Fragments and content hashes are not matchable and
+// so are excluded.
 export type MatchSignal = HashMetaMatchableEntry['level']
 
 export type MatchedBy = MatchSignal | 'reconciled'
