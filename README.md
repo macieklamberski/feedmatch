@@ -83,9 +83,7 @@ const { inserts, updates } = await classifyItems({
 
 ## Fallback Matching
 
-Feedmatch matches items by comparing hashes, so a field has to be identical to count. An item republished with a new guid, a new link and a reworded title shares nothing with its stored copy, and comes out as an insert.
-
-`fallbackMatchFn` covers those cases. It gets each item that is about to become an insert, together with the existing items it could be, and returns the one it matches. How it decides is up to the function: fuzzy text comparison, an AI classifier, a rule written for one feed.
+Feedmatch compares hashes, so an item republished with a new guid, a new link and a reworded title comes out as an insert. `fallbackMatchFn` gets each such item with the existing items it could be, and returns the `id` of the one it matches, or nothing. It can be sync or async.
 
 ```typescript
 const { inserts, updates } = await classifyItems({
@@ -100,8 +98,8 @@ const { inserts, updates } = await classifyItems({
 })
 ```
 
-Return the `id` of one of the candidates, or nothing to keep the insert. The function can be sync or async. A match comes back as an update with `matchedBy: 'fallback'`. When the function throws, `classifyItems` rejects, so catch inside the function to keep the insert.
-
-The candidates are the existing items that no earlier step matched and that were published within `fallbackWindowDays` of the incoming item (default: 2). An existing item is not a candidate when the incoming guid or link already belongs to a different existing item. Items without `publishedAt` are never candidates, and an incoming item without one skips the function. When two incoming items pick the same candidate, both stay inserts.
-
-Pass existing items that share no hash with the incoming ones too, for example the most recent rows by date. A list loaded by looking up the incoming guid, link or title hashes will miss the item the function is looking for.
+- Candidates are the existing items that no earlier step matched, published within `fallbackWindowDays` of the incoming item. Items without `publishedAt` are left out on both sides.
+- An existing item is not offered when the incoming guid or link already belongs to a different one.
+- A match comes back as an update with `matchedBy: 'fallback'`. When two incoming items pick the same candidate, both stay inserts.
+- When the function throws, `classifyItems` rejects. Catch inside the function to keep the insert.
+- Pass recent existing items too, not only those found by a hash lookup, or the item the function is looking for will not be in the list.
