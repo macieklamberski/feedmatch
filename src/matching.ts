@@ -1,4 +1,4 @@
-import { hashMeta, signalHashKeys } from './constants.js'
+import { hashMeta, signalHashKeys, uniqueIdentifierThreshold } from './constants.js'
 import { hasStrongHash } from './hashes.js'
 import type {
   CandidateFilter,
@@ -32,9 +32,9 @@ export const computeSignalStats = (values: Array<string | null>): FeedProfileSta
   }
 }
 
-// Compute feed profile from existing + incoming items. Per-signal stats
-// are kept separate; effective rates use conservative combining: when one
-// side has no present values, fall back to the other; otherwise min.
+// Compute feed profile from existing + incoming items. Per-signal stats are kept separate;
+// effective rates use conservative combining: when one side has no present values, fall back to the
+// other; otherwise min.
 export const computeFeedProfile = (
   existingItems: Array<ExistingItem>,
   incomingItems: Array<IncomingItem>,
@@ -45,8 +45,8 @@ export const computeFeedProfile = (
     const existing = computeSignalStats(existingItems.map((item) => item[hashKey]))
     const incoming = computeSignalStats(incomingItems.map((item) => item[hashKey]))
 
-    // When one side has no present values, use the other side's rates.
-    // Otherwise take the minimum (conservative).
+    // When one side has no present values, use the other side's rates. Otherwise take the minimum
+    // (conservative).
     const source = (() => {
       if (existing.present === 0) {
         return incoming
@@ -72,13 +72,22 @@ export const computeFeedProfile = (
   return profile
 }
 
-// Rejects GUID/link matches when dates are too far apart. Fixes the GUID reuse
-// blind spot where feeds reuse a GUID months later for different content.
-// Allows match if either side lacks publishedAt (backward compatible).
+// Rejects GUID/link matches when dates are too far apart. Fixes the GUID reuse blind spot where
+// feeds reuse a GUID months later for different content. Allows match if either side lacks
+// publishedAt (backward compatible).
+//
+// Guid matches on a feed with trusted (feed-unique) guids are exempt: the window exists to guard
+// guid reuse, and the uniqueness gate already screens feeds that reuse guids. Without the
+// exemption, a publisher that republishes an article with a bumped date re-inserts it as a
+// duplicate and the repeated guid permanently downgrades the channel's fingerprint level.
 export const dateProximityFilter: CandidateFilter = {
   name: 'dateProximity',
   appliesTo: ['guid', 'link'],
   evaluate: (context) => {
+    if (context.matchedBy === 'guid' && context.matchPolicy.guidReliable) {
+      return { allow: true }
+    }
+
     const incomingDate = context.incoming.publishedAt
     const candidateDate = context.candidate.publishedAt
 
@@ -100,14 +109,15 @@ export const dateProximityFilter: CandidateFilter = {
   },
 }
 
-// Updates when any hash field or publishedAt differs between existing and
-// incoming. The matching field is always equal (by definition), so this only
-// detects changes in fields below the match level.
+// Updates when any hash field or publishedAt differs between existing and incoming. The matching
+// field is always equal (by definition), so this only detects changes in fields below the match
+// level. A missing incoming date is not a change: hosts store a fallback date on insert, and
+// comparing against it rewrote every item of an <updated>-only feed on every scan.
 export const changeFilter: UpdateFilter = {
   name: 'change',
   shouldUpdate: (context) => {
     const hashChanged = hashMeta.some(
-      // biome-ignore lint/suspicious/noDoubleEquals: Intentional — null == undefined.
+      // biome-ignore lint/suspicious/noDoubleEquals: Intentional: null == undefined.
       (meta) => context.existing[meta.key] != context.incoming[meta.key],
     )
 
@@ -115,7 +125,11 @@ export const changeFilter: UpdateFilter = {
       return true
     }
 
-    return context.existing.publishedAt?.getTime() !== context.incoming.publishedAt?.getTime()
+    if (context.incoming.publishedAt == null) {
+      return false
+    }
+
+    return context.existing.publishedAt?.getTime() !== context.incoming.publishedAt.getTime()
   },
 }
 
@@ -123,8 +137,8 @@ export const prematchCandidateFilters: Array<CandidateFilter> = [dateProximityFi
 export const classifyCandidateFilters: Array<CandidateFilter> = [dateProximityFilter]
 export const updateFilters: Array<UpdateFilter> = [changeFilter]
 
-// Apply all applicable candidate filters to a candidate list for a given source.
-// Filters are applied sequentially — each filter narrows the output of the previous.
+// Apply all applicable candidate filters to a candidate list for a given source. Filters are
+// applied sequentially: each filter narrows the output of the previous.
 export const applyCandidateFilters = ({
   candidates,
   matchedBy,
@@ -154,8 +168,8 @@ export const applyCandidateFilters = ({
   return result
 }
 
-// Returns true when link is the item's only strong fingerprint.
-// Link-only items always get link matching even on low-uniqueness channels.
+// Returns true when link is the item's only strong fingerprint. Link-only items always get link
+// matching even on low-uniqueness channels.
 export const hasLinkOnly = (item: IncomingItem | ExistingItem): boolean => {
   if (!item.linkHash) {
     return false
@@ -164,11 +178,37 @@ export const hasLinkOnly = (item: IncomingItem | ExistingItem): boolean => {
   return !hashMeta.some((meta) => meta.isStrongHash && meta.key !== 'linkHash' && item[meta.key])
 }
 
-// In-memory filter: returns all existing items where any matchable hash matches.
-// Does NOT apply gating — that's selectMatchingItem's job.
-// Non-matchable hashes (fragments, content, summary) are excluded: too volatile
-// or only used as tiebreakers. Title only checked when no strong hash exists —
-// prevents title pulling in unrelated candidates that would confuse selectMatchingItem.
+// True when the incoming item and a candidate share the same guid and that guid is unique across
+// the feed. A shared feed-unique guid means the same logical item even when volatile fields (title,
+// enclosure) changed, so the caller can treat an edit as an update instead of inserting a
+// duplicate.
+//
+// Only the guid qualifies. Link and enclosure are deliberately excluded: distinct articles
+// routinely share a link (hub and section feeds), so agreeing on a link is not safe evidence of the
+// same item and would merge them.
+//
+// Accepted residual: on a feed that passes the uniqueness gate, a guid reused across scans for a
+// genuinely different article (published within the date proximity window) merges into the earlier
+// item. Per-side uniqueness stats cannot see the reuse (each scan holds the guid once), and no
+// cardinality check can tell the first reuse apart from an edit. Checked against every production
+// family with this shape: all were retitled edits of the same article, so the merge is the desired
+// outcome. Feeds that reuse guids systematically stay far below the gate and never take this path.
+export const agreesOnUniqueIdentifier = (
+  incoming: ItemHashes,
+  candidate: ItemHashes,
+  feedProfile: FeedProfile,
+): boolean => {
+  if (incoming.guidHash == null || incoming.guidHash !== candidate.guidHash) {
+    return false
+  }
+
+  return feedProfile.guid.effective.uniquenessRate >= uniqueIdentifierThreshold
+}
+
+// In-memory filter: returns all existing items where any matchable hash matches. Does NOT apply
+// gating: that's selectMatchingItem's job. Non-matchable hashes (fragments, content, summary) are
+// excluded: too volatile or only used as tiebreakers. Title only checked when no strong hash
+// exists: prevents title pulling in unrelated candidates that would confuse selectMatchingItem.
 export const findMatchCandidates = (
   hashes: ItemHashes,
   existingItems: Array<ExistingItem>,
@@ -195,9 +235,8 @@ const matchableHashMeta = hashMeta
   .filter((meta) => meta.isMatchable)
   .map((meta) => ({ key: meta.key, isStrongHash: meta.isStrongHash }))
 
-// Build an index over existing items for O(1) candidate lookups. Returns a
-// function with the same semantics as findMatchCandidates but backed by a
-// hash map instead of a linear scan.
+// Build an index over existing items for O(1) candidate lookups. Returns a function with the same
+// semantics as findMatchCandidates but backed by a hash map instead of a linear scan.
 export const buildMatchIndex = (
   items: Array<ExistingItem>,
 ): ((hashes: ItemHashes) => Array<ExistingItem>) => {
@@ -378,7 +417,8 @@ export const matchByEnclosure = (context: MatchStrategyContext): MatchStrategyRe
   return { outcome: 'pass' }
 }
 
-// Match strategy: title (no disambiguation, no hasStrongHash guard — that stays in selectMatchingItem).
+// Match strategy: title (no disambiguation, no hasStrongHash guard: that stays in
+// selectMatchingItem).
 export const matchByTitle = (context: MatchStrategyContext): MatchStrategyResult => {
   const { incoming, candidates, filtered } = context
 
@@ -425,7 +465,8 @@ export const computeMatchPolicy = (
   options?: { dateProximityDays?: number },
 ): MatchPolicy => {
   return {
-    linkReliable: feedProfile.link.effective.uniquenessRate >= 0.95,
+    guidReliable: feedProfile.guid.effective.uniquenessRate >= uniqueIdentifierThreshold,
+    linkReliable: feedProfile.link.effective.uniquenessRate >= uniqueIdentifierThreshold,
     dateProximityDays: options?.dateProximityDays ?? 7,
   }
 }
@@ -434,9 +475,9 @@ export const resolveStrategies = (policy: MatchPolicy): Array<MatchStrategy> => 
   return policy.linkReliable ? highUniquenessStrategies : lowUniquenessStrategies
 }
 
-// Priority-based match selection with configurable strategy ordering.
-// Summary/content excluded: too volatile for cross-scan matching.
-// Returns undefined for ambiguous matches (>1) — prefer insert over wrong merge.
+// Priority-based match selection with configurable strategy ordering. Summary/content excluded: too
+// volatile for cross-scan matching. Returns undefined for ambiguous matches (>1): prefer insert
+// over wrong merge.
 export const selectMatchingItem = ({
   incoming,
   candidates,

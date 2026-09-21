@@ -8,6 +8,7 @@ export { fingerprintLevels, fingerprintMeta } from './constants.js'
 export {
   buildFingerprint,
   computeItemHashes,
+  isMediaEnclosure,
   normalizeEnclosureForHashing,
   normalizeGuidForHashing,
   normalizeGuidFragmentForHashing,
@@ -16,10 +17,13 @@ export {
   normalizeLinkFragmentForHashing,
   normalizeTextForHashing,
   resolveFingerprintLevel,
+  selectEnclosure,
 } from './hashes.js'
 export type {
   ClassifyItemsInput,
   ClassifyItemsResult,
+  CleanUrlFn,
+  Enclosure,
   ExistingItem,
   FingerprintedItem,
   FingerprintLevel,

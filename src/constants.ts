@@ -16,11 +16,18 @@ import type {
   MatchSignal,
 } from './types.js'
 
-// Minimum number of content hash fields (title, content, summary, enclosure)
-// that must be non-null on both sides and match for reconciliation to accept
-// a merge. Items with fewer matching fields are too sparse to safely merge
-// (e.g. two items with only the same generic title like "Newsletter").
+// Minimum number of content hash fields (title, content, summary, enclosure) that must be non-null
+// on both sides and match for reconciliation to accept a merge. Items with fewer matching fields
+// are too sparse to safely merge (e.g. two items with only the same generic title like
+// "Newsletter").
 export const minReconciliationFields = 2
+
+// Minimum feed-wide uniqueness rate for a signal to be trusted as an item identifier. Below the
+// gate the feed reuses the signal, so agreement proves nothing; at or above it, two items sharing
+// the signal are the same logical item. Gates link and guid reliability in computeMatchPolicy
+// (match strategy order, the date proximity exemption) and the guid agreement bypass in the level
+// filter.
+export const uniqueIdentifierThreshold = 0.95
 
 export const fingerprintLevels = [
   'guid',
@@ -31,8 +38,7 @@ export const fingerprintLevels = [
   'title',
 ] as const
 
-// Single source of truth for hash key metadata.
-// Order determines fingerprintMeta derivation order.
+// Single source of truth for hash key metadata. Order determines fingerprintMeta derivation order.
 export const hashMeta = [
   {
     key: 'guidHash',
@@ -41,7 +47,7 @@ export const hashMeta = [
     isStrongHash: true,
     isMatchable: true,
     isContent: false,
-    normalizeFn: (item) => normalizeGuidForHashing(item.guid),
+    normalizeFn: (item, cleanUrlFn) => normalizeGuidForHashing(item.guid, cleanUrlFn),
     level: 'guid',
   },
   {
@@ -51,7 +57,7 @@ export const hashMeta = [
     isStrongHash: false,
     isMatchable: false,
     isContent: false,
-    normalizeFn: (item) => normalizeGuidFragmentForHashing(item.guid),
+    normalizeFn: (item, cleanUrlFn) => normalizeGuidFragmentForHashing(item.guid, cleanUrlFn),
     level: 'guidFragment',
   },
   {
@@ -61,7 +67,7 @@ export const hashMeta = [
     isStrongHash: true,
     isMatchable: true,
     isContent: false,
-    normalizeFn: (item) => normalizeLinkForHashing(item.link),
+    normalizeFn: (item, cleanUrlFn) => normalizeLinkForHashing(item.link, cleanUrlFn),
     level: 'link',
   },
   {
@@ -71,7 +77,7 @@ export const hashMeta = [
     isStrongHash: false,
     isMatchable: false,
     isContent: false,
-    normalizeFn: (item) => normalizeLinkFragmentForHashing(item.link),
+    normalizeFn: (item, cleanUrlFn) => normalizeLinkFragmentForHashing(item.link, cleanUrlFn),
     level: 'linkFragment',
   },
   {
@@ -81,7 +87,7 @@ export const hashMeta = [
     isStrongHash: true,
     isMatchable: true,
     isContent: true,
-    normalizeFn: (item) => normalizeEnclosureForHashing(item.enclosures),
+    normalizeFn: (item, cleanUrlFn) => normalizeEnclosureForHashing(item.enclosures, cleanUrlFn),
     level: 'enclosure',
   },
   {
@@ -118,7 +124,7 @@ export const hashMeta = [
 export type HashMetaEntry = (typeof hashMeta)[number]
 export type HashMetaMatchableEntry = Extract<HashMetaEntry, { isMatchable: true }>
 
-// Derived from hashMeta — entries with level form the fingerprint level metadata.
+// Derived from hashMeta: entries with level form the fingerprint level metadata.
 export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
   .filter((meta): meta is Extract<HashMetaEntry, { level: FingerprintLevel }> => {
     return 'level' in meta
@@ -138,6 +144,6 @@ export const signalHashKeys: Array<[MatchSignal, keyof ItemHashes]> = hashMeta
   .map((meta) => [meta.level, meta.key])
 
 // Pre-computed fingerprint prefix arrays per level (avoids findIndex + slice per call).
-export const fingerprintPrefixByLevel = new Map<FingerprintLevel, Array<FingerprintMeta>>(
+export const fingerprintPrefixByLevel = new Map(
   fingerprintMeta.map((entry, index) => [entry.level, fingerprintMeta.slice(0, index + 1)]),
 )

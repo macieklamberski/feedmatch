@@ -23,14 +23,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -39,14 +33,16 @@
   ],
   "scripts": {
     "prepare": "lefthook install",
-    "build": "tsdown src/index.ts --format cjs,esm --dts --clean --unbundle --no-fixed-extension"
+    "build": "tsdown src/index.ts --format esm --dts --clean --unbundle --no-fixed-extension"
   },
-  "dependencies": {
-    "feedcanon": "^1.6.0"
+  "peerDependencies": {
+    "feedcanon": "^2.0.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
+    "@types/bun": "^1.4.2",
+    "feedcanon": "^2.0.0",
     "kvalita": "^1.22.0",
-    "tsdown": "^0.22.2"
+    "trousse": "^2.1.0",
+    "tsdown": "^0.23.0"
   }
 }

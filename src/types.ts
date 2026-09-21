@@ -1,8 +1,16 @@
 import type { fingerprintLevels, HashMetaMatchableEntry } from './constants.js'
 
+export type CleanUrlFn = (url: string) => string
+
 export type FingerprintLevel = (typeof fingerprintLevels)[number]
 
 export type ItemIdLike = string | number
+
+export type Enclosure = {
+  url?: string
+  isDefault?: boolean
+  type?: string | null
+}
 
 export type NewItem = {
   guid?: string | null
@@ -10,7 +18,7 @@ export type NewItem = {
   title?: string | null
   summary?: string | null
   content?: string | null
-  enclosures?: Array<{ url?: string; isDefault?: boolean }> | null
+  enclosures?: Array<Enclosure> | null
   publishedAt?: Date | null
 }
 
@@ -30,6 +38,11 @@ export type IncomingItem<T extends NewItem = NewItem> = T & ItemHashes
 export type ExistingItem = ItemHashes & {
   id: ItemIdLike
   publishedAt?: Date
+  // Raw enclosures as stored by the caller. When present, the classifier checks their type to
+  // decide whether the stored item's enclosure counts toward identity or is excluded from it. When
+  // absent, there is no type to check, so the stored item reuses the decision made for the incoming
+  // item.
+  enclosures?: Array<Enclosure> | null
 }
 
 export type FingerprintedItem<T extends NewItem = NewItem> = IncomingItem<T> & {
@@ -45,7 +58,7 @@ export type HashMeta = {
   isStrongHash: boolean
   isMatchable: boolean
   isContent: boolean
-  normalizeFn: (item: NewItem) => string | undefined
+  normalizeFn: (item: NewItem, cleanUrlFn?: CleanUrlFn) => string | undefined
   level?: FingerprintLevel
 }
 
@@ -74,9 +87,9 @@ export type FeedProfileSignal = {
 
 export type FeedProfile = { [Key in MatchSignal]: FeedProfileSignal }
 
-// The matchable signals, derived from hashMeta so the set stays in sync: the
-// level of every matchable hash (guid, link, enclosure, title). Fragments and
-// content hashes are not matchable and so are excluded.
+// The matchable signals, derived from hashMeta so the set stays in sync: the level of every
+// matchable hash (guid, link, enclosure, title). Fragments and content hashes are not matchable and
+// so are excluded.
 export type MatchSignal = HashMetaMatchableEntry['level']
 
 export type MatchedBy = MatchSignal | 'reconciled'
@@ -107,6 +120,7 @@ export type MatchStrategy = {
 }
 
 export type MatchPolicy = {
+  guidReliable: boolean
   linkReliable: boolean
   dateProximityDays: number
 }
@@ -153,6 +167,8 @@ export type ClassifyItemsInput<T extends NewItem = NewItem> = {
   newItems: Array<T>
   existingItems: Array<ExistingItem>
   fingerprintLevel?: FingerprintLevel
+  cleanUrlFn?: CleanUrlFn
+  dateProximityDays?: number
 }
 
 export type ClassifyItemsResult<T extends NewItem = NewItem> = {
