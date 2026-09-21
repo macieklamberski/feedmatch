@@ -36,8 +36,8 @@ const { inserts, updates } = classifyItems({
   existingItems: [
     {
       id: 42,
-      guidHash: '9a0364b9...',
-      linkHash: '9a0364b9...',
+      guidHash: '08beb303...',
+      linkHash: '08beb303...',
       titleHash: 'b94d27b9...',
       // ... other hash fields
     },
@@ -50,19 +50,22 @@ const { inserts, updates } = classifyItems({
 
 // Updates - items matched to an existing item.
 // updates[0].existingItemId - the ID of the matched existing item.
-// updates[0].matchedBy - how it was matched: 'guid', 'link', 'enclosure', or 'title'.
+// updates[0].matchedBy - how it was matched: 'guid', 'link', 'enclosure', 'title',
+// or 'reconciled'.
+
+// The result also returns fingerprintLevel, the level used for this scan.
 ```
 
 ## How It Works
 
 | Step | Name | Description |
 | --- | --- | --- |
-| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. `publishedAt` is coerced to a valid `Date` or `null` (date strings parsed, invalid dates dropped), and emitted inserts/updates carry the coerced value. |
-| 2 | Classify enclosures | Enclosures are classified by content type: audio and video count as identity, while images and unclassifiable URLs are changeable content, excluded from the fingerprint unless they are the item's only identity. |
-| 3 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. |
-| 4 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
-| 5 | Profile | The feed is profiled to determine which signals (guid, link, enclosure, title) are reliable for matching. |
+| 1 | Hash | Each incoming item's fields (guid, link, title, content, etc.) are normalized and hashed. `publishedAt` is coerced to a valid `Date` or `null`, on incoming and existing items alike, and emitted inserts/updates carry the coerced value. |
+| 2 | Profile | The feed is profiled for how often each signal (guid, link, enclosure, title) is present and how many of its values are distinct. Guids and links are each trusted only when at least 95% of their values are distinct. |
+| 3 | Classify enclosures | Enclosures are classified by content type, falling back to the URL's file extension when the type is missing or unrecognized: audio and video count as identity, while images and unclassifiable URLs are changeable content, excluded from the fingerprint unless they are the item's only identity. |
+| 4 | Fingerprint | Hashes are combined into a single fingerprint at the appropriate level for the feed. An item with no guid, link, enclosure or title has no fingerprint and is dropped from the result. |
+| 5 | Deduplicate | Incoming items sharing a fingerprint are collapsed so duplicates within the same batch don't produce multiple inserts. |
 | 6 | Screen | Match candidates must share the incoming item's fingerprint at the feed's level. Exception: a candidate agreeing on a feed-unique guid passes regardless, so edits on a stable guid become updates. |
-| 7 | Match | Each incoming item is run through a strategy chain (guid → link → enclosure → title) against the screened existing items, with candidate filters to reject false positives. Guid matches on a trusted-guid feed are exempt from the date proximity window, so republished items with a bumped date stay updates. |
+| 7 | Match | Each incoming item is run through a strategy chain against the screened existing items, with candidate filters to reject false positives: guid → link → enclosure → title when links are trusted, guid → enclosure → link → title otherwise. Guid matches on a trusted-guid feed are exempt from the date proximity window, so republished items with a bumped date stay updates. |
 | 8 | Classify | Matched items become updates when any hash differs, or when the incoming item carries a publishedAt that differs from the stored one; unmatched items become inserts. |
 | 9 | Reconcile | Inserts that are identical to an existing item except for guid or link are reclassified as updates, handling feeds with unstable identifiers. A shared link needs no date agreement; a match on text alone does, when both sides carry a date. Several stored copies that all match by link narrow to the most recent one. |
