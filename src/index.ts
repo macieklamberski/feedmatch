@@ -25,6 +25,8 @@ export type {
   CleanUrlFn,
   Enclosure,
   ExistingItem,
+  FallbackMatchContext,
+  FallbackMatchFn,
   FingerprintedItem,
   FingerprintLevel,
   IncomingItem,
