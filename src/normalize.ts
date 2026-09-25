@@ -95,6 +95,7 @@ export const normalizeGuidForHashing = (
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    // biome-ignore lint/nursery/useNullishCoalescing: A cleanUrlFn can reduce the url to an empty string, which falls back to the raw guid.
     return normalizeLinkForHashing(trimmed, cleanUrlFn) || trimmed
   }
 

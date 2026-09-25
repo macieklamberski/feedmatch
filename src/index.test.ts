@@ -981,7 +981,7 @@ describe('classifyItems enclosure masking (e2e)', () => {
       expect(result.inserts[0]?.fingerprintHash).not.toBe(result.inserts[1]?.fingerprintHash)
     })
 
-    it.todo('documented residual: a typeless extensionless generic-title guid-less podcast merges same-title episodes', () => {
+    it.todo('should merge same-title episodes of a typeless extensionless generic-title guid-less podcast', () => {
       // With no type, no extension, no guid, and generic titles, nothing
       // distinguishes two episodes once the enclosure is masked. Accepted:
       // such a feed is barely identifiable under any scheme, and none exist

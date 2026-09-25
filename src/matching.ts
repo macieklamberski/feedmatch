@@ -39,7 +39,7 @@ export const computeFeedProfile = (
   existingItems: Array<ExistingItem>,
   incomingItems: Array<IncomingItem>,
 ): FeedProfile => {
-  const profile = {} as FeedProfile
+  const profile: Partial<FeedProfile> = {}
 
   for (const [signal, hashKey] of signalHashKeys) {
     const existing = computeSignalStats(existingItems.map((item) => item[hashKey]))
@@ -69,7 +69,7 @@ export const computeFeedProfile = (
     profile[signal] = { existing, incoming, effective }
   }
 
-  return profile
+  return profile as FeedProfile
 }
 
 // Rejects GUID/link matches when dates are too far apart. Fixes the GUID reuse blind spot where
