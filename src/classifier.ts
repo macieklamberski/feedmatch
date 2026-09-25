@@ -35,6 +35,7 @@ import type {
 } from './types.js'
 
 const contentHashKeys = hashMeta.filter((meta) => meta.isContent).map((meta) => meta.key)
+const bodyHashKeys: Array<keyof ItemHashes> = ['contentHash', 'summaryHash']
 
 // Find an existing item where guid or link differs but all content fields match (title, content,
 // summary, enclosure).
@@ -61,7 +62,7 @@ export const findReconciliationCandidate = (
     if (incoming[key] != null) {
       matchingFields++
 
-      if (key === 'contentHash' || key === 'summaryHash') {
+      if (bodyHashKeys.includes(key)) {
         hasBodyHash = true
       }
     }

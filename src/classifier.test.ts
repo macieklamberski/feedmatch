@@ -7881,9 +7881,11 @@ describe('classifyItems', () => {
 
   describe('publishedAt coercion', () => {
     it('should not crash when publishedAt is a string and the item matches', () => {
-      const publishedAt = '2020-01-01T00:00:00Z' as unknown as Date
+      const publishedAt = '2020-01-01T00:00:00Z'
       const value: ClassifyItemsInput = {
+        // @ts-expect-error: This is for testing purposes.
         newItems: [{ guid: 'guid-1', title: 'Post', publishedAt }],
+        // @ts-expect-error: This is for testing purposes.
         existingItems: [{ ...makeMatchable({ guid: 'guid-1', title: 'Post' }), publishedAt }],
       }
       const expected: ClassifyItemsResult = {
