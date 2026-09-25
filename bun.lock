@@ -6,13 +6,13 @@
       "name": "feedmatch",
       "devDependencies": {
         "@types/bun": "^1.4.2",
-        "feedcanon": "^2.0.0",
+        "feedcanon": "^2.0.1",
         "kvalita": "^1.22.0",
         "trousse": "^2.1.0",
         "tsdown": "^0.23.0",
       },
       "peerDependencies": {
-        "feedcanon": "^2.0.0",
+        "feedcanon": "^2.0.1",
       },
     },
   },
@@ -397,7 +397,7 @@
 
     "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
 
-    "feedcanon": ["feedcanon@2.0.0", "", { "dependencies": { "entities": "^8.0.0" }, "peerDependencies": { "feedsmith": "^3.0.0" } }, "sha512-PeOvtvjbQ1nCeqxxR/CU+nnVKcbPGP29YYHJxTRYoqD5ZGaKPtFkIghloZkBsXjTiEPJvU4OrOV4tHKrPEUwtw=="],
+    "feedcanon": ["feedcanon@2.0.1", "", { "dependencies": { "entities": "^8.0.0" }, "peerDependencies": { "feedsmith": "^3.0.0" } }, "sha512-pqxoaig5jV3BSGzy9jUruQ7e444iM29FJSvxh2wdU+w/T5IWMr4IGHWm6T0gTn/I8kEZ1ahGIqQqMyVVNDY46A=="],
 
     "feedsmith": ["feedsmith@3.0.0", "", { "dependencies": { "entities": "^7.0.1", "fast-xml-parser": "~5.11.1" } }, "sha512-ePtwtkyWHAN0nkzSdOUJ6pTHdj5Zwh78vL3tmbEJOCXl5ixrdd3J+uve21rZstpn3odjS3Dh3j6hOFN4PTg9ag=="],
 
