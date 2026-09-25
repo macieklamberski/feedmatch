@@ -23,24 +23,27 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "prepare": "lefthook install",
-    "build": "tsdown src/index.ts --format esm --dts --clean --unbundle --no-fixed-extension"
+    "build": "tsdown src/index.ts --format esm --dts --clean --unbundle"
   },
   "peerDependencies": {
-    "feedcanon": "^2.0.0"
+    "feedcanon": "^2.0.1"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
-    "feedcanon": "^2.0.0",
+    "feedcanon": "^2.0.1",
     "kvalita": "^1.23.0",
     "trousse": "^2.1.0",
     "tsdown": "^0.23.0"
