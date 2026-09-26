@@ -1,5 +1,13 @@
 import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
-import { endsWithAnyOf, isPresent, type Nullish, startsWithAnyOf } from 'trousse'
+import {
+  audioExtensions,
+  endsWithAnyOf,
+  imageExtensions,
+  isPresent,
+  type Nullish,
+  startsWithAnyOf,
+  videoExtensions,
+} from 'trousse'
 import type { CleanUrlFn, Enclosure } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
@@ -137,38 +145,10 @@ const urlPathEndRegex = /[?#]/
 
 // File extensions that mark an enclosure URL as an image. A declared audio or video type is
 // distrusted when the URL clearly points at an image file.
-const imageExtensions = [
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.gif',
-  '.webp',
-  '.avif',
-  '.svg',
-  '.bmp',
-  '.ico',
-  '.tif',
-  '.tiff',
-]
+const imageSuffixes = imageExtensions.map((extension) => `.${extension}`)
 
 // File extensions that mark an enclosure URL as audio or video media.
-const mediaExtensions = [
-  '.mp3',
-  '.m4a',
-  '.m4b',
-  '.aac',
-  '.ogg',
-  '.oga',
-  '.opus',
-  '.flac',
-  '.wav',
-  '.mp4',
-  '.m4v',
-  '.mov',
-  '.webm',
-  '.mkv',
-  '.avi',
-]
+const mediaSuffixes = [...audioExtensions, ...videoExtensions].map((extension) => `.${extension}`)
 
 // Whether a single enclosure is real audio/video media. A recognized MIME type decides (audio/* or
 // video/* is media, image/* is not); a missing or unrecognized type (podcast CDNs commonly serve
@@ -186,7 +166,7 @@ const isMedia = (enclosure: Enclosure): boolean => {
     if (startsWithAnyOf(type, mediaTypePrefixes)) {
       // An audio/video type on a URL that clearly points at an image file is contradictory; do not
       // count the enclosure as media on a bad signal.
-      return !endsWithAnyOf(path, imageExtensions)
+      return !endsWithAnyOf(path, imageSuffixes)
     }
 
     if (startsWithAnyOf(type, imageTypePrefixes)) {
@@ -194,7 +174,7 @@ const isMedia = (enclosure: Enclosure): boolean => {
     }
   }
 
-  return endsWithAnyOf(path, mediaExtensions)
+  return endsWithAnyOf(path, mediaSuffixes)
 }
 
 // Select the preferred enclosure: the first with isDefault and a URL, else the first audio/video
