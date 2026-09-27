@@ -1,10 +1,11 @@
-import { type NormalizeOptions, normalizeUrl } from 'feedcanon'
 import {
   audioExtensions,
   endsWithAnyOf,
   imageExtensions,
   isPresent,
+  type NormalizeOptions,
   type Nullish,
+  normalizeUrl,
   startsWithAnyOf,
   videoExtensions,
 } from 'trousse'
@@ -29,7 +30,7 @@ const normalizeWithFragmentOptions: NormalizeOptions = {
   stripHash: false,
 }
 
-// Trim + normalize URL. Feeds often contain whitespace-only strings that feedcanon returns as-is
+// Trim + normalize URL. Feeds often contain whitespace-only strings that normalizeUrl returns as-is
 // (garbage). Guard against that with a trim check.
 const safeNormalizeUrl = (value: string, cleanUrlFn?: CleanUrlFn): string | undefined => {
   const trimmed = value.trim()
