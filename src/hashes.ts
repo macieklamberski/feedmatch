@@ -16,6 +16,9 @@ export {
   selectEnclosure,
 } from './normalize.js'
 
+import { t } from 'trousse'
+import locales from './locales.json' with { type: 'json' }
+
 export const generateHash = (...values: Array<Nullish<string>>) => {
   return createHash('sha256').update(values.join('\0')).digest('hex').slice(0, 32)
 }
@@ -95,7 +98,7 @@ export const resolveFingerprintLevel = (
     : 0
 
   if (startIndex === -1) {
-    throw new Error(`Invalid fingerprint level: ${currentLevel}`)
+    throw new Error(t(locales.errors.invalidFingerprintLevel, { level: String(currentLevel) }))
   }
 
   if (maxIdentifiable === 0) {
