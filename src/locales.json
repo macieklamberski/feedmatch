@@ -1,0 +1,5 @@
+{
+  "errors": {
+    "invalidFingerprintLevel": "Invalid fingerprint level: {{level}}"
+  }
+}

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { Nullish } from 'trousse'
+import { type Nullish, t } from 'trousse'
 import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants.js'
+import locales from './locales.json' with { type: 'json' }
 import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
@@ -95,7 +96,7 @@ export const resolveFingerprintLevel = (
     : 0
 
   if (startIndex === -1) {
-    throw new Error(`Invalid fingerprint level: ${currentLevel}`)
+    throw new Error(t(locales.errors.invalidFingerprintLevel, { level: String(currentLevel) }))
   }
 
   if (maxIdentifiable === 0) {
