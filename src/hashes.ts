@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { Nullish } from 'trousse'
+import { type Nullish, t } from 'trousse'
 import { fingerprintMeta, fingerprintPrefixByLevel, hashMeta } from './constants.js'
+import locales from './locales.json' with { type: 'json' }
 import type { CleanUrlFn, FingerprintLevel, ItemHashes, NewItem } from './types.js'
 
 export {
@@ -15,9 +16,6 @@ export {
   normalizeTextForHashing,
   selectEnclosure,
 } from './normalize.js'
-
-import { t } from 'trousse'
-import locales from './locales.json' with { type: 'json' }
 
 export const generateHash = (...values: Array<Nullish<string>>) => {
   return createHash('sha256').update(values.join('\0')).digest('hex').slice(0, 32)
