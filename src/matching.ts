@@ -1,3 +1,4 @@
+import { isPresent } from 'trousse'
 import { hashMeta, signalHashKeys, uniqueIdentifierThreshold } from './constants.js'
 import { hasStrongHash } from './hashes.js'
 import type {
@@ -20,7 +21,7 @@ import type {
 
 // Compute stats for a single signal from a set of hash values.
 export const computeSignalStats = (values: Array<string | null>): FeedProfileStats => {
-  const present = values.filter((value): value is string => value != null)
+  const present = values.filter(isPresent)
   const distinct = new Set(present).size
 
   return {
@@ -55,8 +56,6 @@ export const computeFeedProfile = (
       if (incoming.present === 0) {
         return existing
       }
-
-      return null
     })()
 
     const effective = source
