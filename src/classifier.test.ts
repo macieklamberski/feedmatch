@@ -7050,9 +7050,11 @@ describe('classifyItems', () => {
           fingerprintLevel: scan1.fingerprintLevel,
         })
 
+        const isScan2MatchedByLink = scan2.updates.every((u) => u.matchedBy === 'link')
+
         expect(scan2.inserts).toHaveLength(0)
         expect(scan2.updates).toHaveLength(3)
-        expect(scan2.updates.every((u) => u.matchedBy === 'link')).toBe(true)
+        expect(isScan2MatchedByLink).toBe(true)
 
         // Build existing items from scan 2 results.
         const afterScan2: Array<ExistingItem> = scan2.updates.map((update) => ({
@@ -7072,9 +7074,11 @@ describe('classifyItems', () => {
           fingerprintLevel: scan2.fingerprintLevel,
         })
 
+        const isScan3MatchedByLink = scan3.updates.every((u) => u.matchedBy === 'link')
+
         expect(scan3.inserts).toHaveLength(0)
         expect(scan3.updates).toHaveLength(3)
-        expect(scan3.updates.every((u) => u.matchedBy === 'link')).toBe(true)
+        expect(isScan3MatchedByLink).toBe(true)
       })
 
       it('should not reconcile when two inserts target the same existing item (ambiguous)', () => {
