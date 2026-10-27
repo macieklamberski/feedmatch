@@ -109,6 +109,8 @@ export const findReconciliationCandidate = (
   }
 }
 
+const identityKeys: Array<keyof ItemHashes> = ['guidHash', 'linkHash']
+
 // Check if any changed identity field (guid or link) already belongs to a different existing item.
 // For example, the guid points to item A but the link points to item B, so it's unclear which item
 // this really is.
@@ -117,8 +119,6 @@ export const hasAmbiguousIdentity = (
   candidate: ExistingItem,
   existingItems: Array<ExistingItem>,
 ): boolean => {
-  const identityKeys: Array<keyof ItemHashes> = ['guidHash', 'linkHash']
-
   for (const key of identityKeys) {
     const value = incoming[key]
 

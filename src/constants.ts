@@ -123,12 +123,19 @@ export const hashMeta = [
 // A single hashMeta entry, and the subset that participates in matching.
 export type HashMetaEntry = (typeof hashMeta)[number]
 export type HashMetaMatchableEntry = Extract<HashMetaEntry, { isMatchable: true }>
+type HashMetaFingerprintEntry = Extract<HashMetaEntry, { level: FingerprintLevel }>
+
+const isFingerprintEntry = (meta: HashMetaEntry): meta is HashMetaFingerprintEntry => {
+  return 'level' in meta
+}
+
+const isMatchableEntry = (meta: HashMetaEntry): meta is HashMetaMatchableEntry => {
+  return meta.isMatchable
+}
 
 // Derived from hashMeta: entries with level form the fingerprint level metadata.
 export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
-  .filter((meta): meta is Extract<HashMetaEntry, { level: FingerprintLevel }> => {
-    return 'level' in meta
-  })
+  .filter(isFingerprintEntry)
   .map((meta) => {
     return { level: meta.level, key: meta.key, tag: meta.tag }
   })
@@ -138,9 +145,7 @@ export const hashKeys: Array<HashKey> = hashMeta.map((meta) => meta.key)
 
 // Signal-to-hash-key mapping for the matchable signals.
 export const signalHashKeys: Array<[MatchSignal, keyof ItemHashes]> = hashMeta
-  .filter((meta): meta is HashMetaMatchableEntry => {
-    return meta.isMatchable
-  })
+  .filter(isMatchableEntry)
   .map((meta) => [meta.level, meta.key])
 
 // Pre-computed fingerprint prefix arrays per level (avoids findIndex + slice per call).

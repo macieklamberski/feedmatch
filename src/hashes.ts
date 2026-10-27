@@ -17,7 +17,7 @@ export {
   selectEnclosure,
 } from './normalize.js'
 
-export const generateHash = (...values: Array<Nullish<string>>) => {
+export const generateHash = (...values: Array<Nullish<string>>): string => {
   return createHash('sha256').update(values.join('\0')).digest('hex').slice(0, 32)
 }
 
