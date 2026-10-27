@@ -161,7 +161,13 @@ describe('computeSignalStats', () => {
   })
 
   it('should return zero rates for empty array', () => {
-    const expected = { present: 0, total: 0, presenceRate: 0, distinct: 0, uniquenessRate: 0 }
+    const expected = {
+      present: 0,
+      total: 0,
+      presenceRate: 0,
+      distinct: 0,
+      uniquenessRate: 0,
+    }
 
     expect(computeSignalStats([])).toEqual(expected)
   })

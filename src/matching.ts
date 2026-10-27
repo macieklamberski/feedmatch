@@ -214,8 +214,8 @@ export const findMatchCandidates = (
 ): Array<ExistingItem> => {
   const hasStrong = hasStrongHash(hashes)
 
-  return existingItems.filter((existing) =>
-    hashMeta.some((meta) => {
+  return existingItems.filter((existing) => {
+    return hashMeta.some((meta) => {
       if (!meta.isMatchable || !hashes[meta.key]) {
         return false
       }
@@ -225,8 +225,8 @@ export const findMatchCandidates = (
       }
 
       return existing[meta.key] === hashes[meta.key]
-    }),
-  )
+    })
+  })
 }
 
 // Pre-computed matchable key metadata for index operations.
