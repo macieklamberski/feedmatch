@@ -35,7 +35,7 @@ const normalizeWithFragmentOptions: NormalizeOptions = {
 const safeNormalizeUrl = (value: string, cleanUrlFn?: CleanUrlFn): string | undefined => {
   const trimmed = value.trim()
 
-  if (trimmed === '') {
+  if (!trimmed) {
     return
   }
 
@@ -67,7 +67,7 @@ export const normalizeLinkWithFragmentForHashing = (
 
   const trimmed = link.trim()
 
-  if (trimmed === '') {
+  if (!trimmed) {
     return
   }
 
@@ -99,7 +99,7 @@ export const normalizeGuidForHashing = (
 
   const trimmed = guid.trim()
 
-  if (trimmed === '') {
+  if (!trimmed) {
     return
   }
 
@@ -244,7 +244,7 @@ export const normalizeWhitespace = (text: Nullish<string>): string | undefined =
 
   const trimmed = text.trim()
 
-  if (trimmed === '') {
+  if (!trimmed) {
     return
   }
 
