@@ -3802,14 +3802,14 @@ describe('classifyItems', () => {
         title: 'Episode',
         content: 'Old content',
       })
-      const uniques = Array.from({ length: 17 }, (_, index) =>
-        makeMatchable({
+      const uniques = Array.from({ length: 17 }, (_, index) => {
+        return makeMatchable({
           id: `u${index}`,
           guid: `g-${index}`,
           link: `https://example.com/u${index}`,
           title: `U${index}`,
-        }),
-      )
+        })
+      })
       const duplicate1 = makeMatchable({
         id: 'd1',
         guid: 'gd-1',
@@ -3856,14 +3856,14 @@ describe('classifyItems', () => {
         title: 'Episode',
         content: 'Old content',
       })
-      const uniques = Array.from({ length: 16 }, (_, index) =>
-        makeMatchable({
+      const uniques = Array.from({ length: 16 }, (_, index) => {
+        return makeMatchable({
           id: `u${index}`,
           guid: `g-${index}`,
           link: `https://example.com/u${index}`,
           title: `U${index}`,
-        }),
-      )
+        })
+      })
       const duplicate1 = makeMatchable({
         id: 'd1',
         guid: 'gd-1',
@@ -3916,14 +3916,14 @@ describe('classifyItems', () => {
         title: 'Episode',
         content: 'Old content',
       })
-      const filler = Array.from({ length: 11 }, (_, index) =>
-        makeMatchable({
+      const filler = Array.from({ length: 11 }, (_, index) => {
+        return makeMatchable({
           id: `h${index}`,
           guid: `hg-${index}`,
           link: `https://example.com/h${index}`,
           title: `H${index}`,
-        }),
-      )
+        })
+      })
       const feedItem = {
         link: 'https://example.com/target',
         enclosures: [{ url: 'https://example.com/e.mp3' }],
@@ -3958,14 +3958,14 @@ describe('classifyItems', () => {
         title: 'Episode',
         content: 'Old content',
       })
-      const filler = Array.from({ length: 11 }, (_, index) =>
-        makeMatchable({
+      const filler = Array.from({ length: 11 }, (_, index) => {
+        return makeMatchable({
           id: `h${index}`,
           guid: `hg-${index}`,
           link: `https://example.com/h${index}`,
           title: `H${index}`,
-        }),
-      )
+        })
+      })
       const feedItem = {
         link: 'https://example.com/target',
         enclosures: [{ url: 'https://example.com/e.mp3' }],
@@ -4687,13 +4687,13 @@ describe('classifyItems', () => {
     it('should downgrade to linkFragment and update correct item when link fragments disambiguate on high-uniqueness channel', () => {
       const base = 'https://example.com/page'
       const feedItem = { link: `${base}#s1`, title: 'Section 1', content: 'New content' }
-      const filler = Array.from({ length: 19 }, (_, index) =>
-        makeMatchable({
+      const filler = Array.from({ length: 19 }, (_, index) => {
+        return makeMatchable({
           id: `u${index}`,
           link: `https://example.com/u${index}`,
           title: `U${index}`,
-        }),
-      )
+        })
+      })
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5464,13 +5464,13 @@ describe('classifyItems', () => {
 
     it('should insert when link match is ambiguous on high-uniqueness channel', () => {
       const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
-      const filler = Array.from({ length: 19 }, (_, index) =>
-        makeMatchable({
+      const filler = Array.from({ length: 19 }, (_, index) => {
+        return makeMatchable({
           id: `u${index}`,
           link: `https://example.com/u${index}`,
           title: `U${index}`,
-        }),
-      )
+        })
+      })
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
