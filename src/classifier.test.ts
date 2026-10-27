@@ -922,7 +922,10 @@ describe('reconcileInserts', () => {
   })
 
   it('should return all inserts unchanged when existingItems is empty', () => {
-    const insert = { item: makeIncoming({ linkHash: 'link-1' }), fingerprintHash: 'fp-1' }
+    const insert = {
+      item: makeIncoming({ linkHash: 'link-1' }),
+      fingerprintHash: 'fp-1',
+    }
     const result = reconcileInserts([insert], [], new Set())
 
     expect(result.reconciledInserts).toHaveLength(1)
@@ -1787,9 +1790,19 @@ describe('classifyItems', () => {
     })
 
     it('should produce same classification regardless of feed item order', () => {
-      const insertItem = { guid: 'guid-new', title: 'New Post' }
-      const updateItem = { guid: 'guid-2', title: 'Changed Title', content: 'New content' }
-      const skipItem = { guid: 'guid-1', title: 'Unchanged' }
+      const insertItem = {
+        guid: 'guid-new',
+        title: 'New Post',
+      }
+      const updateItem = {
+        guid: 'guid-2',
+        title: 'Changed Title',
+        content: 'New content',
+      }
+      const skipItem = {
+        guid: 'guid-1',
+        title: 'Unchanged',
+      }
       const existingItems = [
         makeMatchable({
           id: 'existing-1',
@@ -1817,7 +1830,11 @@ describe('classifyItems', () => {
     })
 
     it('should preserve extra fields in output', () => {
-      const feedItem = { guid: 'guid-1', title: 'Post', customField: 'extra' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'Post',
+        customField: 'extra',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [],
@@ -1865,9 +1882,15 @@ describe('classifyItems', () => {
     })
 
     it('should filter unidentifiable items without affecting level', () => {
-      const feedItem1 = { guid: 'guid-1', title: 'Post 1' }
+      const feedItem1 = {
+        guid: 'guid-1',
+        title: 'Post 1',
+      }
       const feedItem2 = { content: 'Only content' }
-      const feedItem3 = { guid: 'guid-2', title: 'Post 2' }
+      const feedItem3 = {
+        guid: 'guid-2',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem1, feedItem2, feedItem3],
         existingItems: [],
@@ -1931,7 +1954,10 @@ describe('classifyItems', () => {
     })
 
     it('should not downgrade level due to duplicate new items', () => {
-      const feedItem = { guid: 'guid-1', title: 'Post' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'Post',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem, feedItem],
         existingItems: [],
@@ -1952,7 +1978,10 @@ describe('classifyItems', () => {
     })
 
     it('should dedup all-identical items to single insert', () => {
-      const feedItem = { link: 'https://example.com/post', title: 'Post' }
+      const feedItem = {
+        link: 'https://example.com/post',
+        title: 'Post',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem, feedItem, feedItem, feedItem, feedItem],
         existingItems: [],
@@ -1972,8 +2001,14 @@ describe('classifyItems', () => {
     })
 
     it('should collapse title-only items with same title to single insert', () => {
-      const feedItemA = { title: 'Same Title', content: 'Content A' }
-      const feedItemB = { title: 'Same Title', content: 'Content B' }
+      const feedItemA = {
+        title: 'Same Title',
+        content: 'Content A',
+      }
+      const feedItemB = {
+        title: 'Same Title',
+        content: 'Content B',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2110,8 +2145,15 @@ describe('classifyItems', () => {
     })
 
     it('should keep richer duplicate and produce update when it matches existing', () => {
-      const feedItemRich = { guid: 'guid-1', title: 'Post Title', content: 'New content' }
-      const feedItemPoor = { guid: 'guid-1', title: 'Post Title' }
+      const feedItemRich = {
+        guid: 'guid-1',
+        title: 'Post Title',
+        content: 'New content',
+      }
+      const feedItemPoor = {
+        guid: 'guid-1',
+        title: 'Post Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemRich, feedItemPoor],
         existingItems: [
@@ -2140,8 +2182,14 @@ describe('classifyItems', () => {
     })
 
     it('should dedup two items whose links normalize to the same value', () => {
-      const feedItemA = { link: 'https://example.com/post?utm_source=rss', title: 'Post' }
-      const feedItemB = { link: 'http://www.example.com/post/', title: 'Post' }
+      const feedItemA = {
+        link: 'https://example.com/post?utm_source=rss',
+        title: 'Post',
+      }
+      const feedItemB = {
+        link: 'http://www.example.com/post/',
+        title: 'Post',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2164,8 +2212,14 @@ describe('classifyItems', () => {
 
   describe('level computation', () => {
     it('should downgrade fingerprintLevel when collisions exist at input level', () => {
-      const feedItemA = { link: 'https://example.com/shared', title: 'Post A' }
-      const feedItemB = { link: 'https://example.com/shared', title: 'Post B' }
+      const feedItemA = {
+        link: 'https://example.com/shared',
+        title: 'Post A',
+      }
+      const feedItemB = {
+        link: 'https://example.com/shared',
+        title: 'Post B',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2190,8 +2244,14 @@ describe('classifyItems', () => {
     })
 
     it('should preserve fingerprintLevel when level is stable', () => {
-      const feedItem1 = { guid: 'guid-1', title: 'Post 1' }
-      const feedItem2 = { guid: 'guid-2', title: 'Post 2' }
+      const feedItem1 = {
+        guid: 'guid-1',
+        title: 'Post 1',
+      }
+      const feedItem2 = {
+        guid: 'guid-2',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem1, feedItem2],
         existingItems: [],
@@ -2216,8 +2276,14 @@ describe('classifyItems', () => {
     })
 
     it('should produce distinct fingerprintHashes for hub new items with shared link and level=title', () => {
-      const feedItemA = { link: 'https://example.com/hub', title: 'Article A' }
-      const feedItemB = { link: 'https://example.com/hub', title: 'Article B' }
+      const feedItemA = {
+        link: 'https://example.com/hub',
+        title: 'Article A',
+      }
+      const feedItemB = {
+        link: 'https://example.com/hub',
+        title: 'Article B',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2245,7 +2311,10 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade level when new item collides with existing item', () => {
-      const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
+      const feedItem = {
+        link: 'https://example.com/shared',
+        title: 'New Article',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -2277,7 +2346,10 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade level on hub onset with single existing item', () => {
-      const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
+      const feedItem = {
+        link: 'https://example.com/shared',
+        title: 'New Article',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -2304,8 +2376,15 @@ describe('classifyItems', () => {
     })
 
     it('should pick link when some items lack guid', () => {
-      const feedItem1 = { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' }
-      const feedItem2 = { link: 'https://example.com/post-2', title: 'Post 2' }
+      const feedItem1 = {
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        title: 'Post 1',
+      }
+      const feedItem2 = {
+        link: 'https://example.com/post-2',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem1, feedItem2],
         existingItems: [],
@@ -2329,8 +2408,14 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade from link to linkFragment when fragments resolve collision', () => {
-      const feedItemA = { link: 'https://example.com/page#section-a', title: 'Section A' }
-      const feedItemB = { link: 'https://example.com/page#section-b', title: 'Section B' }
+      const feedItemA = {
+        link: 'https://example.com/page#section-a',
+        title: 'Section A',
+      }
+      const feedItemB = {
+        link: 'https://example.com/page#section-b',
+        title: 'Section B',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2355,8 +2440,14 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade guid to guidFragment when guid fragments differ', () => {
-      const feedItemA = { guid: 'https://example.com/post#v1', title: 'Version 1' }
-      const feedItemB = { guid: 'https://example.com/post#v2', title: 'Version 2' }
+      const feedItemA = {
+        guid: 'https://example.com/post#v1',
+        title: 'Version 1',
+      }
+      const feedItemB = {
+        guid: 'https://example.com/post#v2',
+        title: 'Version 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2449,8 +2540,16 @@ describe('classifyItems', () => {
     })
 
     it('should not upgrade level when fingerprintLevel is already deeper', () => {
-      const feedItem1 = { guid: 'guid-1', link: 'https://example.com/post-1', title: 'Post 1' }
-      const feedItem2 = { guid: 'guid-2', link: 'https://example.com/post-2', title: 'Post 2' }
+      const feedItem1 = {
+        guid: 'guid-1',
+        link: 'https://example.com/post-1',
+        title: 'Post 1',
+      }
+      const feedItem2 = {
+        guid: 'guid-2',
+        link: 'https://example.com/post-2',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem1, feedItem2],
         existingItems: [],
@@ -2475,8 +2574,16 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade guid to link when guid collides but links differ', () => {
-      const feedItemA = { guid: 'shared-guid', link: 'https://example.com/post-1', title: 'Post 1' }
-      const feedItemB = { guid: 'shared-guid', link: 'https://example.com/post-2', title: 'Post 2' }
+      const feedItemA = {
+        guid: 'shared-guid',
+        link: 'https://example.com/post-1',
+        title: 'Post 1',
+      }
+      const feedItemB = {
+        guid: 'shared-guid',
+        link: 'https://example.com/post-2',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2535,8 +2642,14 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade guid to title when guid collides and no links exist', () => {
-      const feedItemA = { guid: 'shared-guid', title: 'Post 1' }
-      const feedItemB = { guid: 'shared-guid', title: 'Post 2' }
+      const feedItemA = {
+        guid: 'shared-guid',
+        title: 'Post 1',
+      }
+      const feedItemB = {
+        guid: 'shared-guid',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2623,9 +2736,18 @@ describe('classifyItems', () => {
     })
 
     it('should produce collision-free fingerprintHashes after level downgrade', () => {
-      const feedItem1 = { link: 'https://example.com/page#s1', title: 'Section 1' }
-      const feedItem2 = { link: 'https://example.com/page#s2', title: 'Section 2' }
-      const feedItem3 = { link: 'https://example.com/page#s3', title: 'Section 3' }
+      const feedItem1 = {
+        link: 'https://example.com/page#s1',
+        title: 'Section 1',
+      }
+      const feedItem2 = {
+        link: 'https://example.com/page#s2',
+        title: 'Section 2',
+      }
+      const feedItem3 = {
+        link: 'https://example.com/page#s3',
+        title: 'Section 3',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem1, feedItem2, feedItem3],
         existingItems: [],
@@ -2641,8 +2763,14 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade guid to link when new items lack guids', () => {
-      const feedItemA = { link: 'https://example.com/post-1', title: 'Post 1' }
-      const feedItemB = { link: 'https://example.com/post-2', title: 'Post 2' }
+      const feedItemA = {
+        link: 'https://example.com/post-1',
+        title: 'Post 1',
+      }
+      const feedItemB = {
+        link: 'https://example.com/post-2',
+        title: 'Post 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2699,8 +2827,14 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade enclosure to title when new items lack guids links and enclosures', () => {
-      const feedItemA = { title: 'Post 1', content: 'Content 1' }
-      const feedItemB = { title: 'Post 2', content: 'Content 2' }
+      const feedItemA = {
+        title: 'Post 1',
+        content: 'Content 1',
+      }
+      const feedItemB = {
+        title: 'Post 2',
+        content: 'Content 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2725,8 +2859,14 @@ describe('classifyItems', () => {
     })
 
     it('should downgrade past linkFragment to title when fragments are identical', () => {
-      const feedItemA = { link: 'https://example.com/page#comments', title: 'Post A' }
-      const feedItemB = { link: 'https://example.com/page#comments', title: 'Post B' }
+      const feedItemA = {
+        link: 'https://example.com/page#comments',
+        title: 'Post A',
+      }
+      const feedItemB = {
+        link: 'https://example.com/page#comments',
+        title: 'Post B',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -2985,7 +3125,11 @@ describe('classifyItems', () => {
     })
 
     it('should skip link matching on low-uniqueness channel when item has guid', () => {
-      const feedItem = { guid: 'guid-new', link: 'https://example.com/shared', title: 'New Post' }
+      const feedItem = {
+        guid: 'guid-new',
+        link: 'https://example.com/shared',
+        title: 'New Post',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3016,8 +3160,14 @@ describe('classifyItems', () => {
     })
 
     it('should insert two items when links differ only by fragment', () => {
-      const feedItemA = { link: 'https://example.com/page#Earth2', title: 'Earth2' }
-      const feedItemB = { link: 'https://example.com/page#LimeVPN', title: 'LimeVPN' }
+      const feedItemA = {
+        link: 'https://example.com/page#Earth2',
+        title: 'Earth2',
+      }
+      const feedItemB = {
+        link: 'https://example.com/page#LimeVPN',
+        title: 'LimeVPN',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -3041,7 +3191,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert hub feed item instead of merging when level prevents it', () => {
-      const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
+      const feedItem = {
+        link: 'https://example.com/shared',
+        title: 'New Article',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3147,7 +3300,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert link-only item with changed title when level active', () => {
-      const feedItem = { link: 'https://example.com/post', title: 'New Title' }
+      const feedItem = {
+        link: 'https://example.com/post',
+        title: 'New Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3174,7 +3330,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert when fragment added and level active', () => {
-      const feedItem = { link: 'https://example.com/post#comments', title: 'Post Title' }
+      const feedItem = {
+        link: 'https://example.com/post#comments',
+        title: 'Post Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3201,7 +3360,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert when fragment differs and level is linkFragment', () => {
-      const feedItem = { link: 'https://example.com/post#comments', title: 'Post Title' }
+      const feedItem = {
+        link: 'https://example.com/post#comments',
+        title: 'Post Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3228,7 +3390,10 @@ describe('classifyItems', () => {
     })
 
     it('should not merge hub items even without level', () => {
-      const feedItem = { link: 'https://example.com/shared', title: 'Article C' }
+      const feedItem = {
+        link: 'https://example.com/shared',
+        title: 'Article C',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3259,7 +3424,10 @@ describe('classifyItems', () => {
     })
 
     it('should update by guid when the title changes and level is title', () => {
-      const feedItem = { guid: 'guid-1', title: 'New Title' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'New Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3322,7 +3490,11 @@ describe('classifyItems', () => {
     })
 
     it('should update via guid when level is title and title matches', () => {
-      const feedItem = { guid: 'guid-1', title: 'Same Title', content: 'New content' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'Same Title',
+        content: 'New content',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3352,7 +3524,10 @@ describe('classifyItems', () => {
     })
 
     it('should not hide guid collisions in existing items', () => {
-      const feedItem = { guid: 'shared-guid', title: 'Article A Updated' }
+      const feedItem = {
+        guid: 'shared-guid',
+        title: 'Article A Updated',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3457,7 +3632,10 @@ describe('classifyItems', () => {
     })
 
     it('should update title-only item when content changes', () => {
-      const feedItem = { title: 'Post Title', content: 'New content' }
+      const feedItem = {
+        title: 'Post Title',
+        content: 'New content',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3622,7 +3800,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert when title-only item has ambiguous match against multiple existing items', () => {
-      const feedItem = { title: 'Shared Title', content: 'New content' }
+      const feedItem = {
+        title: 'Shared Title',
+        content: 'New content',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -3733,7 +3914,11 @@ describe('classifyItems', () => {
     })
 
     it('should match by guid when guid and link point to different existing items', () => {
-      const feedItem = { guid: 'G1', link: 'https://example.com/L1', title: 'Updated' }
+      const feedItem = {
+        guid: 'G1',
+        link: 'https://example.com/L1',
+        title: 'Updated',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -4686,7 +4871,11 @@ describe('classifyItems', () => {
 
     it('should downgrade to linkFragment and update correct item when link fragments disambiguate on high-uniqueness channel', () => {
       const base = 'https://example.com/page'
-      const feedItem = { link: `${base}#s1`, title: 'Section 1', content: 'New content' }
+      const feedItem = {
+        link: `${base}#s1`,
+        title: 'Section 1',
+        content: 'New content',
+      }
       const filler = Array.from({ length: 19 }, (_, index) => {
         return makeMatchable({
           id: `u${index}`,
@@ -4947,8 +5136,14 @@ describe('classifyItems', () => {
     })
 
     it('should keep fingerprintLevel guidFragment when guid fragments resolve collision', () => {
-      const feedItemA = { guid: 'https://example.com/post#v1', title: 'Version 1' }
-      const feedItemB = { guid: 'https://example.com/post#v2', title: 'Version 2' }
+      const feedItemA = {
+        guid: 'https://example.com/post#v1',
+        title: 'Version 1',
+      }
+      const feedItemB = {
+        guid: 'https://example.com/post#v2',
+        title: 'Version 2',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemA, feedItemB],
         existingItems: [],
@@ -5007,7 +5202,10 @@ describe('classifyItems', () => {
     })
 
     it('should not downgrade level when existing item matches incoming exactly', () => {
-      const feedItem = { link: 'https://example.com/post', title: 'Same Title' }
+      const feedItem = {
+        link: 'https://example.com/post',
+        title: 'Same Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5029,7 +5227,11 @@ describe('classifyItems', () => {
     })
 
     it('should not downgrade level when guid match resolves the collision', () => {
-      const feedItem = { guid: 'guid-1', link: 'https://example.com/post', title: 'New Title' }
+      const feedItem = {
+        guid: 'guid-1',
+        link: 'https://example.com/post',
+        title: 'New Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5064,7 +5266,10 @@ describe('classifyItems', () => {
         title: 'Article A',
         content: 'New content',
       }
-      const feedItemNew = { link: 'https://example.com/shared', title: 'Article B' }
+      const feedItemNew = {
+        link: 'https://example.com/shared',
+        title: 'Article B',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItemUpdate, feedItemNew],
         existingItems: [
@@ -5191,7 +5396,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert when feed item shares no fields with existing item', () => {
-      const feedItem = { guid: 'guid-new', title: 'New Post' }
+      const feedItem = {
+        guid: 'guid-new',
+        title: 'New Post',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5362,7 +5570,11 @@ describe('classifyItems', () => {
     })
 
     it('should work with numeric existing item IDs', () => {
-      const feedItem = { guid: 'guid-1', title: 'Updated', content: 'New content' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'Updated',
+        content: 'New content',
+      }
       const existingItem: ExistingItem = {
         id: 42,
         ...computeItemHashes({ guid: 'guid-1', title: 'Old', content: 'Old content' }),
@@ -5378,7 +5590,11 @@ describe('classifyItems', () => {
     })
 
     it('should insert when guid changes but title stays the same', () => {
-      const feedItem = { guid: 'new-guid', title: 'Same Title', content: 'New content' }
+      const feedItem = {
+        guid: 'new-guid',
+        title: 'Same Title',
+        content: 'New content',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5405,7 +5621,10 @@ describe('classifyItems', () => {
     })
 
     it('should update via guid when incoming loses content', () => {
-      const feedItem = { guid: 'guid-1', title: 'Post Title' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'Post Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5434,7 +5653,10 @@ describe('classifyItems', () => {
     })
 
     it('should update via guid when incoming loses summary', () => {
-      const feedItem = { guid: 'guid-1', title: 'Post Title' }
+      const feedItem = {
+        guid: 'guid-1',
+        title: 'Post Title',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -5463,7 +5685,10 @@ describe('classifyItems', () => {
     })
 
     it('should insert when link match is ambiguous on high-uniqueness channel', () => {
-      const feedItem = { link: 'https://example.com/shared', title: 'New Article' }
+      const feedItem = {
+        link: 'https://example.com/shared',
+        title: 'New Article',
+      }
       const filler = Array.from({ length: 19 }, (_, index) => {
         return makeMatchable({
           id: `u${index}`,
@@ -5749,7 +5974,12 @@ describe('classifyItems', () => {
     // the GUID strategy runs first and finds a unique match.
     it('should match when guid and link are identical strings', () => {
       const url = 'https://example.com/post-1'
-      const feedItem = { guid: url, link: url, title: 'Post 1', content: 'New content' }
+      const feedItem = {
+        guid: url,
+        link: url,
+        title: 'Post 1',
+        content: 'New content',
+      }
       const value: ClassifyItemsInput = {
         newItems: [feedItem],
         existingItems: [
@@ -7982,7 +8212,10 @@ describe('excludeEnclosureFromIdentity', () => {
       enclosures: [{ url: 'https://example.com/thumb.jpg' }],
       publishedAt: new Date('2026-06-30T12:00:00Z'),
     }
-    const expected = { ...value, enclosureHash: null }
+    const expected = {
+      ...value,
+      enclosureHash: null,
+    }
 
     expect(excludeEnclosureFromIdentity(value)).toEqual(expected)
   })
@@ -8010,7 +8243,10 @@ describe('excludeCandidateEnclosure', () => {
       ...makeHashes({ linkHash: 'l1', enclosureHash: 'e1' }),
       enclosures: [{ url: 'https://example.com/thumb.jpg' }],
     }
-    const expected = { ...value, enclosureHash: null }
+    const expected = {
+      ...value,
+      enclosureHash: null,
+    }
 
     expect(excludeCandidateEnclosure(value, false)).toEqual(expected)
   })
@@ -8020,7 +8256,10 @@ describe('excludeCandidateEnclosure', () => {
       id: 'item-1',
       ...makeHashes({ linkHash: 'l1', enclosureHash: 'e1' }),
     }
-    const expected = { ...value, enclosureHash: null }
+    const expected = {
+      ...value,
+      enclosureHash: null,
+    }
 
     expect(excludeCandidateEnclosure(value, true)).toEqual(expected)
   })
@@ -8138,8 +8377,14 @@ describe('classifyItems enclosure exclusion', () => {
   })
 
   it('should still insert and match an item identified only by its image enclosure', () => {
-    const original = { enclosures: [{ url: 'https://example.com/only.jpg' }], content: 'Old' }
-    const edited = { enclosures: [{ url: 'https://example.com/only.jpg' }], content: 'New' }
+    const original = {
+      enclosures: [{ url: 'https://example.com/only.jpg' }],
+      content: 'Old',
+    }
+    const edited = {
+      enclosures: [{ url: 'https://example.com/only.jpg' }],
+      content: 'New',
+    }
     const scanOne = classifyItems({ newItems: [original], existingItems: [] })
     const scanTwo = classifyItems({
       newItems: [edited],
@@ -8261,7 +8506,10 @@ describe('classifyItems enclosure exclusion', () => {
       title: 'Post Title',
       enclosures: [{ url: 'https://example.com/new-thumb.jpg' }],
     }
-    const existingWithoutEnclosures = { id: 'existing-1', ...computeItemHashes(original) }
+    const existingWithoutEnclosures = {
+      id: 'existing-1',
+      ...computeItemHashes(original),
+    }
     const value: ClassifyItemsInput = {
       newItems: [feedItem],
       existingItems: [existingWithoutEnclosures],
