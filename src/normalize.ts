@@ -12,7 +12,7 @@ import {
 import type { CleanUrlFn, Enclosure } from './types.js'
 
 const normalizeOptions: NormalizeOptions = {
-  stripProtocol: true,
+  stripScheme: true,
   stripAuthentication: true,
   stripWww: true,
   stripTrailingSlash: true,
