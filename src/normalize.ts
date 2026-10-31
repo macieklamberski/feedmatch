@@ -209,7 +209,7 @@ export const selectEnclosure = (enclosures: Nullish<Array<Enclosure>>): Enclosur
 export const isMediaEnclosure = (enclosures: Nullish<Array<Enclosure>>): boolean => {
   const enclosure = selectEnclosure(enclosures)
 
-  return isPresent(enclosure) && isMedia(enclosure)
+  return enclosure != null && isMedia(enclosure)
 }
 
 // Select preferred enclosure (isDefault first, then first with URL) and normalize for hashing.

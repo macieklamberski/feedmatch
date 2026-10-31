@@ -1,4 +1,4 @@
-import { isNullish, isPresent } from 'trousse'
+import { isPresent } from 'trousse'
 import { hashMeta, signalHashKeys, uniqueIdentifierThreshold } from './constants.js'
 import { hasStrongHash } from './hashes.js'
 import type {
@@ -124,7 +124,7 @@ export const changeFilter: UpdateFilter = {
       return true
     }
 
-    if (isNullish(context.incoming.publishedAt)) {
+    if (context.incoming.publishedAt == null) {
       return false
     }
 
@@ -197,7 +197,7 @@ export const agreesOnUniqueIdentifier = (
   candidate: ItemHashes,
   feedProfile: FeedProfile,
 ): boolean => {
-  if (isNullish(incoming.guidHash) || incoming.guidHash !== candidate.guidHash) {
+  if (incoming.guidHash == null || incoming.guidHash !== candidate.guidHash) {
     return false
   }
 
