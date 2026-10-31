@@ -1,4 +1,4 @@
-import { coerceDate, isNullish, isPresent, isValidDate } from 'trousse'
+import { coerceDate, isNullish, isNumber, isPresent, isValidDate } from 'trousse'
 import { hashMeta, minReconciliationFields } from './constants.js'
 import {
   buildFingerprint,
@@ -171,7 +171,7 @@ const isLaterCopy = (candidate: ExistingItem, latest: ExistingItem): boolean => 
     return time > latestTime
   }
 
-  if (typeof candidate.id === 'number' && typeof latest.id === 'number') {
+  if (isNumber(candidate.id) && isNumber(latest.id)) {
     return candidate.id > latest.id
   }
 
