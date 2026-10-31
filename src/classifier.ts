@@ -1,4 +1,4 @@
-import { coerceDate, isNullish, isValidDate } from 'trousse'
+import { coerceDate, isNullish, isPresent, isValidDate } from 'trousse'
 import { hashMeta, minReconciliationFields } from './constants.js'
 import {
   buildFingerprint,
@@ -59,7 +59,7 @@ export const findReconciliationCandidate = (
       return
     }
 
-    if (incoming[key] != null) {
+    if (isPresent(incoming[key])) {
       matchingFields++
 
       if (bodyHashKeys.includes(key)) {
@@ -76,14 +76,14 @@ export const findReconciliationCandidate = (
   const isLinkMatch = incoming.linkHash === existing.linkHash
 
   // Case 1: GUID differs, link is the same.
-  if (!isGuidMatch && isLinkMatch && incoming.linkHash != null) {
+  if (!isGuidMatch && isLinkMatch && isPresent(incoming.linkHash)) {
     return { match: existing, matchedBy: 'link' }
   }
 
   // A side without a date has nothing to compare.
   if (
-    incoming.publishedAt != null &&
-    existing.publishedAt != null &&
+    isPresent(incoming.publishedAt) &&
+    isPresent(existing.publishedAt) &&
     incoming.publishedAt.getTime() !== existing.publishedAt.getTime()
   ) {
     return
@@ -92,7 +92,7 @@ export const findReconciliationCandidate = (
   // Case 2: No GUID on either side, link differs but all content fields and publishedAt are the
   // same. Requires at least one body hash (contentHash or summaryHash) to prevent false merges on
   // weak evidence.
-  if (incoming.guidHash == null && existing.guidHash == null && !isLinkMatch && hasBodyHash) {
+  if (isNullish(incoming.guidHash) && isNullish(existing.guidHash) && !isLinkMatch && hasBodyHash) {
     return { match: existing, matchedBy: 'reconciled' }
   }
 
@@ -122,7 +122,7 @@ export const hasAmbiguousIdentity = (
   for (const key of identityKeys) {
     const value = incoming[key]
 
-    if (value == null || value === candidate[key]) {
+    if (isNullish(value) || value === candidate[key]) {
       continue
     }
 
@@ -273,7 +273,7 @@ export const excludeEnclosureFromIdentity = <
 >(
   item: T,
 ): T => {
-  if (item.enclosureHash == null || item.enclosures == null) {
+  if (isNullish(item.enclosureHash) || isNullish(item.enclosures)) {
     return item
   }
 
@@ -281,7 +281,7 @@ export const excludeEnclosureFromIdentity = <
     return item
   }
 
-  if (item.guidHash == null && item.linkHash == null && item.titleHash == null) {
+  if (isNullish(item.guidHash) && isNullish(item.linkHash) && isNullish(item.titleHash)) {
     return item
   }
 
@@ -295,15 +295,19 @@ export const excludeCandidateEnclosure = (
   candidate: ExistingItem,
   isIncomingExcluded: boolean,
 ): ExistingItem => {
-  if (candidate.enclosures != null) {
+  if (isPresent(candidate.enclosures)) {
     return excludeEnclosureFromIdentity(candidate)
   }
 
-  if (!isIncomingExcluded || candidate.enclosureHash == null) {
+  if (!isIncomingExcluded || isNullish(candidate.enclosureHash)) {
     return candidate
   }
 
-  if (candidate.guidHash == null && candidate.linkHash == null && candidate.titleHash == null) {
+  if (
+    isNullish(candidate.guidHash) &&
+    isNullish(candidate.linkHash) &&
+    isNullish(candidate.titleHash)
+  ) {
     return candidate
   }
 
@@ -389,7 +393,7 @@ export const classifyItems = <T extends NewItem>(
   // call .getTime() on both sides, so both must be a valid Date or absent for change detection and
   // reconciliation to be stable. Absent and already-valid dates skip the copy (the common case).
   const existingItems = input.existingItems.map((item) => {
-    if (item.publishedAt == null || isValidDate(item.publishedAt)) {
+    if (isNullish(item.publishedAt) || isValidDate(item.publishedAt)) {
       return item
     }
 
