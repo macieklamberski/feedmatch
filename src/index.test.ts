@@ -24,6 +24,7 @@ import { classifyItems, computeItemHashes } from './index.js'
 // explain the reasoning in a comment.
 
 const md5Regex = /^[a-f0-9]{32}$/
+
 const publishedAt = new Date('2026-06-30T23:08:00Z')
 const olderPublishedAt = new Date('2026-06-01T12:00:00Z')
 
