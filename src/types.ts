@@ -125,6 +125,10 @@ export type MatchPolicy = {
   dateProximityDays: number
 }
 
+export type MatchPolicyOptions = {
+  dateProximityDays?: number
+}
+
 export type InsertAction<T extends NewItem = NewItem> = {
   item: IncomingItem<T>
   fingerprintHash: string
@@ -135,6 +139,11 @@ export type UpdateAction<T extends NewItem = NewItem> = {
   fingerprintHash: string
   existingItemId: ItemIdLike
   matchedBy: MatchedBy
+}
+
+export type ReconcileInsertsResult<T extends NewItem = NewItem> = {
+  reconciledInserts: Array<InsertAction<T>>
+  reconciledUpdates: Array<UpdateAction<T>>
 }
 
 export type CandidateFilterContext = {
@@ -150,6 +159,21 @@ export type CandidateFilter = {
   name: string
   appliesTo: Array<MatchSignal>
   evaluate: (context: CandidateFilterContext) => CandidateFilterResult
+}
+
+export type ApplyCandidateFiltersInput = {
+  candidates: Array<ExistingItem>
+  matchedBy: MatchSignal
+  filters: Array<CandidateFilter>
+  incoming: IncomingItem
+  matchPolicy: MatchPolicy
+}
+
+export type SelectMatchingItemInput = {
+  incoming: IncomingItem
+  candidates: Array<ExistingItem>
+  matchPolicy: MatchPolicy
+  candidateFilters: Array<CandidateFilter>
 }
 
 export type UpdateFilterContext = {
