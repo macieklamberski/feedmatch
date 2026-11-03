@@ -2,6 +2,7 @@ import { isPresent } from 'trousse'
 import { hashMeta, signalHashKeys, uniqueIdentifierThreshold } from './constants.js'
 import { hasStrongHash } from './hashes.js'
 import type {
+  ApplyCandidateFiltersInput,
   CandidateFilter,
   CandidateFilterContext,
   ExistingItem,
@@ -11,11 +12,13 @@ import type {
   ItemHashes,
   ItemIdLike,
   MatchPolicy,
+  MatchPolicyOptions,
   MatchResult,
   MatchSignal,
   MatchStrategy,
   MatchStrategyContext,
   MatchStrategyResult,
+  SelectMatchingItemInput,
   UpdateFilter,
 } from './types.js'
 
@@ -144,13 +147,7 @@ export const applyCandidateFilters = ({
   filters,
   incoming,
   matchPolicy,
-}: {
-  candidates: Array<ExistingItem>
-  matchedBy: MatchSignal
-  filters: Array<CandidateFilter>
-  incoming: IncomingItem
-  matchPolicy: MatchPolicy
-}): Array<ExistingItem> => {
+}: ApplyCandidateFiltersInput): Array<ExistingItem> => {
   let result = candidates
 
   for (const filter of filters) {
@@ -461,7 +458,7 @@ export const lowUniquenessStrategies: Array<MatchStrategy> = [
 
 export const computeMatchPolicy = (
   feedProfile: FeedProfile,
-  options?: { dateProximityDays?: number },
+  options?: MatchPolicyOptions,
 ): MatchPolicy => {
   return {
     guidReliable: feedProfile.guid.effective.uniquenessRate >= uniqueIdentifierThreshold,
@@ -482,12 +479,7 @@ export const selectMatchingItem = ({
   candidates,
   matchPolicy,
   candidateFilters,
-}: {
-  incoming: IncomingItem
-  candidates: Array<ExistingItem>
-  matchPolicy: MatchPolicy
-  candidateFilters: Array<CandidateFilter>
-}): MatchResult | undefined => {
+}: SelectMatchingItemInput): MatchResult | undefined => {
   const filtered = (
     matchedBy: MatchSignal,
     candidates: Array<ExistingItem>,

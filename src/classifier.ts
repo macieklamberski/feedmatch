@@ -31,6 +31,7 @@ import type {
   ItemIdLike,
   MatchResult,
   NewItem,
+  ReconcileInsertsResult,
   UpdateAction,
 } from './types.js'
 
@@ -186,7 +187,7 @@ export const reconcileInserts = <T extends NewItem>(
   inserts: Array<InsertAction<T>>,
   existingItems: Array<ExistingItem>,
   claimedExistingIds: Set<ItemIdLike>,
-): { reconciledInserts: Array<InsertAction<T>>; reconciledUpdates: Array<UpdateAction<T>> } => {
+): ReconcileInsertsResult<T> => {
   // Phase 1: collect all eligible candidates for each insert.
   const candidatesByInsert = new Map<number, Array<ReconciliationCandidate>>()
 
