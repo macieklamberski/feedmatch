@@ -1,3 +1,4 @@
+import type { Nullish } from 'trousse'
 import type { fingerprintLevels, HashMetaMatchableEntry } from './constants.js'
 
 export type CleanUrlFn = (url: string) => string
@@ -9,17 +10,17 @@ export type ItemIdLike = string | number
 export type Enclosure = {
   url?: string
   isDefault?: boolean
-  type?: string | null
+  type?: Nullish<string>
 }
 
 export type NewItem = {
-  guid?: string | null
-  link?: string | null
-  title?: string | null
-  summary?: string | null
-  content?: string | null
-  enclosures?: Array<Enclosure> | null
-  publishedAt?: Date | null
+  guid?: Nullish<string>
+  link?: Nullish<string>
+  title?: Nullish<string>
+  summary?: Nullish<string>
+  content?: Nullish<string>
+  enclosures?: Nullish<Array<Enclosure>>
+  publishedAt?: Nullish<Date>
 }
 
 export type ItemHashes = {
@@ -42,7 +43,7 @@ export type ExistingItem = ItemHashes & {
   // decide whether the stored item's enclosure counts toward identity or is excluded from it. When
   // absent, there is no type to check, so the stored item reuses the decision made for the incoming
   // item.
-  enclosures?: Array<Enclosure> | null
+  enclosures?: Nullish<Array<Enclosure>>
 }
 
 export type FingerprintedItem<T extends NewItem = NewItem> = IncomingItem<T> & {
