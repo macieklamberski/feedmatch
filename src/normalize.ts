@@ -7,6 +7,7 @@ import {
   type Nullish,
   normalizeUrl,
   startsWithAnyOf,
+  trimString,
   videoExtensions,
 } from 'trousse'
 import type { CleanUrlFn, Enclosure } from './types.js'
@@ -33,7 +34,7 @@ const normalizeWithFragmentOptions: NormalizeOptions = {
 // Trim + normalize URL. Feeds often contain whitespace-only strings that normalizeUrl returns as-is
 // (garbage). Guard against that with a trim check.
 const safeNormalizeUrl = (value: string, cleanUrlFn?: CleanUrlFn): string | undefined => {
-  const trimmed = value.trim()
+  const trimmed = trimString(value)
 
   if (!trimmed) {
     return
@@ -65,7 +66,7 @@ export const normalizeLinkWithFragmentForHashing = (
     return
   }
 
-  const trimmed = link.trim()
+  const trimmed = trimString(link)
 
   if (!trimmed) {
     return
@@ -97,7 +98,7 @@ export const normalizeGuidForHashing = (
     return
   }
 
-  const trimmed = guid.trim()
+  const trimmed = trimString(guid)
 
   if (!trimmed) {
     return
@@ -242,7 +243,7 @@ export const normalizeWhitespace = (text: Nullish<string>): string | undefined =
     return
   }
 
-  const trimmed = text.trim()
+  const trimmed = trimString(text)
 
   if (!trimmed) {
     return
