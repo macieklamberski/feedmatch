@@ -134,7 +134,7 @@ const isMatchableEntry = (meta: HashMetaEntry): meta is HashMetaMatchableEntry =
 }
 
 // Derived from hashMeta: entries with level form the fingerprint level metadata.
-export const fingerprintMeta: ReadonlyArray<FingerprintMeta> = hashMeta
+export const fingerprintMeta: Array<FingerprintMeta> = hashMeta
   .filter(isFingerprintEntry)
   .map((meta) => {
     return { level: meta.level, key: meta.key, tag: meta.tag }
